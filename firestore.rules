@@ -1,0 +1,408 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: products
+// Fields: name (string), sku (string), category (string), price (number), cost (number), stock (number), lowStockThreshold (number), supplierId (string), createdAt (timestamp), updatedAt (timestamp)
+//
+// Collection: sales
+// Fields: items (list), total (number), tax (number), discount (number), paymentMethod (string), status (string), staffId (string), timestamp (timestamp)
+//
+// Collection: suppliers
+// Fields: name (string), contact (string), email (string), address (string)
+//
+// Collection: categories
+// Fields: name (string)
+//
+// Collection: locations
+// Fields: name (string), addressLine1 (string), addressLine2 (string), municipality (string), city (string), country (string), isWarehouse (bool)
+//
+// Collection: customers
+// Fields: name (string), billingAddress (string), shippingAddress (string), municipality (string), city (string), country (string), zip (string), email (string), phone (string), createdAt (timestamp)
+//
+// Collection: users
+// Fields: name (string), email (string), role (string: 'admin' | 'manager' | 'staff')
+//
+// Collection: purchaseOrders
+// Fields: poNumber (string), supplierId (string), locationId (string), items (list), totalAmount (number), status (string), createdAt (timestamp)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.uid == "wAWaysGJ8ndhcAKhbrDMEC9DSkH3" ||
+         (request.auth.token != null && 'email' in request.auth.token && (
+           request.auth.token.email == "vanhuxley24@gmail.com" || 
+           request.auth.token.email == "v4peavenue@gmail.com" ||
+           request.auth.token.email == "Vanhuxley24@gmail.com" ||
+           request.auth.token.email == "V4peavenue@gmail.com"
+         )) || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isStaff() {
+      return isAuthenticated() &&
+        (request.auth.uid == "wAWaysGJ8ndhcAKhbrDMEC9DSkH3" ||
+         (request.auth.token != null && 'email' in request.auth.token && (
+           request.auth.token.email == "vanhuxley24@gmail.com" || 
+           request.auth.token.email == "v4peavenue@gmail.com" ||
+           request.auth.token.email == "Vanhuxley24@gmail.com" ||
+           request.auth.token.email == "V4peavenue@gmail.com"
+         )) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'staff']));
+    }
+
+    function isManager() {
+      return isAuthenticated() &&
+        (request.auth.uid == "wAWaysGJ8ndhcAKhbrDMEC9DSkH3" ||
+         (request.auth.token != null && 'email' in request.auth.token && (
+           request.auth.token.email == "vanhuxley24@gmail.com" || 
+           request.auth.token.email == "v4peavenue@gmail.com" ||
+           request.auth.token.email == "Vanhuxley24@gmail.com" ||
+           request.auth.token.email == "V4peavenue@gmail.com"
+         )) ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager']));
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'sku', 'price', 'stock']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.sku is string && data.sku.size() > 0 &&
+             data.price is number && data.price >= 0 &&
+             data.stock is number &&
+             (!('category' in data) || data.category is string) &&
+             (!('brand' in data) || data.brand is string) &&
+             (!('imageUrl' in data) || data.imageUrl is string) &&
+             (!('locationIds' in data) || data.locationIds is list) &&
+             (!('stocks' in data) || data.stocks is map) &&
+             (!('tierPrices' in data) || data.tierPrices is map) &&
+             (!('locationThresholds' in data) || data.locationThresholds is map) &&
+             (!('cost' in data) || data.cost is number);
+    }
+
+    function isValidSale(data) {
+      return data.get('items', []) is list &&
+             data.get('total', 0) is number &&
+             data.get('status', '') in ['completed', 'returned', 'voided', 'pending'] &&
+             data.get('paymentMethod', '') is string &&
+             data.get('staffId', '') is string;
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['name', 'billingAddress', 'shippingAddress', 'municipality', 'city', 'country', 'zip', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.billingAddress is string &&
+             data.shippingAddress is string &&
+             data.municipality is string &&
+             data.city is string &&
+             data.country is string &&
+             data.zip is string &&
+             data.createdAt is timestamp &&
+             (!('priceTierId' in data) || data.priceTierId is string);
+    }
+
+    function isValidPriceTier(data) {
+      return data.keys().hasAll(['name']) &&
+             data.name is string && data.name.size() > 0 &&
+             (!('description' in data) || data.description == null || data.description is string);
+    }
+
+    function isValidPromoCode(data) {
+      return data.keys().hasAll(['code', 'amount', 'isPermanent', 'isActive', 'createdAt']) &&
+             data.code is string && data.code.size() > 0 &&
+             data.amount is number && data.amount >= 0 &&
+             data.isPermanent is bool &&
+             data.isActive is bool &&
+             data.createdAt is timestamp &&
+             (!('startDate' in data) || data.startDate == null || data.startDate is timestamp) &&
+             (!('endDate' in data) || data.endDate == null || data.endDate is timestamp);
+    }
+
+    function isValidPaymentOption(data) {
+      return data.keys().hasAll(['name', 'type', 'active']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.type in ['bank', 'ewallet', 'cash', 'card'] &&
+             data.active is bool;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['name']) &&
+             data.name is string && data.name.size() > 0;
+    }
+
+    function isValidBrand(data) {
+      return data.keys().hasAll(['name']) &&
+             data.name is string && data.name.size() > 0;
+    }
+
+    function isValidSupplier(data) {
+      return data.keys().hasAll(['name']) &&
+             data.name is string && data.name.size() > 0 &&
+             (!('contact' in data) || data.contact is string) &&
+             (!('email' in data) || data.email is string) &&
+             (!('address' in data) || data.address is string);
+    }
+
+    function isValidLocation(data) {
+      return data.keys().hasAll(['name', 'addressLine1', 'addressLine2', 'municipality', 'city', 'country']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.addressLine1 is string &&
+             data.addressLine2 is string &&
+             data.municipality is string &&
+             data.city is string &&
+             data.country is string;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role']) &&
+             data.email is string &&
+             data.role in ['admin', 'manager', 'staff'] &&
+             (!('name' in data) || data.name is string) &&
+             (!('createdAt' in data) || data.createdAt is string);
+    }
+
+    function isValidReturnTransaction(data) {
+      return data.keys().hasAll(['originalSaleId', 'items', 'totalRefund', 'staffId', 'staffName', 'locationId', 'timestamp', 'reason']) &&
+             data.originalSaleId is string &&
+             data.items is list &&
+             data.totalRefund is number &&
+             (!('refundMethod' in data) || data.refundMethod in ['cash', 'card', 'bank', 'ewallet', 'Digital', 'Card', 'Cash']) &&
+             (!('refundAccountId' in data) || data.refundAccountId is string) &&
+             data.staffId is string &&
+             data.staffName is string &&
+             (data.locationId == null || data.locationId is string) &&
+             data.timestamp is timestamp &&
+             data.reason is string &&
+             (!('status' in data) || data.status is string) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidFinancialAccount(data) {
+      return data.keys().hasAll(['name', 'type', 'balance', 'lastUpdated']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.type in ['bank', 'ewallet', 'cash', 'card'] &&
+             data.balance is number &&
+             data.lastUpdated is timestamp;
+    }
+
+    function isValidFinancialTransaction(data) {
+      return data.keys().hasAll(['amount', 'type', 'accountId', 'accountName', 'category', 'timestamp', 'createdBy']) &&
+             data.amount is number && data.amount > 0 &&
+             data.type in ['income', 'expense'] &&
+             data.accountId is string &&
+             data.accountName is string &&
+             (!('locationId' in data) || data.locationId == null || data.locationId is string) &&
+             (!('locationName' in data) || data.locationName == null || data.locationName is string) &&
+             data.category is string &&
+             data.timestamp is timestamp &&
+             data.createdBy is string &&
+             (!('description' in data) || data.description is string) &&
+             (!('createdByName' in data) || data.createdByName is string);
+    }
+
+    function isValidPurchaseOrder(data) {
+      return data.keys().hasAll(['poNumber', 'supplierId', 'supplierName', 'locationId', 'items', 'totalAmount', 'status', 'createdAt', 'updatedAt']) &&
+             data.poNumber is string &&
+             data.supplierId is string &&
+             data.items is list &&
+             data.totalAmount is number &&
+             data.status in ['draft', 'ordered', 'received', 'cancelled'] &&
+             (!('paymentMethod' in data) || data.paymentMethod in ['cash', 'card', 'bank', 'ewallet']) &&
+             (!('paymentAccountId' in data) || data.paymentAccountId is string) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSchedule(data) {
+      return data.keys().hasAll(['userId', 'date']) &&
+             data.userId is string &&
+             data.date is string &&
+             (!('startTime' in data) || data.startTime is string) &&
+             (!('endTime' in data) || data.endTime is string) &&
+             (!('userName' in data) || data.userName is string) &&
+             (!('locationId' in data) || data.locationId is string) &&
+             (!('isDayOff' in data) || data.isDayOff is bool) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['userId', 'date', 'timeIn']) &&
+             data.userId is string &&
+             data.date is string &&
+             data.timeIn is timestamp &&
+             (!('userName' in data) || data.userName is string) &&
+             (!('locationId' in data) || data.locationId is string) &&
+             (!('locationName' in data) || data.locationName is string) &&
+             (!('notes' in data) || data.notes is string) &&
+             (!('timeOut' in data) || data.timeOut is timestamp || data.timeOut == null);
+    }
+
+    function isValidAttendanceRequest(data) {
+      return data.keys().hasAll(['userId', 'type', 'status', 'startDate', 'reason', 'createdAt']) &&
+             data.userId is string &&
+             data.type in ['leave', 'schedule_change'] &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.startDate is string &&
+             data.reason is string &&
+             data.createdAt is timestamp &&
+             (!('endDate' in data) || data.endDate == null || data.endDate is string) &&
+             (!('newStartTime' in data) || data.newStartTime == null || data.newStartTime is string) &&
+             (!('newEndTime' in data) || data.newEndTime == null || data.newEndTime is string) &&
+             (!('userName' in data) || data.userName is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isManager() && (request.method == 'delete' || isValidProduct(request.resource.data));
+      // Staff can update stock during sales
+      allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'stocks', 'updatedAt']);
+    }
+
+    match /sales/{saleId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff() && isValidSale(request.resource.data);
+      allow update: if isManager() && isValidSale(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /suppliers/{supplierId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() && (request.method == 'delete' || isValidSupplier(request.resource.data));
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() && (request.method == 'delete' || isValidCategory(request.resource.data));
+    }
+
+    match /brands/{brandId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() && (request.method == 'delete' || isValidBrand(request.resource.data));
+    }
+
+    match /locations/{locationId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() && (request.method == 'delete' || isValidLocation(request.resource.data));
+    }
+
+    match /customers/{customerId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isStaff() && isValidCustomer(request.resource.data);
+      allow delete: if isManager();
+    }
+
+    match /invites/{inviteId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isAuthenticated() && request.auth.token.email == resource.data.email && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']));
+    }
+
+    match /audit_logs/{logId} {
+      allow read: if isManager();
+      allow create: if isAuthenticated();
+    }
+
+    match /purchaseOrders/{poId} {
+      allow read: if isManager();
+      allow create, update: if isManager() && isValidPurchaseOrder(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /stockAdjustments/{adjId} {
+      allow read: if isManager();
+      allow create: if isManager();
+    }
+
+    match /returnTransactions/{returnId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff() && isValidReturnTransaction(request.resource.data);
+      allow update: if isAdmin() && isValidReturnTransaction(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /priceTiers/{tierId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() && (request.method == 'delete' || isValidPriceTier(request.resource.data));
+    }
+
+    match /promos/{promoId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager() && (request.method == 'delete' || isValidPromoCode(request.resource.data));
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidFinancialAccount(request.resource.data);
+      allow update: if isStaff() && isValidFinancialAccount(request.resource.data);
+      allow delete: if isManager();
+    }
+
+    match /financialTransactions/{transId} {
+      allow read: if isManager();
+      allow create: if isStaff() && isValidFinancialTransaction(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /paymentOptions/{optionId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff() && isValidPaymentOption(request.resource.data);
+      allow update: if isManager() && isValidPaymentOption(request.resource.data);
+      allow delete: if isManager();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isManager());
+      // Allow users to create their own profile if they are the primary admin or have been invited
+      // (Role validation is handled in Login.tsx, but we ensure it's a valid role here)
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data);
+      // Only admins can update roles
+      allow update: if isAdmin() && isValidUser(request.resource.data);
+      // Users can update their own name
+      allow update: if request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
+    }
+
+    match /schedules/{scheduleId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isManager() && isValidSchedule(request.resource.data);
+      allow delete: if isManager();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isManager() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow list: if isManager() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidAttendance(request.resource.data);
+      allow update: if (isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timeOut', 'notes'])) || isManager();
+      allow delete: if isAdmin();
+    }
+
+    match /attendanceRequests/{requestId} {
+      allow read: if isManager() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidAttendanceRequest(request.resource.data);
+      allow update: if isManager() && isValidAttendanceRequest(request.resource.data);
+      allow delete: if isManager();
+    }
+  }
+}
