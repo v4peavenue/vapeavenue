@@ -95,6 +95,13 @@ export const Settings: React.FC = () => {
   const [revertAccountId, setRevertAccountId] = useState<string>('');
   const [isReverting, setIsReverting] = useState(false);
 
+  // Go-Live Reset Wizard states
+  const [isResetWizardOpen, setIsResetWizardOpen] = useState(false);
+  const [resetType, setResetType] = useState<'transactions' | 'factory'>('transactions');
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetStep, setResetStep] = useState('');
+
   useEffect(() => {
     if (!profile) return;
 
@@ -158,6 +165,163 @@ export const Settings: React.FC = () => {
   useEffect(() => {
     if (profile) setProfileName(profile.name || '');
   }, [profile]);
+
+  const handleProceedReset = async () => {
+    if (resetConfirmText !== 'RESET') {
+      toast.error('Please enter RESET to confirm');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      let batch = writeBatch(db);
+      let opCount = 0;
+
+      // Helper function to commit and recreate batch to avoid Firestore batch limits
+      const safeDeleteDocs = async (snap: any) => {
+        for (const docSnap of snap.docs) {
+          batch.delete(docSnap.ref);
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+      };
+
+      // 1. Clear Sales & Returns
+      setResetStep('Clearing sales and return records...');
+      const salesSnap = await getDocs(collection(db, 'sales'));
+      await safeDeleteDocs(salesSnap);
+      const returnsSnap = await getDocs(collection(db, 'returnTransactions'));
+      await safeDeleteDocs(returnsSnap);
+      if (opCount > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+
+      // 2. Clear POs & Stock Adjustments
+      setResetStep('Clearing purchase orders and stock logs...');
+      const poSnap = await getDocs(collection(db, 'purchaseOrders'));
+      await safeDeleteDocs(poSnap);
+      const saSnap = await getDocs(collection(db, 'stockAdjustments'));
+      await safeDeleteDocs(saSnap);
+      if (opCount > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+
+      // 3. Clear Financial Transactions
+      setResetStep('Purging financial transaction logs...');
+      const finSnap = await getDocs(collection(db, 'financialTransactions'));
+      await safeDeleteDocs(finSnap);
+      if (opCount > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+
+      // 4. Clear Schedules & Attendance
+      setResetStep('Clearing employee shifts and schedules...');
+      const schedsSnap = await getDocs(collection(db, 'schedules'));
+      await safeDeleteDocs(schedsSnap);
+      const attendSnap = await getDocs(collection(db, 'attendance'));
+      await safeDeleteDocs(attendSnap);
+      if (opCount > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+
+      // 5. Hard Reset (Option A: Just transaction history + stock reset, Option B: Full wipe of everything)
+      if (resetType === 'factory') {
+        setResetStep('Executing structural factory reset of all registers...');
+        const collectionsToWipe = [
+          'products', 'customers', 'suppliers', 'brands', 'categories',
+          'priceTiers', 'promos', 'paymentOptions', 'accounts', 'locations', 'invites'
+        ];
+        for (const colName of collectionsToWipe) {
+          const snap = await getDocs(collection(db, colName));
+          await safeDeleteDocs(snap);
+        }
+        if (opCount > 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      } else {
+        // Option A: Just reset existing product stock counts to zero, reset financial account balances to zero
+        setResetStep('Resetting stock counts to zero across all locations...');
+        const prodSnap = await getDocs(collection(db, 'products'));
+        for (const docSnap of prodSnap.docs) {
+          batch.update(docSnap.ref, {
+            stock: 0,
+            stocks: {},
+            lastUpdated: Timestamp.now()
+          });
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+        if (opCount > 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+
+        setResetStep('Setting account balances back to zero...');
+        const accsSnap = await getDocs(collection(db, 'accounts'));
+        for (const docSnap of accsSnap.docs) {
+          batch.update(docSnap.ref, {
+            balance: 0,
+            lastUpdated: Timestamp.now()
+          });
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+        if (opCount > 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      }
+
+      // 6. Purge Audit Trails
+      setResetStep('Purging action audit trials...');
+      const auditSnap = await getDocs(collection(db, 'audit_logs'));
+      await safeDeleteDocs(auditSnap);
+      if (opCount > 0) {
+        await batch.commit();
+      }
+
+      // Post-reset log entry to mark the dynamic startup
+      await logAction(
+        profile, 
+        'SYSTEM_RESET', 
+        `Triggered a database reset to pristine factory settings in ${resetType} mode. All previous test operations reversed.`
+      );
+
+      toast.success('Database has been successfully initialized and prepared for production go-live!');
+      setIsResetWizardOpen(false);
+      setResetConfirmText('');
+    } catch (e) {
+      console.error("Reset Error:", e);
+      toast.error('Could not complete database purge.');
+    } finally {
+      setIsResetting(false);
+      setResetStep('');
+    }
+  };
 
   const handleSyncStock = async () => {
     if (!isAdmin) return;
@@ -1484,6 +1648,31 @@ export const Settings: React.FC = () => {
                   {isSyncing ? 'Syncing...' : 'Sync Stock Now'}
                 </Button>
               </div>
+
+              {isAdmin && (
+                <div className="flex items-center justify-between p-5 bg-rose-50/40 rounded-2xl border border-rose-100 mt-2">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-white rounded-lg shadow-sm border border-rose-100">
+                      <Trash2 className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-rose-950">Go-Live / Production Reset Wizard</p>
+                      <p className="text-xs text-rose-800/80">Purge initial test transactions, log data, and stock figures to prepare for real-world storefront usage.</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    onClick={() => {
+                      setResetConfirmText('');
+                      setIsResetWizardOpen(true);
+                    }}
+                    className="gap-2 font-semibold shadow-sm hover:bg-rose-600 bg-rose-500"
+                  >
+                    Reset for Production
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1720,6 +1909,107 @@ export const Settings: React.FC = () => {
               }
             >
               {isReverting ? 'Reverting...' : 'Confirm Revert'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isResetWizardOpen} onOpenChange={(open) => !open && !isResetting && setIsResetWizardOpen(false)}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-heading text-xl text-rose-600">
+              <Trash2 className="w-5 h-5 text-rose-500" />
+              Go-Live Production Reset Wizard
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500 pt-1">
+              Are you preparing to deploy or transition this register and stock management system to real production use? Use this utility to purge testing noise and begin with a pristine log stack.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!isResetting ? (
+            <div className="space-y-4 py-4 border-t border-b border-border my-2 text-sm text-slate-700">
+              <div className="space-y-3">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Select Reset Intensity:</Label>
+                
+                <div 
+                  onClick={() => setResetType('transactions')}
+                  className={cn(
+                    "p-4 rounded-xl border cursor-pointer transition-all flex flex-col gap-1",
+                    resetType === 'transactions' 
+                      ? "border-primary bg-primary/5 shadow-sm" 
+                      : "border-border bg-slate-50 hover:bg-slate-100"
+                  )}
+                >
+                  <span className="font-bold text-slate-900 flex items-center justify-between">
+                    <span>1. Clear Transactional History Only (Recommended)</span>
+                    {resetType === 'transactions' && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  </span>
+                  <span className="text-xs text-slate-500 leading-normal mt-1">
+                    Completely purges all test data including **Sales invoices, Refund records, Purchase Orders, inventory adjustments, employee shifts/attendance, financial ledgers, and audit trials**. Resets stock counts back to zero and account balances back to zero.
+                  </span>
+                  <span className="text-xs font-semibold text-emerald-600 mt-1">
+                    ✓ Keeps catalog setups (locations, products, customers, suppliers) intact so you don't have to re-enter them.
+                  </span>
+                </div>
+
+                <div 
+                  onClick={() => setResetType('factory')}
+                  className={cn(
+                    "p-4 rounded-xl border cursor-pointer transition-all flex flex-col gap-1",
+                    resetType === 'factory' 
+                      ? "border-rose-500 bg-rose-50/40 shadow-sm" 
+                      : "border-border bg-slate-50 hover:bg-slate-100"
+                  )}
+                >
+                  <span className="font-bold text-rose-950 flex items-center justify-between">
+                    <span>2. Full Structural Factory Reset (Nuclear)</span>
+                    {resetType === 'factory' && <span className="h-2 w-2 rounded-full bg-rose-500" />}
+                  </span>
+                  <span className="text-xs text-slate-500 leading-normal mt-1">
+                    Wipes absolutely every collection inside your Firestore database. The system resets back to an absolute slate of an empty database. All custom products, price tiers, promos, suppliers, and locations will be permanently deleted.
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <Label className="text-xs font-bold uppercase tracking-wide text-rose-700 block">
+                  Security Confirmation
+                </Label>
+                <p className="text-xs text-slate-500 leading-normal mb-1">
+                  Type the word <strong className="font-mono text-rose-600">RESET</strong> below to confirm you want to proceed. This operation cannot be undone.
+                </p>
+                <Input 
+                  value={resetConfirmText}
+                  onChange={(e) => setResetConfirmText(e.target.value)}
+                  placeholder="Type RESET here"
+                  className="font-mono text-center h-10 border-rose-200 focus-visible:ring-rose-400 bg-rose-50/10"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 items-center justify-center py-12 text-sm text-slate-700">
+              <div className="relative flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-600" />
+                <Trash2 className="w-5 h-5 text-rose-500 absolute" />
+              </div>
+              <div className="text-center space-y-1">
+                <p className="font-semibold text-rose-600 animate-pulse">Database Purging Active</p>
+                <p className="text-xs text-muted-foreground italic max-w-[320px]">{resetStep}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button variant="outline" onClick={() => setIsResetWizardOpen(false)} disabled={isResetting}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleProceedReset} 
+              disabled={isResetting || resetConfirmText !== 'RESET'}
+              className="bg-rose-600 hover:bg-rose-700 font-semibold"
+            >
+              Initialize Purge
             </Button>
           </DialogFooter>
         </DialogContent>
