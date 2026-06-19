@@ -21,7 +21,9 @@ import {
   Wallet,
   Building,
   Banknote,
-  Undo2
+  Undo2,
+  Download,
+  Upload
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit, getDocs, writeBatch, Timestamp, setDoc, deleteField, getDoc, increment, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -102,6 +104,15 @@ export const Settings: React.FC = () => {
   const [isResetting, setIsResetting] = useState(false);
   const [resetStep, setResetStep] = useState('');
 
+  // Backup / Restore states
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [backupProgress, setBackupProgress] = useState('');
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreConfirmText, setRestoreConfirmText] = useState('');
+  const [restoreOption, setRestoreOption] = useState<'merge' | 'replace'>('merge');
+
   useEffect(() => {
     if (!profile) return;
 
@@ -165,6 +176,216 @@ export const Settings: React.FC = () => {
   useEffect(() => {
     if (profile) setProfileName(profile.name || '');
   }, [profile]);
+
+  // JSON serialization/deserialization helpers for Firestore Timestamps
+  const serializeData = (data: any): any => {
+    if (data === null || data === undefined) return data;
+    if (data instanceof Timestamp) {
+      return { _type: 'timestamp', seconds: data.seconds, nanoseconds: data.nanoseconds };
+    }
+    if (Array.isArray(data)) {
+      return data.map(serializeData);
+    }
+    if (typeof data === 'object') {
+      // Check if it looks like a Firestore Timestamp object from a plain serialized perspective
+      if (data.seconds !== undefined && data.nanoseconds !== undefined && typeof data.toDate === 'function') {
+        return { _type: 'timestamp', seconds: data.seconds, nanoseconds: data.nanoseconds };
+      }
+      const result: any = {};
+      for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+          result[key] = serializeData(data[key]);
+        }
+      }
+      return result;
+    }
+    return data;
+  };
+
+  const deserializeData = (data: any): any => {
+    if (data === null || data === undefined) return data;
+    if (Array.isArray(data)) {
+      return data.map(deserializeData);
+    }
+    if (typeof data === 'object') {
+      if (data._type === 'timestamp') {
+        return new Timestamp(data.seconds, data.nanoseconds);
+      }
+      const result: any = {};
+      for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) {
+          result[key] = deserializeData(data[key]);
+        }
+      }
+      return result;
+    }
+    return data;
+  };
+
+  const COLLECTIONS_TO_BACKUP = [
+    'locations',
+    'categories',
+    'brands',
+    'suppliers',
+    'priceTiers',
+    'promos',
+    'paymentOptions',
+    'accounts',
+    'products',
+    'customers',
+    'sales',
+    'returnTransactions',
+    'purchaseOrders',
+    'stockAdjustments',
+    'financialTransactions',
+    'schedules',
+    'attendance',
+    'audit_logs'
+  ];
+
+  const handleBackupData = async () => {
+    setIsBackingUp(true);
+    setBackupProgress('Initiating database export...');
+    try {
+      const backupData: Record<string, { id: string; data: any }[]> = {};
+      
+      for (const colName of COLLECTIONS_TO_BACKUP) {
+        setBackupProgress(`Fetching ${colName}...`);
+        const snapshot = await getDocs(collection(db, colName));
+        backupData[colName] = snapshot.docs.map(doc => ({
+          id: doc.id,
+          data: serializeData(doc.data())
+        }));
+      }
+
+      setBackupProgress('Formatting JSON backup payload...');
+      const fullBackup = {
+        backupVersion: 1,
+        timestamp: new Date().toISOString(),
+        collections: backupData
+      };
+
+      const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `inventory_pos_backup_${dateStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      await logAction(
+        profile, 
+        'SYSTEM_BACKUP', 
+        `Exported a full database backup consisting of ${Object.values(backupData).reduce((acc, curr) => acc + curr.length, 0)} total records across ${COLLECTIONS_TO_BACKUP.length} collections.`
+      );
+
+      toast.success('Database backup created and downloaded successfully!');
+    } catch (error) {
+      console.error('Backup failed:', error);
+      toast.error('Failed to create database backup.');
+    } finally {
+      setIsBackingUp(false);
+      setBackupProgress('');
+    }
+  };
+
+  const handleRestoreData = async () => {
+    if (!restoreFile) {
+      toast.error('Please select a valid backup JSON file first.');
+      return;
+    }
+    if (restoreConfirmText !== 'RESTORE') {
+      toast.error('Please type RESTORE to confirm this operation.');
+      return;
+    }
+
+    setIsRestoring(true);
+    setBackupProgress('Reading backup file...');
+    
+    try {
+      const fileText = await restoreFile.text();
+      const backupObj = JSON.parse(fileText);
+
+      // Simple validation
+      if (!backupObj || typeof backupObj !== 'object' || !backupObj.collections) {
+        throw new Error('Invalid backup file format.');
+      }
+
+      let batch = writeBatch(db);
+      let opCount = 0;
+
+      const collections = backupObj.collections;
+
+      // 1. If 'replace' (clean restore), let's clear existing documents in all backed-up collections
+      if (restoreOption === 'replace') {
+        for (const colName of COLLECTIONS_TO_BACKUP) {
+          setBackupProgress(`Purging current ${colName} collection...`);
+          const snapshot = await getDocs(collection(db, colName));
+          for (const docSnap of snapshot.docs) {
+            batch.delete(docSnap.ref);
+            opCount++;
+            if (opCount >= 400) {
+              await batch.commit();
+              batch = writeBatch(db);
+              opCount = 0;
+            }
+          }
+        }
+        if (opCount > 0) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      }
+
+      // 2. Load and write backup data doc by doc
+      for (const colName of COLLECTIONS_TO_BACKUP) {
+        const docs = collections[colName];
+        if (!docs || !Array.isArray(docs)) continue;
+
+        setBackupProgress(`Restoring ${docs.length} records into ${colName}...`);
+        for (const item of docs) {
+          if (!item.id || !item.data) continue;
+
+          const docRef = doc(db, colName, item.id);
+          const deserialized = deserializeData(item.data);
+          
+          batch.set(docRef, deserialized);
+          opCount++;
+          if (opCount >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            opCount = 0;
+          }
+        }
+      }
+
+      if (opCount > 0) {
+        await batch.commit();
+      }
+
+      // 3. Post-restore log entry
+      await logAction(
+        profile,
+        'SYSTEM_RESTORE',
+        `Imported database backup from snapshot dated ${backupObj.timestamp || 'unknown'}. Restore mode: ${restoreOption}.`
+      );
+
+      toast.success('Database restored successfully from the backup snapshot!');
+      setIsRestoreModalOpen(false);
+      setRestoreFile(null);
+      setRestoreConfirmText('');
+    } catch (error: any) {
+      console.error('Restore failed:', error);
+      toast.error(`Restore failed: ${error.message || 'Malformed JSON file'}`);
+    } finally {
+      setIsRestoring(false);
+      setBackupProgress('');
+    }
+  };
 
   const handleProceedReset = async () => {
     if (resetConfirmText !== 'RESET') {
@@ -1650,6 +1871,50 @@ export const Settings: React.FC = () => {
               </div>
 
               {isAdmin && (
+                <div className="border border-border rounded-2xl p-5 bg-slate-50/50 mt-2 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200">
+                      <Database className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">Database Backup &amp; Restore</p>
+                      <p className="text-xs text-slate-500 max-w-lg">
+                        Export your entire storefront catalog and historical ledger records into an offline JSON backup file, or restore existing snapshots from local storage to recover lost data.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleBackupData}
+                      disabled={isBackingUp || isRestoring}
+                      className="gap-2 font-semibold shadow-sm text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50 border-indigo-200"
+                    >
+                      <Download className="w-4 h-4" />
+                      {isBackingUp ? (backupProgress || 'Exporting...') : 'Export JSON Backup'}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setRestoreFile(null);
+                        setRestoreConfirmText('');
+                        setIsRestoreModalOpen(true);
+                      }}
+                      disabled={isBackingUp || isRestoring}
+                      className="gap-2 font-semibold shadow-sm text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Import &amp; Restore Backup
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {isAdmin && (
                 <div className="flex items-center justify-between p-5 bg-rose-50/40 rounded-2xl border border-rose-100 mt-2">
                   <div className="flex items-center gap-4">
                     <div className="p-2 bg-white rounded-lg shadow-sm border border-rose-100">
@@ -2010,6 +2275,117 @@ export const Settings: React.FC = () => {
               className="bg-rose-600 hover:bg-rose-700 font-semibold"
             >
               Initialize Purge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRestoreModalOpen} onOpenChange={(open) => !open && !isRestoring && setIsRestoreModalOpen(false)}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-heading text-xl text-emerald-600">
+              <Upload className="w-5 h-5 text-emerald-500" />
+              Import &amp; Restore Database
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500 pt-1">
+              Restore an existing offline JSON backup file into your cloud database. This will rebuild collections back to snapshot state.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!isRestoring ? (
+            <div className="space-y-4 py-4 border-t border-b border-border my-2 text-sm text-slate-700">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Select Backup JSON File:</Label>
+                <Input 
+                  type="file" 
+                  accept=".json"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setRestoreFile(file);
+                  }}
+                  className="cursor-pointer file:text-emerald-700 file:font-semibold"
+                />
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">Select Restore Strategy:</Label>
+                
+                <div 
+                  onClick={() => setRestoreOption('merge')}
+                  className={cn(
+                    "p-3 rounded-xl border cursor-pointer transition-all flex flex-col gap-1",
+                    restoreOption === 'merge' 
+                      ? "border-primary bg-primary/5 shadow-sm" 
+                      : "border-border bg-slate-50 hover:bg-slate-100"
+                  )}
+                >
+                  <span className="font-bold text-slate-900 flex items-center justify-between">
+                    <span>1. Merge &amp; Update (Safe)</span>
+                    {restoreOption === 'merge' && <span className="h-2 w-2 rounded-full bg-primary" />}
+                  </span>
+                  <span className="text-xs text-slate-500 leading-normal">
+                    Overwrites documents that match IDs in the backup while leaving other current documents completely untouched. Best for non-destructive repairs.
+                  </span>
+                </div>
+
+                <div 
+                  onClick={() => setRestoreOption('replace')}
+                  className={cn(
+                    "p-3 rounded-xl border cursor-pointer transition-all flex flex-col gap-1",
+                    restoreOption === 'replace' 
+                      ? "border-rose-500 bg-rose-50/40 shadow-sm" 
+                      : "border-border bg-slate-50 hover:bg-slate-100"
+                  )}
+                >
+                  <span className="font-bold text-rose-950 flex items-center justify-between">
+                    <span>2. Pure Overwrite (Clean Replace)</span>
+                    {restoreOption === 'replace' && <span className="h-2 w-2 rounded-full bg-rose-500" />}
+                  </span>
+                  <span className="text-xs text-slate-500 leading-normal">
+                    Completely purges all current database collections before injecting the backup records. Fully syncs database with your JSON backup file.
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <Label className="text-xs font-bold uppercase tracking-wide text-rose-700 block">
+                  Security Confirmation
+                </Label>
+                <p className="text-xs text-slate-500 leading-normal mb-1">
+                  Type the word <strong className="font-mono text-rose-600">RESTORE</strong> below to confirm you want to proceed. This operation cannot be undone.
+                </p>
+                <Input 
+                  value={restoreConfirmText}
+                  onChange={(e) => setRestoreConfirmText(e.target.value)}
+                  placeholder="Type RESTORE here"
+                  className="font-mono text-center h-10 border-rose-200 focus-visible:ring-rose-400 bg-rose-50/10"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4 items-center justify-center py-12 text-sm text-slate-700">
+              <div className="relative flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600" />
+                <Upload className="w-5 h-5 text-emerald-500 absolute" />
+              </div>
+              <div className="text-center space-y-1">
+                <p className="font-semibold text-emerald-600 animate-pulse">Restoring Database State</p>
+                <p className="text-xs text-muted-foreground italic max-w-[320px]">{backupProgress}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button variant="outline" onClick={() => setIsRestoreModalOpen(false)} disabled={isRestoring}>
+              Cancel
+            </Button>
+            <Button 
+              variant="default" 
+              onClick={handleRestoreData} 
+              disabled={isRestoring || !restoreFile || restoreConfirmText !== 'RESTORE'}
+              className="bg-emerald-600 hover:bg-emerald-700 font-semibold"
+            >
+              Initialize Restore
             </Button>
           </DialogFooter>
         </DialogContent>

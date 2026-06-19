@@ -1,6 +1,6 @@
 # Agos
 
-StockSync Pro is a professional, offline-first inventory and sales management system designed for small to medium businesses. It features real-time stock tracking, sales reporting, and role-based access control, ensuring your business stays operational even without an internet connection.
+Agos is a professional, offline-first inventory and sales management system designed for small to medium businesses. It features real-time stock tracking, sales reporting, and role-based access control, ensuring your business stays operational even without an internet connection.
 
 ## Features
 
@@ -118,7 +118,7 @@ The app needs a place to remember your sales. We use a free service called Fireb
 
 ## Offline Support
 
-StockSync Pro uses Firestore's `persistentLocalCache`. This means:
+Agos uses Firestore's `persistentLocalCache`. This means:
 - Data is cached locally in your browser (IndexedDB).
 - You can perform sales and view inventory while offline.
 - Changes are queued and automatically synced to the cloud once a connection is restored.
