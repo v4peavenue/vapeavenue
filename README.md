@@ -1,4 +1,4 @@
-# StockSync Pro
+# Agos
 
 StockSync Pro is a professional, offline-first inventory and sales management system designed for small to medium businesses. It features real-time stock tracking, sales reporting, and role-based access control, ensuring your business stays operational even without an internet connection.
 
