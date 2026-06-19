@@ -86,6 +86,7 @@ export interface SaleItem {
   subtotal: number;
   originalPrice: number;
   tierId?: string;
+  returnedQuantity?: number;
 }
 
 export interface Sale {
@@ -99,7 +100,7 @@ export interface Sale {
   promoCode?: string;
   paymentMethod: string; // Dynamic
   paymentSplits: PaymentSplit[];
-  status: 'completed' | 'returned' | 'voided' | 'pending';
+  status: 'completed' | 'returned' | 'partially_returned' | 'voided' | 'pending';
   staffId: string;
   locationId: string;
   customerId: string;

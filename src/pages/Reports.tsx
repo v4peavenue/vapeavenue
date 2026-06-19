@@ -55,12 +55,32 @@ export const Reports: React.FC = () => {
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
+  const [paymentOptions, setPaymentOptions] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [reportType, setReportType] = useState<ReportType>('sales');
   const [dateRange, setDateRange] = useState<string>('month');
   const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [searchTerm, setSearchTerm] = useState('');
+
+  const getPaymentMethodName = (methodId: string) => {
+    if (!methodId) return 'N/A';
+    if (methodId === 'split') return 'Split Payment';
+    if (methodId === 'cash') return 'Cash';
+    if (methodId === 'card') return 'Card';
+    
+    // Look in paymentOptions
+    const opt = paymentOptions.find(o => o.id === methodId);
+    if (opt) return opt.name;
+
+    // Look in accounts
+    const acc = accounts.find(a => a.id === methodId);
+    if (acc) return acc.name;
+
+    // Humanize the string if not found
+    return methodId.charAt(0).toUpperCase() + methodId.slice(1);
+  };
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -138,10 +158,20 @@ export const Reports: React.FC = () => {
       setAdjustments(adjList);
     });
 
+    const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
+      setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubscribeSales();
       unsubscribeProducts();
       unsubscribeAdjustments();
+      unsubscribePayments();
+      unsubscribeAccounts();
     };
   }, [dateRange, customStartDate, customEndDate, selectedLocationId, profile, isAdmin]);
 
@@ -151,14 +181,21 @@ export const Reports: React.FC = () => {
 
     if (reportType === 'sales') {
       name = 'Sales_Report';
-      data = filteredSales.map(s => ({
-        ID: s.id,
-        Date: format(s.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
-        Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
-        Items: s.items.map(i => `${i.name} x${i.quantity}`).join('; '),
-        Total: (s.total ?? 0).toFixed(2),
-        Payment: s.paymentMethod
-      }));
+      data = filteredSales.map(s => {
+        const returnedAmount = (s.items || []).reduce((sum, item) => sum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+        const netTotal = Math.max(0, (s.total ?? 0) - returnedAmount);
+        return {
+          ID: s.id,
+          Date: format(s.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
+          Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
+          Items: s.items.map(i => {
+            const netQty = i.quantity - (i.returnedQuantity || 0);
+            return `${i.name} x${netQty}${i.returnedQuantity ? ` (${i.returnedQuantity} returned)` : ''}`;
+          }).join('; '),
+          Total: netTotal.toFixed(2),
+          Payment: getPaymentMethodName(s.paymentMethod)
+        };
+      });
     } else if (reportType === 'inventory') {
       name = 'Inventory_Report';
       data = products.map(p => ({
@@ -173,7 +210,12 @@ export const Reports: React.FC = () => {
       data = products.map(p => {
         const pSales = sales.reduce((acc, s) => {
           const item = s.items.find(i => i.productId === p.id);
-          if (item) { acc.quantity += item.quantity; acc.revenue += item.subtotal; }
+          if (item) {
+            const netQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
+            const netSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
+            acc.quantity += netQty;
+            acc.revenue += netSubtotal;
+          }
           return acc;
         }, { quantity: 0, revenue: 0 });
         const cost = pSales.quantity * p.cost;
@@ -211,12 +253,20 @@ export const Reports: React.FC = () => {
     window.print();
   };
 
-  const totalRevenue = sales.reduce((sum, s) => sum + (s.total ?? 0), 0);
+  const totalRevenue = sales.reduce((sum, s) => {
+    const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+    const netTotal = Math.max(0, (s.total ?? 0) - returnedAmount);
+    return sum + netTotal;
+  }, 0);
+
   const totalProfit = sales.reduce((sum, s) => {
     const saleProfit = (s.items || []).reduce((pSum, item) => {
       const product = products.find(p => p.id === item.productId);
       const cost = product?.cost || 0;
-      return pSum + ((item.price ?? 0) - cost) * (item.quantity ?? 0);
+      const netQty = Math.max(0, (item.quantity ?? 0) - (item.returnedQuantity || 0));
+      const itemSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
+      const itemCost = cost * netQty;
+      return pSum + (itemSubtotal - itemCost);
     }, 0);
     return sum + saleProfit;
   }, 0);
@@ -429,20 +479,30 @@ export const Reports: React.FC = () => {
                       )}
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {sale.items.map((item, idx) => (
-                            <Badge key={idx} variant="outline" className="text-[10px] font-normal bg-white">
-                              {item.name} x{item.quantity}
-                            </Badge>
-                          ))}
+                          {sale.items.map((item, idx) => {
+                            const netQty = item.quantity - (item.returnedQuantity || 0);
+                            return (
+                              <Badge key={idx} variant="outline" className="text-[10px] font-normal bg-white">
+                                {item.name} x{netQty}
+                                {item.returnedQuantity && item.returnedQuantity > 0 ? (
+                                  <span className="text-rose-500 font-bold ml-1">({item.returnedQuantity} ret)</span>
+                                ) : null}
+                              </Badge>
+                            );
+                          })}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary" className="capitalize text-[10px] font-medium">
-                          {sale.paymentMethod}
+                        <Badge variant="secondary" className="text-[10px] font-medium">
+                          {getPaymentMethodName(sale.paymentMethod)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-bold text-slate-900">
-                        {settings.currency}{(sale.total ?? 0).toFixed(2)}
+                        {settings.currency}{(() => {
+                          const returnedAmount = (sale.items || []).reduce((sum, item) => sum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+                          const netTotal = Math.max(0, (sale.total ?? 0) - returnedAmount);
+                          return netTotal.toFixed(2);
+                        })()}
                       </TableCell>
                     </TableRow>
                   ))
@@ -516,8 +576,10 @@ export const Reports: React.FC = () => {
                   const productSales = sales.reduce((acc, sale) => {
                     const item = sale.items.find(i => i.productId === product.id);
                     if (item) {
-                      acc.quantity += item.quantity;
-                      acc.revenue += item.subtotal;
+                      const netQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
+                      const netSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
+                      acc.quantity += netQty;
+                      acc.revenue += netSubtotal;
                     }
                     return acc;
                   }, { quantity: 0, revenue: 0 });
@@ -548,7 +610,8 @@ export const Reports: React.FC = () => {
                       {products.reduce((sum, p) => {
                         return sum + sales.reduce((acc, s) => {
                           const item = s.items.find(i => i.productId === p.id);
-                          return acc + (item?.quantity || 0);
+                          const netQty = item ? Math.max(0, item.quantity - (item.returnedQuantity || 0)) : 0;
+                          return acc + netQty;
                         }, 0);
                       }, 0)}
                     </TableCell>

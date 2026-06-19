@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sale, ReturnItem, ReturnTransaction, Product, PaymentOption } from '@/types';
+import { format } from 'date-fns';
 import { 
   Dialog, 
   DialogContent, 
@@ -43,6 +44,7 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
   const [refundMethod, setRefundMethod] = useState<string>('cash');
   const [refundAccountId, setRefundAccountId] = useState<string>('');
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [returnDate, setReturnDate] = useState<string>(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'accounts'), (snapshot) => {
@@ -60,8 +62,9 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
         delete next[productId];
       } else {
         const item = sale.items.find(i => i.productId === productId);
+        const maxAllowed = item ? (item.quantity - (item.returnedQuantity || 0)) : 1;
         next[productId] = { 
-          quantity: item?.quantity || 1, 
+          quantity: maxAllowed > 0 ? maxAllowed : 1, 
           type: 'return', 
           reason: '',
           restock: true
@@ -87,6 +90,22 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
     if (!overallReason.trim()) {
       toast.error('Please provide an overall reason for the return/replacement');
       return;
+    }
+
+    // Safety validation checks to ensure return quantities are valid
+    for (const item of sale.items) {
+      const selection = selectedItems[item.productId];
+      if (selection) {
+        const maxAllowed = item.quantity - (item.returnedQuantity || 0);
+        if (selection.quantity > maxAllowed) {
+          toast.error(`Cannot return ${selection.quantity} of ${item.name} (Max remaining returnable: ${maxAllowed})`);
+          return;
+        }
+        if (selection.quantity <= 0) {
+          toast.error(`Please specify a quantity greater than 0 for ${item.name}`);
+          return;
+        }
+      }
     }
 
     setLoading(true);
@@ -127,7 +146,7 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
         staffId: profile?.id || 'anonymous',
         staffName: profile?.name || 'Staff',
         locationId: sale.locationId,
-        timestamp: sale.timestamp, // Backdated to original sale's timestamp
+        timestamp: Timestamp.fromDate(new Date(returnDate)), // Save as selected date/time
         reason: overallReason,
         ...(hasRefund && refundMethod ? { refundMethod } : {}),
         ...(hasRefund && refundAccountId ? { refundAccountId } : {})
@@ -136,10 +155,28 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
       // 1. Save return transaction
       const returnRef = await addDoc(collection(db, 'returnTransactions'), returnData);
 
-      // 2. Update status of the sale to 'returned'
+      // 2. Calculate updated items list for the sale keeping track of returnedQuantity
+      const updatedSaleItems = sale.items.map(item => {
+        const selection = selectedItems[item.productId];
+        if (selection) {
+          const previouslyReturned = item.returnedQuantity || 0;
+          return {
+            ...item,
+            returnedQuantity: previouslyReturned + selection.quantity
+          };
+        }
+        return item;
+      });
+
+      // If all items and their quantities have been returned, status becomes 'returned'
+      // Otherwise, status is 'partially_returned'
+      const allReturned = updatedSaleItems.every(item => (item.returnedQuantity || 0) >= item.quantity);
+      const saleStatus = allReturned ? 'returned' : 'partially_returned';
+
       const saleRef = doc(db, 'sales', sale.id);
       await updateDoc(saleRef, {
-        status: 'returned',
+        status: saleStatus,
+        items: updatedSaleItems,
         updatedAt: Timestamp.now()
       });
       
@@ -222,7 +259,7 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
           locationName: null,
           category: 'Sales Return',
           description: `Refund for Sale #${sale.id.slice(-6)}`,
-          timestamp: sale.timestamp, // Backdated to original sale's timestamp
+          timestamp: Timestamp.fromDate(new Date(returnDate)), // Save as selected date/time
           createdBy: profile?.id || 'anonymous',
           createdByName: profile?.name || 'Staff',
           accountBalance: newBalance
@@ -259,71 +296,94 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
           <div className="space-y-4">
             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Select Items to Process</Label>
             <div className="space-y-3">
-              {sale.items.map((item) => (
-                <div key={item.productId} className="flex flex-col gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="flex items-start gap-3">
-                    <Checkbox 
-                      id={`check-${item.productId}`}
-                      checked={!!selectedItems[item.productId]}
-                      onCheckedChange={() => handleToggleItem(item.productId)}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Label 
-                        htmlFor={`check-${item.productId}`}
-                        className="text-sm font-bold text-[#1A2B4B] cursor-pointer"
-                      >
-                        {item.name}
-                      </Label>
-                      <p className="text-[10px] text-slate-500">
-                        Purchased: {item.quantity} @ ₱{(item.price ?? 0).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {selectedItems[item.productId] && (
-                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/50">
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px]">Type</Label>
-                        <Select 
-                          value={selectedItems[item.productId].type}
-                          onValueChange={(v: 'return' | 'replacement') => handleUpdateItem(item.productId, 'type', v)}
+              {sale.items.map((item) => {
+                const maxAllowed = item.quantity - (item.returnedQuantity || 0);
+                const isFullyReturned = maxAllowed <= 0;
+                return (
+                  <div 
+                    key={item.productId} 
+                    className={`flex flex-col gap-3 p-3 rounded-lg border ${
+                      isFullyReturned 
+                        ? 'opacity-65 bg-slate-100 border-slate-200' 
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Checkbox 
+                        id={`check-${item.productId}`}
+                        checked={!!selectedItems[item.productId]}
+                        onCheckedChange={() => handleToggleItem(item.productId)}
+                        disabled={isFullyReturned}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <Label 
+                          htmlFor={`check-${item.productId}`}
+                          className={`text-sm font-bold text-[#1A2B4B] ${
+                            isFullyReturned ? 'text-slate-400 cursor-not-allowed' : 'cursor-pointer'
+                          }`}
                         >
-                          <SelectTrigger className="h-8 text-xs bg-white">
-                            <SelectValue>
-                              {selectedItems[item.productId].type === 'return' ? 'Return (Refund)' : 'Replacement'}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="return">Return (Refund)</SelectItem>
-                            <SelectItem value="replacement">Replacement</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px]">Quantity</Label>
-                        <Input 
-                          type="number" 
-                          max={item.quantity}
-                          min={1}
-                          className="h-8 text-xs bg-white"
-                          value={selectedItems[item.productId].quantity}
-                          onChange={(e) => handleUpdateItem(item.productId, 'quantity', Number(e.target.value))}
-                        />
-                      </div>
-                      <div className="col-span-2 flex items-center gap-2">
-                        <Checkbox 
-                          id={`restock-${item.productId}`}
-                          checked={selectedItems[item.productId].restock}
-                          onCheckedChange={(checked) => handleUpdateItem(item.productId, 'restock', !!checked)}
-                        />
-                        <Label htmlFor={`restock-${item.productId}`} className="text-[10px] text-slate-600 cursor-pointer">
-                          Add returned item back to stock? (Restock)
+                          {item.name}
                         </Label>
+                        <p className="text-[10px] text-slate-500">
+                          Purchased: {item.quantity} @ ₱{(item.price ?? 0).toFixed(2)}
+                          {item.returnedQuantity && item.returnedQuantity > 0 ? (
+                            <span className="text-rose-600 font-bold ml-1.5">
+                              (Already Returned: {item.returnedQuantity})
+                            </span>
+                          ) : null}
+                        </p>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {selectedItems[item.productId] && (
+                      <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200/50">
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px]">Type</Label>
+                          <Select 
+                            value={selectedItems[item.productId].type}
+                            onValueChange={(v: 'return' | 'replacement') => handleUpdateItem(item.productId, 'type', v)}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-white">
+                              <SelectValue>
+                                {selectedItems[item.productId].type === 'return' ? 'Return (Refund)' : 'Replacement'}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="return">Return (Refund)</SelectItem>
+                              <SelectItem value="replacement">Replacement</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px]">Quantity</Label>
+                          <Input 
+                            type="number" 
+                            max={maxAllowed}
+                            min={1}
+                            className="h-8 text-xs bg-white"
+                            value={selectedItems[item.productId].quantity}
+                            onChange={(e) => {
+                              const inputVal = Number(e.target.value);
+                              const constrainedVal = Math.min(maxAllowed, Math.max(1, inputVal));
+                              handleUpdateItem(item.productId, 'quantity', constrainedVal);
+                            }}
+                          />
+                        </div>
+                        <div className="col-span-2 flex items-center gap-2">
+                          <Checkbox 
+                            id={`restock-${item.productId}`}
+                            checked={selectedItems[item.productId].restock}
+                            onCheckedChange={(checked) => handleUpdateItem(item.productId, 'restock', !!checked)}
+                          />
+                          <Label htmlFor={`restock-${item.productId}`} className="text-[10px] text-slate-600 cursor-pointer">
+                            Add returned item back to stock? (Restock)
+                          </Label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -353,6 +413,18 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="return-date" className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Return Date & Time (Backdate Return)</Label>
+              <Input 
+                id="return-date"
+                type="datetime-local"
+                value={returnDate}
+                onChange={(e) => setReturnDate(e.target.value)}
+                className="h-9 text-xs bg-slate-50 border-slate-200"
+                required
+              />
             </div>
 
             <div className="space-y-2">

@@ -98,7 +98,7 @@ service cloud.firestore {
     function isValidSale(data) {
       return data.get('items', []) is list &&
              data.get('total', 0) is number &&
-             data.get('status', '') in ['completed', 'returned', 'voided', 'pending'] &&
+             data.get('status', '') in ['completed', 'returned', 'partially_returned', 'voided', 'pending'] &&
              data.get('paymentMethod', '') is string &&
              data.get('staffId', '') is string;
     }

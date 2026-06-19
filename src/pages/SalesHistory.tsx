@@ -24,7 +24,8 @@ import {
   addDoc,
   increment, 
   Timestamp,
-  setDoc 
+  setDoc,
+  getDoc 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -326,12 +327,37 @@ export const SalesHistory: React.FC = () => {
         }
       }
 
-      // 3. Update original sale status back to completed
+      // 3. Update original sale items returnedQuantity and status
       const saleRef = doc(db, 'sales', returnToReverse.originalSaleId);
-      batch.update(saleRef, {
-        status: 'completed',
-        updatedAt: Timestamp.now()
-      });
+      const saleSnap = await getDoc(saleRef);
+      if (saleSnap.exists()) {
+        const saleData = saleSnap.data() as Sale;
+        const updatedItems = saleData.items.map(item => {
+          const returnedItem = returnToReverse.items?.find((i: any) => i.productId === item.productId);
+          if (returnedItem) {
+            const currentReturned = item.returnedQuantity || 0;
+            return {
+              ...item,
+              returnedQuantity: Math.max(0, currentReturned - returnedItem.quantity)
+            };
+          }
+          return item;
+        });
+
+        const hasAnyReturnsLeft = updatedItems.some(i => (i.returnedQuantity || 0) > 0);
+        const newStatus = hasAnyReturnsLeft ? 'partially_returned' : 'completed';
+
+        batch.update(saleRef, {
+          items: updatedItems,
+          status: newStatus,
+          updatedAt: Timestamp.now()
+        });
+      } else {
+        batch.update(saleRef, {
+          status: 'completed',
+          updatedAt: Timestamp.now()
+        });
+      }
 
       // 4. Update return transaction record status to voided
       const returnRef = doc(db, 'returnTransactions', returnToReverse.id);
@@ -689,11 +715,13 @@ export const SalesHistory: React.FC = () => {
                       "capitalize border-slate-200 font-medium",
                       sale.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : 
                       sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
+                      sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
                       sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
                       "bg-emerald-50 text-emerald-600 border-emerald-200"
                     )}>
                       {sale.status === 'voided' ? 'Voided' :
                        sale.status === 'returned' ? 'Returned' :
+                       sale.status === 'partially_returned' ? 'Partially Returned' :
                        sale.status === 'pending' ? 'Pending' : 'Completed'}
                     </Badge>
                   </TableCell>
@@ -902,7 +930,14 @@ export const SalesHistory: React.FC = () => {
                         <TableCell className="text-[10px] text-slate-500 font-medium">
                           {item.tierId ? priceTiers.find(t => t.id === item.tierId)?.name || 'Custom Tier' : 'Retail'}
                         </TableCell>
-                        <TableCell className="text-center text-sm">{item.quantity}</TableCell>
+                        <TableCell className="text-center text-sm">
+                          <div>{item.quantity}</div>
+                          {item.returnedQuantity && item.returnedQuantity > 0 ? (
+                            <div className="text-[10px] text-rose-500 font-bold whitespace-nowrap">
+                              (-{item.returnedQuantity} returned)
+                            </div>
+                          ) : null}
+                        </TableCell>
                         <TableCell className="text-right text-sm font-medium">{settings.currency}{(item.subtotal ?? 0).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
@@ -962,6 +997,8 @@ export const SalesHistory: React.FC = () => {
                         ? "text-rose-600 border-rose-200 bg-rose-50" 
                         : selectedSale.status === 'returned'
                         ? "text-blue-600 border-blue-200 bg-blue-50"
+                        : selectedSale.status === 'partially_returned'
+                        ? "text-indigo-600 border-indigo-200 bg-indigo-50"
                         : selectedSale.status === 'pending'
                         ? "text-amber-600 border-amber-200 bg-amber-50"
                         : "text-emerald-600 border-emerald-200 bg-emerald-50"
@@ -969,6 +1006,7 @@ export const SalesHistory: React.FC = () => {
                   >
                     {selectedSale.status === 'voided' ? 'Voided' : 
                      selectedSale.status === 'returned' ? 'Returned' :
+                     selectedSale.status === 'partially_returned' ? 'Partially Returned' :
                      selectedSale.status === 'pending' ? 'Pending' : 'Completed'}
                   </Badge>
                 </div>

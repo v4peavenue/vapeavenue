@@ -658,7 +658,17 @@ export const Finance: React.FC = () => {
                     amount: 0 // Logs might not have an intuitive singular amount
                   }))
                 ]
-                .sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis())
+                .sort((a, b) => {
+                  const getMillis = (ts: any) => {
+                    if (!ts) return 0;
+                    if (typeof ts.toMillis === 'function') return ts.toMillis();
+                    if (ts instanceof Date) return ts.getTime();
+                    if (typeof ts === 'number') return ts;
+                    if (typeof ts === 'string') return new Date(ts).getTime();
+                    return 0;
+                  };
+                  return getMillis(b.timestamp) - getMillis(a.timestamp);
+                })
                 .slice(0, 50)
                 .map((item) => {
                   const isIncome = item.type === 'TRANSACTION' 
@@ -715,7 +725,11 @@ export const Finance: React.FC = () => {
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-slate-500 font-mono whitespace-nowrap">
-                        {format(item.timestamp.toDate(), 'MMM dd, p')}
+                        {item.timestamp ? (
+                          format(typeof item.timestamp.toDate === 'function' ? item.timestamp.toDate() : new Date(item.timestamp), 'MMM dd, p')
+                        ) : (
+                          '--:--'
+                        )}
                       </TableCell>
                     </TableRow>
                   );

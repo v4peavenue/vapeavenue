@@ -103,6 +103,8 @@ export const Dashboard: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<AuditLog[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [locationChartData, setLocationChartData] = useState<any[]>([]);
+  const [paymentOptions, setPaymentOptions] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // New states for filters
@@ -219,7 +221,11 @@ export const Dashboard: React.FC = () => {
         sales = sales.filter(s => s.locationId === selectedLocationId);
       }
       
-      const totalSales = sales.reduce((sum, s) => sum + s.total, 0);
+      const totalSales = sales.reduce((sum, s) => {
+        const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+        const netTotal = Math.max(0, (s.total ?? 0) - returnedAmount);
+        return sum + netTotal;
+      }, 0);
       setStats(prev => ({ ...prev, totalSales, totalOrders: sales.length }));
       setRecentSales(sales.slice(0, 5));
 
@@ -230,8 +236,10 @@ export const Dashboard: React.FC = () => {
           if (!productSales[item.productId]) {
             productSales[item.productId] = { name: item.name, quantity: 0, total: 0 };
           }
-          productSales[item.productId].quantity += item.quantity;
-          productSales[item.productId].total += item.subtotal;
+          const netQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
+          const netSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
+          productSales[item.productId].quantity += netQty;
+          productSales[item.productId].total += netSubtotal;
         });
       });
 
@@ -269,7 +277,10 @@ export const Dashboard: React.FC = () => {
         return {
           name: label,
           subLabel,
-          amount: bucketSales.reduce((sum, s) => sum + s.total, 0),
+          amount: bucketSales.reduce((sum, s) => {
+            const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+            return sum + Math.max(0, (s.total ?? 0) - returnedAmount);
+          }, 0),
           orders: bucketSales.length,
           fullDate: date
         };
@@ -280,7 +291,7 @@ export const Dashboard: React.FC = () => {
       const locationData = interval.map(date => {
         const item: any = {
           name: groupBy === 'day' ? format(date, 'dd') : (groupBy === 'month' ? format(date, 'MMM') : format(date, 'yyyy')),
-          subLabel: groupBy === 'day' ? format(date, 'MMM yy') : (groupBy === 'month' ? format(date, 'yyyy') : ''),
+          subLabel: groupBy === 'day' ? format(date, 'MMM yy') : (groupBy === 'month' ? format(date, 'yyyy' ) : ''),
           fullDate: date
         };
 
@@ -293,7 +304,10 @@ export const Dashboard: React.FC = () => {
           } else {
             locSales = locSales.filter(s => isSameYear(s.timestamp.toDate(), date));
           }
-          item[loc.name] = locSales.reduce((sum, s) => sum + s.total, 0);
+          item[loc.name] = locSales.reduce((sum, s) => {
+            const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+            return sum + Math.max(0, (s.total ?? 0) - returnedAmount);
+          }, 0);
         });
 
         return item;
@@ -306,12 +320,40 @@ export const Dashboard: React.FC = () => {
       setLoading(false);
     });
 
+    const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
+      setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubscribeProducts();
       unsubscribeSales();
       unsubscribeAudit();
+      unsubscribePayments();
+      unsubscribeAccounts();
     };
   }, [isAdmin, selectedLocationId, timeRange, groupBy, locations, customStartDate, customEndDate]);
+
+  const getPaymentMethodName = (methodId: string) => {
+    if (!methodId) return 'N/A';
+    if (methodId === 'split') return 'Split Payment';
+    if (methodId === 'cash') return 'Cash';
+    if (methodId === 'card') return 'Card';
+    
+    // Look in paymentOptions
+    const opt = paymentOptions.find(o => o.id === methodId);
+    if (opt) return opt.name;
+
+    // Look in accounts
+    const acc = accounts.find(a => a.id === methodId);
+    if (acc) return acc.name;
+
+    // Humanize the string if not found
+    return methodId.charAt(0).toUpperCase() + methodId.slice(1);
+  };
 
   const StatCard = ({ title, value, icon: Icon, description, trend, trendValue, className }: any) => {
     const isRevenue = title.toLowerCase().includes('revenue');
@@ -683,18 +725,30 @@ export const Dashboard: React.FC = () => {
               {recentSales.map((sale) => (
                 <div key={sale.id} className="flex items-center gap-4 group cursor-pointer">
                   <div className="w-9 h-9 rounded-lg bg-[#1A2B4B]/5 flex items-center justify-center text-[#1A2B4B] font-bold group-hover:bg-[#1A2B4B] group-hover:text-white transition-all">
-                    {sale.paymentMethod[0].toUpperCase()}
+                    {(getPaymentMethodName(sale.paymentMethod)?.[0] || 'S').toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-[#1A2B4B] truncate">
                       {sale.items.map(i => i.name).join(', ')}
                     </p>
                     <p className="text-[10px] text-slate-500">
-                      {format(sale.timestamp.toDate(), 'HH:mm')} • {sale.paymentMethod}
+                      {format(sale.timestamp.toDate(), 'HH:mm')} • {getPaymentMethodName(sale.paymentMethod)}
                     </p>
                   </div>
-                  <div className="text-xs font-bold text-[#1A2B4B]">
-                    +{settings.currency}{(sale.total ?? 0).toFixed(2)}
+                  <div className="text-right flex flex-col items-end gap-0.5">
+                    <div className="text-xs font-bold text-[#1A2B4B]">
+                      +{settings.currency}{(() => {
+                        const returnedAmount = (sale.items || []).reduce((sum, item) => sum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+                        const netTotal = Math.max(0, (sale.total ?? 0) - returnedAmount);
+                        return netTotal.toFixed(2);
+                      })()}
+                    </div>
+                    {sale.status === 'returned' && (
+                      <span className="text-[8px] px-1 py-0.5 rounded bg-blue-50 text-blue-600 font-bold leading-none">Returned</span>
+                    )}
+                    {sale.status === 'partially_returned' && (
+                      <span className="text-[8px] px-1 py-0.5 rounded bg-indigo-50 text-indigo-600 font-bold leading-none">Partially Returned</span>
+                    )}
                   </div>
                 </div>
               ))}
