@@ -15,8 +15,8 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const { loginOffline } = useAuth();
 
-  const [offlineEmail, setOfflineEmail] = useState('v4peavenue@gmail.com');
-  const [offlineName, setOfflineName] = useState('Admin User');
+  const [offlineEmail, setOfflineEmail] = useState('');
+  const [offlineName, setOfflineName] = useState('');
   const [offlineRole, setOfflineRole] = useState('admin');
   const [showOffline, setShowOffline] = useState(false);
 
@@ -159,7 +159,7 @@ export const Login: React.FC = () => {
             <div className="space-y-1">
               <p className="font-semibold text-[11px] uppercase tracking-wider text-[#A0522D]">Sandbox Environment Note</p>
               <p className="leading-relaxed">
-                If Firebase is not yet fully configured with your live custom credentials, click the <strong className="underline cursor-pointer" onClick={() => setShowOffline(true)}>Offline Local Mode</strong> link below to launch immediately as <strong>v4peavenue@gmail.com</strong> with full Admin privileges.
+                If Firebase is not yet fully configured with your live custom credentials, click the <strong className="underline cursor-pointer" onClick={() => setShowOffline(true)}>Offline Local Mode</strong> link below to launch a secure local database session.
               </p>
             </div>
           </div>
@@ -196,7 +196,7 @@ export const Login: React.FC = () => {
               <div className="space-y-3 pt-1">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Email Address (Use v4peavenue@gmail.com for Admin)
+                    Email Address
                   </label>
                   <input 
                     type="email" 
