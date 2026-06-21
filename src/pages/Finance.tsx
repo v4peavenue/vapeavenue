@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { 
   collection, 
   onSnapshot, 
@@ -625,7 +626,8 @@ export const Finance: React.FC = () => {
             <History className="w-5 h-5 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="hidden md:block">
+              <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent border-slate-100">
                   <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Transaction</TableHead>
@@ -736,6 +738,115 @@ export const Finance: React.FC = () => {
                 })}
               </TableBody>
             </Table>
+            </div>
+
+            {/* Mobile-optimized dense stacked transaction/event bento items */}
+            <div className="block md:hidden space-y-3">
+              {[
+                ...transactions.map(t => ({ 
+                  id: t.id, 
+                  type: 'TRANSACTION', 
+                  transType: t.type, 
+                  details: t.description, 
+                  category: t.category, 
+                  accountName: t.accountName, 
+                  locationName: t.locationName,
+                  amount: t.amount, 
+                  timestamp: t.timestamp,
+                  accountBalance: t.accountBalance
+                })),
+                ...logs.map(l => ({ 
+                  id: l.id, 
+                  type: 'LOG', 
+                  action: l.action, 
+                  details: l.details, 
+                  timestamp: l.timestamp,
+                  amount: 0
+                }))
+              ]
+              .sort((a, b) => {
+                const getMillis = (ts: any) => {
+                  if (!ts) return 0;
+                  if (typeof ts.toMillis === 'function') return ts.toMillis();
+                  if (ts instanceof Date) return ts.getTime();
+                  if (typeof ts === 'number') return ts;
+                  if (typeof ts === 'string') return new Date(ts).getTime();
+                  return 0;
+                };
+                return getMillis(b.timestamp) - getMillis(a.timestamp);
+              })
+              .slice(0, 50)
+              .map((item, index) => {
+                const isIncome = item.type === 'TRANSACTION' 
+                  ? item.transType === 'income' 
+                  : (item.action === 'CREATE_SALE' || item.action === 'ITEM_RETURN');
+                const isExpense = item.type === 'TRANSACTION' 
+                  ? item.transType === 'expense' 
+                  : (item.action === 'RECEIVE_STOCK');
+                
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(index * 0.012, 0.2) }}
+                    className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-sm space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`p-1.5 rounded-lg shrink-0 ${isIncome ? 'bg-emerald-50 text-emerald-600' : isExpense ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600'}`}>
+                          {isIncome ? <TrendingUp className="w-3.5 h-3.5" /> : isExpense ? <TrendingDown className="w-3.5 h-3.5" /> : <DollarSign className="w-3.5 h-3.5" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-700 truncate">{item.details}</p>
+                          <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">
+                            {item.type === 'TRANSACTION' ? item.category : item.type}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        {item.type === 'TRANSACTION' ? (
+                          <span className={`font-mono text-sm font-black ${isIncome ? 'text-emerald-600' : isExpense ? 'text-rose-600' : 'text-slate-600'}`}>
+                            {isIncome ? '+' : '-'}{settings.currency}{(item.amount || 0).toFixed(2)}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Audit</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 bg-slate-50/50 p-2 rounded-xl text-[11px] border border-slate-100 font-medium text-slate-600">
+                      <div>
+                        <span className="block text-[9px] text-slate-400 font-bold uppercase mb-0.5">Origin / Account</span>
+                        <span className="font-bold text-slate-700 truncate block">
+                          {item.type === 'TRANSACTION' ? item.accountName : 'System Event'}
+                          {item.type === 'TRANSACTION' && item.locationName && ` (${item.locationName})`}
+                        </span>
+                      </div>
+                      <div className="border-l border-slate-200 pl-2">
+                        <span className="block text-[9px] text-slate-400 font-bold uppercase mb-0.5">Balance / Action</span>
+                        <span className="font-bold text-slate-700 truncate block">
+                          {item.type === 'TRANSACTION' && item.accountBalance !== undefined ? (
+                            `${settings.currency}${(item.accountBalance).toFixed(2)}`
+                          ) : (
+                            item.action?.replace('_', ' ') || '--'
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-[10px] text-slate-400 font-semibold text-right">
+                      {item.timestamp ? (
+                        format(typeof item.timestamp.toDate === 'function' ? item.timestamp.toDate() : new Date(item.timestamp), 'MMM dd, yyyy - p')
+                      ) : (
+                        '--:--'
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 

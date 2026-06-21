@@ -93,6 +93,8 @@ export const POS: React.FC = () => {
     zip: ''
   });
 
+  const [activeTab, setActiveTab] = useState<'products' | 'cart'>('products');
+
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -681,10 +683,45 @@ export const POS: React.FC = () => {
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4 }}
-      className="h-[calc(100vh-120px)] flex flex-col lg:flex-row gap-8"
+      className="h-full min-h-0 lg:h-[calc(100vh-120px)] flex flex-col lg:flex-row gap-6 lg:gap-8"
     >
+      {/* Mobile Tab Switcher */}
+      <div className="flex lg:hidden bg-slate-100 p-1.5 rounded-2xl gap-2 shadow-sm shrink-0 border border-slate-200">
+        <Button
+          variant="ghost"
+          onClick={() => setActiveTab('products')}
+          className={cn(
+            "flex-1 h-11 text-xs font-bold rounded-xl transition-all gap-2",
+            activeTab === 'products'
+              ? "bg-[#1A2B4B] text-white shadow-md shadow-[#1A2B4B]/10 hover:bg-[#1A2B4B]"
+              : "text-slate-600 hover:bg-slate-200"
+          )}
+        >
+          <Package className="w-4 h-4" />
+          Products ({filteredProducts.length})
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => setActiveTab('cart')}
+          className={cn(
+            "flex-1 h-11 text-xs font-bold rounded-xl transition-all gap-2 relative",
+            activeTab === 'cart'
+              ? "bg-[#1A2B4B] text-white shadow-[#1A2B4B]/10 hover:bg-[#1A2B4B] hover:text-white font-black"
+              : "text-slate-600 hover:bg-slate-200"
+          )}
+        >
+          <ShoppingCart className="w-4 h-4" />
+          Cart ({cart.reduce((sum, i) => sum + i.quantity, 0)})
+          {cart.length > 0 && (
+            <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-black text-[9px] h-4 min-w-[16px] px-1 rounded-full flex items-center justify-center border-2 border-white animate-bounce animate-duration-1000">
+              {cart.reduce((sum, i) => sum + i.quantity, 0)}
+            </span>
+          )}
+        </Button>
+      </div>
+
       {/* Product Selection Area */}
-      <div className="flex-1 flex flex-col gap-6 min-h-0">
+      <div className={cn("flex-1 flex flex-col gap-6 min-h-0", activeTab !== 'products' && "hidden lg:flex")}>
         <div className="flex flex-col sm:flex-row items-center gap-4">
           {selectedLocationId === 'all' && (
             <div className="bg-[#1A2B4B]/5 border border-[#1A2B4B]/10 p-3 rounded-xl flex items-center gap-3 text-[#1A2B4B] text-sm backdrop-blur-sm">
@@ -811,7 +848,10 @@ export const POS: React.FC = () => {
       </div>
 
       {/* Cart Area */}
-      <Card className="w-full lg:w-[420px] flex flex-col shadow-2xl border-slate-200 bg-white/80 backdrop-blur-md rounded-3xl overflow-hidden">
+      <Card className={cn(
+        "w-full lg:w-[420px] flex flex-col shadow-2xl border-slate-200 bg-white/80 backdrop-blur-md rounded-3xl overflow-hidden",
+        activeTab !== 'cart' && "hidden lg:flex"
+      )}>
         <CardHeader className="border-b bg-[#1A2B4B]/5 p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

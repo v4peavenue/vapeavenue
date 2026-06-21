@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { 
   collection, 
   onSnapshot, 
@@ -400,7 +401,8 @@ export const Purchasing: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
+          <div className="hidden md:block">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>PO Number</TableHead>
@@ -453,7 +455,75 @@ export const Purchasing: React.FC = () => {
                 ))
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
+
+          {/* Mobile-optimized cards for smartphones */}
+          <div className="block md:hidden space-y-4">
+            {loading ? (
+              <div className="p-6 text-center text-slate-500 font-semibold animate-pulse">
+                Loading purchase orders...
+              </div>
+            ) : filteredPos.length === 0 ? (
+              <div className="p-6 text-center text-slate-500">
+                No purchase orders found.
+              </div>
+            ) : (
+              filteredPos.map((po, index) => (
+                <motion.div
+                  key={po.id}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.02, 0.2) }}
+                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-bold text-[#1A2B4B] bg-[#1A2B4B]/5 px-2 py-1 rounded-md">
+                      {po.poNumber}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {format(po.createdAt.toDate(), 'MMM dd, yyyy')}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 py-1">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400 font-medium text-xs uppercase tracking-wider">Supplier</span>
+                      <span className="font-bold text-slate-800 truncate max-w-[150px]">{po.supplierName}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-slate-400 font-medium text-xs uppercase tracking-wider">Destination</span>
+                      <span className="text-slate-600 font-semibold text-xs">
+                        {locations.find(l => l.id === po.locationId)?.name || 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm border-t border-slate-50 pt-1.5 mt-1.5 align-middle">
+                      <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Total amount</span>
+                      <span className="font-black text-rose-600 text-sm">
+                        {settings.currency}{(po.totalAmount ?? 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                    <div>{getStatusBadge(po.status)}</div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs font-bold gap-1.5 border-slate-200"
+                      onClick={() => {
+                        setSelectedPO(po);
+                        setIsViewOpen(true);
+                      }}
+                    >
+                      <Eye className="w-3.5 h-3.5 text-indigo-500" />
+                      View Details
+                    </Button>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
         </CardContent>
       </Card>
 

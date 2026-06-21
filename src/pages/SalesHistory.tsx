@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { 
   History, 
   Search, 
@@ -659,8 +660,9 @@ export const SalesHistory: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <Table>
-          {activeTab === 'sales' ? (
+        <div className="hidden md:block">
+          <Table>
+            {activeTab === 'sales' ? (
             <>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -809,7 +811,186 @@ export const SalesHistory: React.FC = () => {
         </Table>
       </div>
 
-      {/* Filter Dialog */}
+      {/* Interactive Responsive View for smartphones */}
+      <div className="block md:hidden p-3 bg-slate-50/50 space-y-4">
+        {activeTab === 'sales' ? (
+          loading ? (
+            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
+              Loading sales ledger...
+            </div>
+          ) : filteredSales.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
+              No sales transactions found.
+            </div>
+          ) : (
+            filteredSales.map((sale, index) => (
+              <motion.div
+                key={sale.id}
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: Math.min(index * 0.01, 0.15) }}
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900">
+                      {format(sale.timestamp.toDate(), 'MMM dd, yyyy')}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {format(sale.timestamp.toDate(), 'HH:mm:ss')}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                    #{sale.id.substring(0, 8)}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 py-1 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Customer</span>
+                    <span className="font-bold text-slate-800">{sale.customerDetails?.name || 'Walk-In'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Location branch</span>
+                    <Badge variant="secondary" className="bg-[#1A2B4B]/5 text-[#1A2B4B] hover:bg-[#1A2B4B]/10 py-0 px-1.5 border-none font-bold text-[10px]">
+                      {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-slate-400 shrink-0">Purchased items</span>
+                    <span className="text-slate-700 font-medium text-right max-w-[170px] truncate block" title={sale.items.map(i => i.name).join(', ')}>
+                      {sale.items.map(i => i.name).join(', ')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-slate-50 pt-1.5 mt-1 align-middle">
+                    <span className="text-slate-400 font-semibold">Total Paid</span>
+                    <span className="font-black text-slate-900 text-sm">
+                      {settings.currency}{(sale.total ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                  <Badge variant="outline" className={cn(
+                    "capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5",
+                    sale.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : 
+                    sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
+                    sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
+                    sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
+                    "bg-emerald-50 text-emerald-600 border-emerald-200"
+                  )}>
+                    {sale.status === 'voided' ? 'Voided' :
+                     sale.status === 'returned' ? 'Returned' :
+                     sale.status === 'partially_returned' ? 'Partially Returned' :
+                     sale.status === 'pending' ? 'Pending' : 'Completed'}
+                  </Badge>
+
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
+                    onClick={() => setSelectedSale(sale)}
+                  >
+                    <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                    Invoice Receipt
+                  </Button>
+                </div>
+              </motion.div>
+            ))
+          )
+        ) : (
+          loading ? (
+            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
+              Loading returns history...
+            </div>
+          ) : filteredReturns.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
+              No return records found.
+            </div>
+          ) : (
+            filteredReturns.map((ret, index) => (
+              <motion.div
+                key={ret.id}
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: Math.min(index * 0.01, 0.15) }}
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900">
+                      {format(ret.timestamp.toDate(), 'MMM dd, yyyy')}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {format(ret.timestamp.toDate(), 'HH:mm:ss')}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                    #{ret.id.substring(0, 8)}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 py-1 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Original Sale ID</span>
+                    <span className="font-mono text-xs font-semibold text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded">
+                      #{ret.originalSaleId.substring(0, 8)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Branch Name</span>
+                    <Badge variant="secondary" className="bg-[#1A2B4B]/5 text-[#1A2B4B] py-0 px-1.5 border-none font-bold text-[10px]">
+                      {locations.find(l => l.id === ret.locationId)?.name || 'Unknown'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-slate-400 shrink-0">Items Refunded</span>
+                    <span className="text-slate-700 font-bold text-right max-w-[170px] truncate block" title={ret.items?.map((i: any) => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}>
+                      {ret.items?.map((i: any) => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Return Reason</span>
+                    <span className="text-amber-600 font-semibold italic">{ret.reason}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Refund Account</span>
+                    <span className="text-slate-600 font-medium">{accounts.find(a => a.id === ret.refundAccountId)?.name || ret.refundMethod || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-slate-50 pt-1.5 mt-1 align-middle">
+                    <span className="text-slate-400 font-semibold">Refund Value</span>
+                    <span className="font-black text-rose-600 text-sm">
+                      {settings.currency}{(ret.totalRefund ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                  <Badge variant="outline" className={cn(
+                    "capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5",
+                    ret.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-blue-50 text-blue-600 border-blue-200"
+                  )}>
+                    {ret.status === 'voided' ? 'Voided' : 'Completed'}
+                  </Badge>
+
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
+                    onClick={() => setSelectedReturn(ret)}
+                  >
+                    <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                    Inspect Returns
+                  </Button>
+                </div>
+              </motion.div>
+            ))
+          )
+        )}
+      </div>
+    </div>
+
+    {/* Filter Dialog */}
       <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>

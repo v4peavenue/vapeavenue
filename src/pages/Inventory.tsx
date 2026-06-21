@@ -245,7 +245,7 @@ export const Inventory: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white/50 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="hidden md:block bg-white/50 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-50/50">
             <TableRow>
@@ -426,6 +426,149 @@ export const Inventory: React.FC = () => {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile Card-Based Grid - optimized for smartphone scanning */}
+      <div className="block md:hidden space-y-4">
+        {loading ? (
+          <div className="bg-white/80 p-8 rounded-2xl border border-slate-200 text-center text-slate-500 font-semibold animate-pulse">
+            Loading interactive inventory...
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="bg-white/80 p-8 rounded-2xl border border-slate-200 text-center text-slate-500">
+            {searchTerm ? 'No products found matching search.' : 'No products in inventory yet.'}
+          </div>
+        ) : (
+          filteredProducts.map((product, index) => {
+            const outOfStock = isOutOfStock(product, selectedLocationId);
+            const lowStock = isLowStock(product, selectedLocationId);
+            
+            return (
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.02, 0.2) }}
+                className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3.5 relative overflow-hidden"
+              >
+                {/* Header Info Banner */}
+                <div className="flex gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <Package className="w-6 h-6 text-slate-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-slate-900 truncate">{product.name}</div>
+                    <div className="text-[11px] text-slate-500 font-medium">SKU: <span className="font-mono">{product.sku}</span></div>
+                    {product.barcode && <div className="text-[10px] text-slate-400 font-mono mt-0.5">║ {product.barcode}</div>}
+                  </div>
+                  
+                  {isManager && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 -mt-2">
+                            <MoreVertical className="w-4 h-4 text-slate-500" />
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end" className="bg-white border-slate-200">
+                        <DropdownMenuItem onClick={() => {
+                          setAdjustingProductId(product.id);
+                          setIsAdjustmentOpen(true);
+                        }}>
+                          <ArrowUpDown className="w-4 h-4 mr-2 text-indigo-600" />
+                          Adjust Stock
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => {
+                          setEditingProduct(product);
+                          setIsFormOpen(true);
+                        }}>
+                          <Edit2 className="w-4 h-4 mr-2 text-slate-500" />
+                          Edit Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-rose-600" onClick={() => handleDelete(product.id)}>
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Product
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+
+                {/* Sub Badges Grid */}
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  <Badge variant="secondary" className="text-[10px] bg-slate-100 text-slate-600 py-0.5 border-none">
+                    {product.category}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] border-indigo-100 bg-indigo-50/50 text-indigo-600 py-0.5">
+                    {product.brand || 'No Brand'}
+                  </Badge>
+                  {outOfStock ? (
+                    <Badge variant="destructive" className="text-[10px] gap-1 bg-rose-50 text-rose-700 border-rose-100 shadow-none py-0.5">
+                      ✕ Out of Stock
+                    </Badge>
+                  ) : lowStock ? (
+                    <Badge variant="outline" className="text-[10px] gap-1 border-amber-200 bg-amber-50 text-amber-700 py-0.5 shadow-none">
+                      ⚠️ Low Stock
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] border-emerald-200 bg-emerald-50 text-emerald-700 py-0.5 font-bold shadow-none">
+                      ✓ Healthy
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Selling Pricing/Costs Details Panel */}
+                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center text-xs border border-slate-100 font-medium">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Selling Price</span>
+                    <span className="text-[#1A2B4B] font-bold">{settings.currency}{(product.price ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="border-l border-slate-200">
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Unit Cost</span>
+                    <span className="text-slate-600">{settings.currency}{(product.cost ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="border-l border-slate-200">
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Available Stock</span>
+                    <span className={cn(
+                      "font-bold",
+                      outOfStock ? "text-rose-600" : lowStock ? "text-amber-600" : "text-[#1A2B4B]"
+                    )}>{getDisplayStock(product)}</span>
+                  </div>
+                </div>
+
+                {/* Location Stocks Details */}
+                <div className="border-t border-slate-100 pt-3 space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between pb-1">
+                    <span>Stock Distribution by Branch</span>
+                    <MapPin className="w-3 h-3 text-[#D4AF37]" />
+                  </div>
+                  {locations.map(loc => {
+                    const threshold = product.locationThresholds?.[loc.id] ?? product.lowStockThreshold;
+                    const stock = product.stocks?.[loc.id] || 0;
+                    const isLow = stock > 0 && stock <= threshold;
+                    return (
+                      <div key={loc.id} className="flex justify-between items-center text-[11px] py-1 bg-slate-50/40 px-2 rounded-lg border border-slate-100">
+                        <span className="text-slate-600 truncate max-w-[150px] font-semibold">{loc.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn(
+                            "font-black",
+                            stock <= 0 ? "text-rose-500" : isLow ? "text-amber-600" : "text-slate-800"
+                          )}>{stock} units</span>
+                          <span className="text-[9px] text-slate-400 italic">(limit: {threshold})</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            );
+          })
+        )}
       </div>
 
       <ProductForm 
