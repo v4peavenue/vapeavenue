@@ -122,13 +122,21 @@ export const Dashboard: React.FC = () => {
       
       const filteredProducts = selectedLocationId === 'all' 
         ? allProducts 
-        : allProducts.filter(p => p.locationIds && p.locationIds.includes(selectedLocationId));
+        : allProducts.filter(p => 
+            (p.locationIds && p.locationIds.includes(selectedLocationId)) ||
+            (p.stocks && p.stocks[selectedLocationId] !== undefined && Number(p.stocks[selectedLocationId]) > 0)
+          );
 
       let alerts: LowStockAlert[] = [];
       if (selectedLocationId === 'all') {
         allProducts.forEach(p => {
-          // Only show alerts for locations that actually carry the product
-          (p.locationIds || []).forEach(locId => {
+          // Only show alerts for locations that actually carry the product (linked or has stock)
+          const productLocations = Array.from(new Set([
+            ...(p.locationIds || []),
+            ...Object.keys(p.stocks || {})
+          ]));
+          
+          productLocations.forEach(locId => {
             const loc = locations.find(l => l.id === locId);
             if (!loc) return;
 

@@ -164,7 +164,9 @@ export const Inventory: React.FC = () => {
     const matchesBrand = brandFilter === 'all' || p.brand === brandFilter;
     
     // Filter by global location
-    const matchesLocation = selectedLocationId === 'all' || (p.locationIds && p.locationIds.includes(selectedLocationId));
+    const matchesLocation = selectedLocationId === 'all' || 
+                            (p.locationIds && p.locationIds.includes(selectedLocationId)) ||
+                            (p.stocks && p.stocks[selectedLocationId] !== undefined && Number(p.stocks[selectedLocationId]) > 0);
     
     return matchesSearch && matchesCategory && matchesBrand && matchesLocation;
   });
@@ -298,7 +300,9 @@ export const Inventory: React.FC = () => {
                         </div>
                         <div>
                           <div className="font-medium text-[#1A2B4B]">{product.name}</div>
-                          <div className="text-xs text-slate-500">Cost: {settings.currency}{(product.cost ?? 0).toFixed(2)}</div>
+                          {isAdmin && (
+                            <div className="text-xs text-slate-500">Cost: {settings.currency}{(product.cost ?? 0).toFixed(2)}</div>
+                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -523,15 +527,20 @@ export const Inventory: React.FC = () => {
                 </div>
 
                 {/* Selling Pricing/Costs Details Panel */}
-                <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center text-xs border border-slate-100 font-medium">
+                <div className={cn(
+                  "grid gap-2 bg-slate-50 p-2.5 rounded-xl text-center text-xs border border-slate-100 font-medium",
+                  isAdmin ? "grid-cols-3" : "grid-cols-2"
+                )}>
                   <div>
                     <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Selling Price</span>
                     <span className="text-[#1A2B4B] font-bold">{settings.currency}{(product.price ?? 0).toFixed(2)}</span>
                   </div>
-                  <div className="border-l border-slate-200">
-                    <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Unit Cost</span>
-                    <span className="text-slate-600">{settings.currency}{(product.cost ?? 0).toFixed(2)}</span>
-                  </div>
+                  {isAdmin && (
+                    <div className="border-l border-slate-200">
+                      <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Unit Cost</span>
+                      <span className="text-slate-600">{settings.currency}{(product.cost ?? 0).toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="border-l border-slate-200">
                     <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Available Stock</span>
                     <span className={cn(

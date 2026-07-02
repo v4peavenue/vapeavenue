@@ -206,7 +206,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <span className="font-bold text-white font-heading text-xl">Agos</span>
           </div>
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-            <SheetTrigger render={<Button variant="ghost" size="icon" className="text-white" />}>
+            <SheetTrigger render={<Button variant="ghost" className="text-white h-11 w-11 hover:bg-white/10 flex items-center justify-center p-0" />}>
               <Menu className="w-6 h-6" />
             </SheetTrigger>
             <SheetContent side="left" className="p-0 w-64 border-none">

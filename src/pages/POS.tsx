@@ -94,13 +94,33 @@ export const POS: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState<'products' | 'cart'>('products');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedBrand, setSelectedBrand] = useState<string>('all');
+
+  const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean))) as string[];
+  const brandsForCategory = Array.from(new Set(
+    products
+      .filter(p => selectedCategory === 'all' || p.category === selectedCategory)
+      .map(p => p.brand)
+      .filter(Boolean)
+  )) as string[];
+
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
+    setSelectedBrand('all');
+  };
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesLocation = selectedLocationId === 'all' || (p.locationIds && p.locationIds.includes(selectedLocationId));
-    return matchesSearch && matchesLocation;
+    const matchesLocation = selectedLocationId === 'all' || 
+                            (p.locationIds && p.locationIds.includes(selectedLocationId)) ||
+                            (p.stocks && p.stocks[selectedLocationId] !== undefined && Number(p.stocks[selectedLocationId]) > 0);
+    const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
+    const matchesBrand = selectedBrand === 'all' || p.brand === selectedBrand;
+    
+    return matchesSearch && matchesLocation && matchesCategory && matchesBrand;
   });
 
   const getProductStock = (product: Product) => {
@@ -789,6 +809,86 @@ export const POS: React.FC = () => {
           </div>
         </div>
 
+        {/* Category & Brand Hierarchy Filter */}
+        <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 backdrop-blur-sm shrink-0">
+          {/* Category Level */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Category</span>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar pr-1">
+              <Button
+                variant={selectedCategory === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleCategoryChange('all')}
+                className={cn(
+                  "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
+                  selectedCategory === 'all'
+                    ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]"
+                    : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                )}
+              >
+                All Categories
+              </Button>
+              {categories.map(cat => (
+                <Button
+                  key={cat}
+                  variant={selectedCategory === cat ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => handleCategoryChange(cat)}
+                  className={cn(
+                    "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
+                    selectedCategory === cat
+                      ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]"
+                      : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                  )}
+                >
+                  {cat}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Brand Level */}
+          <div className="flex flex-col gap-1.5 border-t border-slate-200/50 pt-2.5">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+              Brand
+              {selectedCategory !== 'all' && (
+                <span className="text-slate-400/80 font-medium normal-case font-sans">under {selectedCategory}</span>
+              )}
+            </span>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar pr-1">
+              <Button
+                variant={selectedBrand === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedBrand('all')}
+                className={cn(
+                  "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
+                  selectedBrand === 'all'
+                    ? "bg-[#D4AF37] text-[#1A2B4B] hover:bg-[#D4AF37] font-bold"
+                    : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                )}
+              >
+                All Brands
+              </Button>
+              {brandsForCategory.map(brand => (
+                <Button
+                  key={brand}
+                  variant={selectedBrand === brand ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setSelectedBrand(brand)}
+                  className={cn(
+                    "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
+                    selectedBrand === brand
+                      ? "bg-[#D4AF37] text-[#1A2B4B] hover:bg-[#D4AF37] font-bold"
+                      : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                  )}
+                >
+                  {brand}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5 pb-6">
             {filteredProducts.map((product, index) => {
@@ -1007,7 +1107,7 @@ export const POS: React.FC = () => {
 
       {/* Checkout Dialog */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent className="sm:max-w-[600px] min-h-[720px] flex flex-col bg-white/95 backdrop-blur-md border-[#D4AF37]/20">
+        <DialogContent className="sm:max-w-[600px] md:min-h-[650px] max-h-[95vh] flex flex-col overflow-y-auto bg-white/95 backdrop-blur-md border-[#D4AF37]/20">
           <DialogHeader>
             <DialogTitle className="text-[#1A2B4B] font-heading text-2xl">Complete Sale</DialogTitle>
             <DialogDescription>Enter customer details and select payment method.</DialogDescription>
@@ -1419,7 +1519,7 @@ export const POS: React.FC = () => {
 
       {/* Success Dialog */}
       <Dialog open={isSuccessOpen} onOpenChange={setIsSuccessOpen}>
-        <DialogContent className="sm:max-w-[400px] min-h-[400px] flex flex-col justify-center text-center bg-white/95 backdrop-blur-md border-[#D4AF37]/20">
+        <DialogContent className="sm:max-w-[400px] md:min-h-[400px] max-h-[95vh] overflow-y-auto flex flex-col justify-center text-center bg-white/95 backdrop-blur-md border-[#D4AF37]/20">
           <div className="py-8 flex flex-col items-center">
             <motion.div 
               initial={{ scale: 0 }}

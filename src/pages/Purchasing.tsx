@@ -409,7 +409,7 @@ export const Purchasing: React.FC = () => {
                 <TableHead>Date</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>Destination</TableHead>
-                <TableHead>Total</TableHead>
+                {isAdmin && <TableHead>Total</TableHead>}
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -417,11 +417,11 @@ export const Purchasing: React.FC = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">Loading purchase orders...</TableCell>
+                  <TableCell colSpan={isAdmin ? 7 : 6} className="h-24 text-center">Loading purchase orders...</TableCell>
                 </TableRow>
               ) : filteredPos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                  <TableCell colSpan={isAdmin ? 7 : 6} className="h-24 text-center text-slate-500">
                     No purchase orders found.
                   </TableCell>
                 </TableRow>
@@ -436,7 +436,7 @@ export const Purchasing: React.FC = () => {
                     <TableCell className="text-xs">
                       {locations.find(l => l.id === po.locationId)?.name || 'Unknown'}
                     </TableCell>
-                    <TableCell className="font-semibold">{settings.currency}{(po.totalAmount ?? 0).toFixed(2)}</TableCell>
+                    {isAdmin && <TableCell className="font-semibold">{settings.currency}{(po.totalAmount ?? 0).toFixed(2)}</TableCell>}
                     <TableCell>{getStatusBadge(po.status)}</TableCell>
                     <TableCell className="text-right">
                       <Button 
@@ -497,12 +497,14 @@ export const Purchasing: React.FC = () => {
                         {locations.find(l => l.id === po.locationId)?.name || 'Unknown'}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-sm border-t border-slate-50 pt-1.5 mt-1.5 align-middle">
-                      <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Total amount</span>
-                      <span className="font-black text-rose-600 text-sm">
-                        {settings.currency}{(po.totalAmount ?? 0).toFixed(2)}
-                      </span>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex justify-between items-center text-sm border-t border-slate-50 pt-1.5 mt-1.5 align-middle">
+                        <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Total amount</span>
+                        <span className="font-black text-rose-600 text-sm">
+                          {settings.currency}{(po.totalAmount ?? 0).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
@@ -581,8 +583,8 @@ export const Purchasing: React.FC = () => {
                       <TableHead className="text-xs">Product</TableHead>
                       <TableHead className="text-xs">SKU</TableHead>
                       <TableHead className="text-xs text-center">Qty</TableHead>
-                      <TableHead className="text-xs text-right">Cost</TableHead>
-                      <TableHead className="text-xs text-right">Subtotal</TableHead>
+                      {isAdmin && <TableHead className="text-xs text-right">Cost</TableHead>}
+                      {isAdmin && <TableHead className="text-xs text-right">Subtotal</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -591,20 +593,22 @@ export const Purchasing: React.FC = () => {
                         <TableCell className="text-xs font-medium">{item.name}</TableCell>
                         <TableCell className="text-xs text-slate-500">{item.sku}</TableCell>
                         <TableCell className="text-xs text-center font-bold">{item.quantity}</TableCell>
-                        <TableCell className="text-xs text-right">{settings.currency}{(item.cost ?? 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-xs text-right font-bold">{settings.currency}{((item.quantity ?? 0) * (item.cost ?? 0)).toFixed(2)}</TableCell>
+                        {isAdmin && <TableCell className="text-xs text-right">{settings.currency}{(item.cost ?? 0).toFixed(2)}</TableCell>}
+                        {isAdmin && <TableCell className="text-xs text-right font-bold">{settings.currency}{((item.quantity ?? 0) * (item.cost ?? 0)).toFixed(2)}</TableCell>}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
 
-              <div className="flex justify-end">
-                <div className="text-right space-y-1">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Total Amount</p>
-                  <p className="text-2xl font-black text-slate-900">{settings.currency}{(selectedPO.totalAmount ?? 0).toFixed(2)}</p>
+              {isAdmin && (
+                <div className="flex justify-end">
+                  <div className="text-right space-y-1">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Total Amount</p>
+                    <p className="text-2xl font-black text-slate-900">{settings.currency}{(selectedPO.totalAmount ?? 0).toFixed(2)}</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {selectedPO.notes && (
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">

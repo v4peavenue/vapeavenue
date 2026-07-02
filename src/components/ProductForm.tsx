@@ -26,6 +26,7 @@ import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { logAction } from '@/lib/audit';
+import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
 import { MapPin, Scan } from 'lucide-react';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -49,7 +50,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   isOpen, 
   onClose 
 }) => {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const { settings } = useSettings();
   const [loading, setLoading] = useState(false);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -197,7 +198,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] min-h-[600px] flex flex-col">
+      <DialogContent className="sm:max-w-[500px] md:min-h-[600px] max-h-[95vh] overflow-y-auto flex flex-col">
         <DialogHeader>
           <DialogTitle>{product ? 'Edit Product' : 'Add New Product'}</DialogTitle>
         </DialogHeader>
@@ -308,11 +309,15 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
               <TabsContent value="pricing" className="space-y-4 mt-0 text-left">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cost">Cost Price ({settings.currency})</Label>
-                    <Input id="cost" type="number" step="0.01" {...register('cost', { required: true })} />
-                  </div>
-                  <div className="space-y-2">
+                  {isAdmin ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="cost">Cost Price ({settings.currency})</Label>
+                      <Input id="cost" type="number" step="0.01" {...register('cost', { required: true })} />
+                    </div>
+                  ) : (
+                    <input type="hidden" {...register('cost')} />
+                  )}
+                  <div className={cn("space-y-2", !isAdmin && "col-span-2")}>
                     <Label htmlFor="price">Selling Price ({settings.currency})</Label>
                     <Input id="price" type="number" step="0.01" {...register('price', { required: true })} />
                   </div>

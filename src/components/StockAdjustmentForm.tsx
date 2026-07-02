@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Product, Location, StockAdjustment } from '@/types';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, collection, addDoc, Timestamp, increment } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, Timestamp, increment, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { logAction } from '@/lib/audit';
 import { toast } from 'sonner';
@@ -112,6 +112,7 @@ export const StockAdjustmentForm: React.FC<StockAdjustmentFormProps> = ({
       await updateDoc(productRef, {
         [`stocks.${data.locationId}`]: newStockAtLocation,
         stock: increment(adjustmentAmount),
+        locationIds: arrayUnion(data.locationId),
         updatedAt: Timestamp.now()
       });
 

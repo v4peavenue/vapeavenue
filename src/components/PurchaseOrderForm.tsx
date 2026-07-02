@@ -70,7 +70,7 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
   suppliers,
   paymentOptions
 }) => {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const { settings } = useSettings();
   const [loading, setLoading] = useState(false);
   
@@ -186,7 +186,7 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] min-h-[750px] flex flex-col max-h-[90vh]">
+      <DialogContent className="sm:max-w-[700px] md:min-h-[700px] max-h-[95vh] flex flex-col overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-indigo-600" />
@@ -410,15 +410,19 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
                       {...register(`items.${index}.quantity` as const, { required: true, min: 1 })} 
                     />
                   </div>
-                  <div className="w-32 space-y-1">
-                    <Label className="text-[10px] uppercase font-bold text-slate-400">Unit Cost ({settings.currency})</Label>
-                    <Input 
-                      type="number" 
-                      step="0.01" 
-                      className="bg-white"
-                      {...register(`items.${index}.cost` as const, { required: true, min: 0 })} 
-                    />
-                  </div>
+                  {isAdmin ? (
+                    <div className="w-32 space-y-1">
+                      <Label className="text-[10px] uppercase font-bold text-slate-400">Unit Cost ({settings.currency})</Label>
+                      <Input 
+                        type="number" 
+                        step="0.01" 
+                        className="bg-white"
+                        {...register(`items.${index}.cost` as const, { required: true, min: 0 })} 
+                      />
+                    </div>
+                  ) : (
+                    <input type="hidden" {...register(`items.${index}.cost` as const)} />
+                  )}
                   <Button 
                     type="button" 
                     variant="ghost" 
@@ -433,10 +437,12 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
             </div>
           </div>
 
-          <div className="bg-indigo-50 p-4 rounded-xl flex justify-between items-center border border-indigo-100">
-            <span className="text-sm font-bold text-indigo-900">Total Purchase Amount:</span>
-            <span className="text-2xl font-black text-indigo-600">{settings.currency}{(totalAmount ?? 0).toFixed(2)}</span>
-          </div>
+          {isAdmin && (
+            <div className="bg-indigo-50 p-4 rounded-xl flex justify-between items-center border border-indigo-100">
+              <span className="text-sm font-bold text-indigo-900">Total Purchase Amount:</span>
+              <span className="text-2xl font-black text-indigo-600">{settings.currency}{(totalAmount ?? 0).toFixed(2)}</span>
+            </div>
+          )}
 
           <DialogFooter className="pt-6 border-t mt-auto">
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
