@@ -55,7 +55,7 @@ import { MapPin } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const POS: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const { locations, selectedLocationId } = useLocations();
   const { settings } = useSettings();
   const [products, setProducts] = useState<Product[]>([]);
@@ -97,9 +97,17 @@ export const POS: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
 
-  const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean))) as string[];
+  const visibleProducts = products.filter(p => {
+    if (isAdmin) return true;
+    const userLocId = profile?.locationId;
+    if (!userLocId) return false;
+    return (p.locationIds && p.locationIds.includes(userLocId)) || 
+           (p.stocks && p.stocks[userLocId] !== undefined && Number(p.stocks[userLocId]) > 0);
+  });
+
+  const categories = Array.from(new Set(visibleProducts.map(p => p.category).filter(Boolean))) as string[];
   const brandsForCategory = Array.from(new Set(
-    products
+    visibleProducts
       .filter(p => selectedCategory === 'all' || p.category === selectedCategory)
       .map(p => p.brand)
       .filter(Boolean)
@@ -110,7 +118,7 @@ export const POS: React.FC = () => {
     setSelectedBrand('all');
   };
 
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = visibleProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -193,7 +201,7 @@ export const POS: React.FC = () => {
       if (!term) return;
       e.preventDefault();
 
-      const matched = products.find(p => 
+      const matched = visibleProducts.find(p => 
         p.barcode?.toLowerCase() === term ||
         p.sku?.toLowerCase() === term
       );
@@ -234,7 +242,7 @@ export const POS: React.FC = () => {
 
       if (e.key === 'Enter') {
         if (buffer.length >= 3) {
-          const matched = products.find(p => 
+          const matched = visibleProducts.find(p => 
             p.barcode?.toLowerCase() === buffer.toLowerCase() ||
             p.sku?.toLowerCase() === buffer.toLowerCase()
           );
@@ -255,7 +263,7 @@ export const POS: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [products, selectedLocationId, addQtyMulti]);
+  }, [visibleProducts, selectedLocationId, addQtyMulti]);
 
   const handleCustomerSelect = (id: string) => {
     setSelectedCustomerId(id);

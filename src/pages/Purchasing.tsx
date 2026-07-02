@@ -372,6 +372,14 @@ export const Purchasing: React.FC = () => {
     po.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const visibleProducts = products.filter(p => {
+    if (isAdmin) return true;
+    const userLocId = profile?.locationId;
+    if (!userLocId) return false;
+    return (p.locationIds && p.locationIds.includes(userLocId)) || 
+           (p.stocks && p.stocks[userLocId] !== undefined && Number(p.stocks[userLocId]) > 0);
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -532,7 +540,7 @@ export const Purchasing: React.FC = () => {
       <PurchaseOrderForm 
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
-        products={products}
+        products={visibleProducts}
         locations={locations}
         suppliers={suppliers}
         paymentOptions={paymentOptions}

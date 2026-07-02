@@ -145,3 +145,38 @@
   }
 }
 
+/* Mobile & Tablet Cross-Platform Normalization (Apple/iOS vs Android) */
+
+/* Prevent iOS forced zoom on focus of form elements on mobile/tablet devices */
+@media (max-width: 1024px) {
+  input, select, textarea, [role="combobox"], [data-radix-select-trigger] {
+    font-size: 16px !important;
+  }
+}
+
+/* Standardize scrollbars and touch interaction */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ensure smooth native momentum scrolling on iOS and Android */
+.custom-scrollbar, 
+[role="dialog"], 
+main,
+aside {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Normalize date inputs on Safari (iOS) and Chrome (Android) */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 2.25rem;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  min-height: 1.5em;
+  margin: 0;
+}
+

@@ -72,14 +72,12 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [profile, isAdmin, loading, locations]);
 
   const handleSetSelectedLocationId = (id: string | 'all') => {
-    if (!isAdmin && profile?.locationId && id !== profile.locationId) {
-      // Prevent non-admins from changing to a location they don't belong to
+    if (!isAdmin) {
+      // Only Admins can change location
       return;
     }
     setSelectedLocationId(id);
-    if (isAdmin) {
-      localStorage.setItem('selectedLocationId', id);
-    }
+    localStorage.setItem('selectedLocationId', id);
   };
 
   const selectedLocation = locations.find(l => l.id === selectedLocationId) || null;

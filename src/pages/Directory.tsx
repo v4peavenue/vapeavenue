@@ -412,10 +412,12 @@ export const Directory: React.FC = () => {
             <Building2 className="w-4 h-4" />
             Suppliers
           </TabsTrigger>
-          <TabsTrigger value="locations" className="gap-2 rounded-lg px-6">
-            <MapPin className="w-4 h-4" />
-            Locations
-          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="locations" className="gap-2 rounded-lg px-6">
+              <MapPin className="w-4 h-4" />
+              Locations
+            </TabsTrigger>
+          )}
           <TabsTrigger value="customers" className="gap-2 rounded-lg px-6">
             <Users className="w-4 h-4" />
             Customers
@@ -662,107 +664,109 @@ export const Directory: React.FC = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="locations" className="space-y-6">
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card className="md:col-span-1 border-none shadow-sm bg-white/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl">Add Location</CardTitle>
-                <CardDescription>Branches and warehouses.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddLocation} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Location Name</Label>
-                    <Input 
-                      value={newLocation.name}
-                      onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
-                      placeholder="e.g. Quezon City Hub"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Address</Label>
-                    <Input 
-                      value={newLocation.addressLine1}
-                      onChange={(e) => setNewLocation({ ...newLocation, addressLine1: e.target.value })}
-                      placeholder="Street address"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+        {isAdmin && (
+          <TabsContent value="locations" className="space-y-6">
+            <div className="grid md:grid-cols-3 gap-6">
+              <Card className="md:col-span-1 border-none shadow-sm bg-white/50 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="font-heading text-2xl">Add Location</CardTitle>
+                  <CardDescription>Branches and warehouses.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleAddLocation} className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Municipality</Label>
+                      <Label>Location Name</Label>
                       <Input 
-                        value={newLocation.municipality}
-                        onChange={(e) => setNewLocation({ ...newLocation, municipality: e.target.value })}
-                        placeholder="District"
+                        value={newLocation.name}
+                        onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })}
+                        placeholder="e.g. Quezon City Hub"
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>City</Label>
+                      <Label>Address</Label>
                       <Input 
-                        value={newLocation.city}
-                        onChange={(e) => setNewLocation({ ...newLocation, city: e.target.value })}
-                        placeholder="City"
+                        value={newLocation.addressLine1}
+                        onChange={(e) => setNewLocation({ ...newLocation, addressLine1: e.target.value })}
+                        placeholder="Street address"
                       />
                     </div>
-                  </div>
-                  <Button type="submit" className="w-full">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Location
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Municipality</Label>
+                        <Input 
+                          value={newLocation.municipality}
+                          onChange={(e) => setNewLocation({ ...newLocation, municipality: e.target.value })}
+                          placeholder="District"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>City</Label>
+                        <Input 
+                          value={newLocation.city}
+                          onChange={(e) => setNewLocation({ ...newLocation, city: e.target.value })}
+                          placeholder="City"
+                        />
+                      </div>
+                    </div>
+                    <Button type="submit" className="w-full">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Location
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
 
-            <Card className="md:col-span-2 border-none shadow-sm">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl">Business Locations</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {locations
-                    .filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((loc) => (
-                    <div key={loc.id} className="p-5 bg-secondary/50 rounded-2xl border border-border group hover:border-primary/20 transition-all flex justify-between items-start">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4 text-secondary-foreground" />
-                          <h4 className="font-bold text-primary text-lg">{loc.name}</h4>
+              <Card className="md:col-span-2 border-none shadow-sm">
+                <CardHeader>
+                  <CardTitle className="font-heading text-2xl">Business Locations</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {locations
+                      .filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .map((loc) => (
+                      <div key={loc.id} className="p-5 bg-secondary/50 rounded-2xl border border-border group hover:border-primary/20 transition-all flex justify-between items-start">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-secondary-foreground" />
+                            <h4 className="font-bold text-primary text-lg">{loc.name}</h4>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {loc.addressLine1}
+                          </p>
+                          <p className="text-xs text-muted-foreground/80">
+                            {loc.municipality}, {loc.city}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {loc.addressLine1}
-                        </p>
-                        <p className="text-xs text-muted-foreground/80">
-                          {loc.municipality}, {loc.city}
-                        </p>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            onClick={() => setEditingLocation(loc)}
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete('locations', loc.id);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditingLocation(loc)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('locations', loc.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
 
         <TabsContent value="customers" className="space-y-6">
           <div className="grid md:grid-cols-3 gap-6">

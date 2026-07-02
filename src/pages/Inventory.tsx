@@ -156,7 +156,15 @@ export const Inventory: React.FC = () => {
     return stock <= 0;
   };
 
-  const filteredProducts = products.filter(p => {
+  const visibleProducts = products.filter(p => {
+    if (isAdmin) return true;
+    const userLocId = profile?.locationId;
+    if (!userLocId) return false;
+    return (p.locationIds && p.locationIds.includes(userLocId)) || 
+           (p.stocks && p.stocks[userLocId] !== undefined && Number(p.stocks[userLocId]) > 0);
+  });
+
+  const filteredProducts = visibleProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                          p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -593,7 +601,7 @@ export const Inventory: React.FC = () => {
       <StockAdjustmentForm
         isOpen={isAdjustmentOpen}
         onClose={() => setIsAdjustmentOpen(false)}
-        products={products}
+        products={visibleProducts}
         locations={locations}
         initialProductId={adjustingProductId}
       />
