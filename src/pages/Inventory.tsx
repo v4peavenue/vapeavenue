@@ -131,6 +131,11 @@ export const Inventory: React.FC = () => {
   };
 
   const getDisplayStock = (product: Product) => {
+    if (!isAdmin) {
+      const userLocId = profile?.locationId;
+      if (!userLocId) return 0;
+      return Number(product.stocks?.[userLocId] || 0);
+    }
     if (selectedLocationId === 'all') {
       return Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number;
     }
@@ -138,21 +143,27 @@ export const Inventory: React.FC = () => {
   };
 
   const isLowStock = (product: Product, locationId: string) => {
-    const stock = locationId === 'all' 
+    const locId = isAdmin ? locationId : (profile?.locationId || 'none');
+    if (locId === 'none') return false;
+
+    const stock = locId === 'all' 
       ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
-      : Number(product.stocks?.[locationId] || 0);
+      : Number(product.stocks?.[locId] || 0);
     
-    const threshold = locationId === 'all' 
+    const threshold = locId === 'all' 
       ? product.lowStockThreshold 
-      : (product.locationThresholds?.[locationId] ?? product.lowStockThreshold);
+      : (product.locationThresholds?.[locId] ?? product.lowStockThreshold);
       
     return stock > 0 && stock <= threshold;
   };
 
   const isOutOfStock = (product: Product, locationId: string) => {
-    const stock = locationId === 'all' 
+    const locId = isAdmin ? locationId : (profile?.locationId || 'none');
+    if (locId === 'none') return true;
+
+    const stock = locId === 'all' 
       ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
-      : Number(product.stocks?.[locationId] || 0);
+      : Number(product.stocks?.[locId] || 0);
     return stock <= 0;
   };
 
@@ -345,41 +356,43 @@ export const Inventory: React.FC = () => {
                         )}>
                           {getDisplayStock(product)}
                         </div>
-                        <Tooltip>
-                          <TooltipTrigger 
-                            render={
-                              <div className="h-6 w-6 flex items-center justify-center text-slate-400 hover:bg-white hover:text-[#D4AF37] rounded-md cursor-pointer transition-colors">
-                                <MapPin className="w-3 h-3" />
-                              </div>
-                            }
-                          />
-                          <TooltipContent side="right" className="bg-white border-slate-200">
-                              <div className="space-y-1.5 p-2 min-w-[150px]">
-                                <p className="text-[10px] font-black uppercase text-[#D4AF37] border-b border-[#D4AF37]/20 pb-1 mb-2 tracking-widest text-center">Stock & Alert Levels</p>
-                                {locations.map(loc => {
-                                  const threshold = product.locationThresholds?.[loc.id] ?? product.lowStockThreshold;
-                                  const stock = product.stocks?.[loc.id] || 0;
-                                  const isLow = stock > 0 && stock <= threshold;
-                                  
-                                  return (
-                                    <div key={loc.id} className="flex flex-col gap-0.5 mb-2 last:mb-0">
-                                      <div className="flex justify-between items-center text-[11px]">
-                                        <span className="text-slate-600 truncate max-w-[100px]">{loc.name}</span>
-                                        <span className={cn(
-                                          "font-black tracking-tight",
-                                          stock <= 0 ? "text-rose-500" : isLow ? "text-amber-600" : "text-[#1A2B4B]"
-                                        )}>{stock}</span>
+                        {isAdmin && (
+                          <Tooltip>
+                            <TooltipTrigger 
+                              render={
+                                <div className="h-6 w-6 flex items-center justify-center text-slate-400 hover:bg-white hover:text-[#D4AF37] rounded-md cursor-pointer transition-colors">
+                                  <MapPin className="w-3 h-3" />
+                                </div>
+                              }
+                            />
+                            <TooltipContent side="right" className="bg-white border-slate-200">
+                                <div className="space-y-1.5 p-2 min-w-[150px]">
+                                  <p className="text-[10px] font-black uppercase text-[#D4AF37] border-b border-[#D4AF37]/20 pb-1 mb-2 tracking-widest text-center">Stock & Alert Levels</p>
+                                  {locations.map(loc => {
+                                    const threshold = product.locationThresholds?.[loc.id] ?? product.lowStockThreshold;
+                                    const stock = product.stocks?.[loc.id] || 0;
+                                    const isLow = stock > 0 && stock <= threshold;
+                                    
+                                    return (
+                                      <div key={loc.id} className="flex flex-col gap-0.5 mb-2 last:mb-0">
+                                        <div className="flex justify-between items-center text-[11px]">
+                                          <span className="text-slate-600 truncate max-w-[100px]">{loc.name}</span>
+                                          <span className={cn(
+                                            "font-black tracking-tight",
+                                            stock <= 0 ? "text-rose-500" : isLow ? "text-amber-600" : "text-[#1A2B4B]"
+                                          )}>{stock}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[9px] text-slate-400">
+                                          <span>Alert Level:</span>
+                                          <span>{threshold}</span>
+                                        </div>
                                       </div>
-                                      <div className="flex justify-between items-center text-[9px] text-slate-400">
-                                        <span>Alert Level:</span>
-                                        <span>{threshold}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
+                                    );
+                                  })}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
                     </TableCell>
                     <TableCell>
@@ -559,29 +572,31 @@ export const Inventory: React.FC = () => {
                 </div>
 
                 {/* Location Stocks Details */}
-                <div className="border-t border-slate-100 pt-3 space-y-1.5">
-                  <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between pb-1">
-                    <span>Stock Distribution by Branch</span>
-                    <MapPin className="w-3 h-3 text-[#D4AF37]" />
-                  </div>
-                  {locations.map(loc => {
-                    const threshold = product.locationThresholds?.[loc.id] ?? product.lowStockThreshold;
-                    const stock = product.stocks?.[loc.id] || 0;
-                    const isLow = stock > 0 && stock <= threshold;
-                    return (
-                      <div key={loc.id} className="flex justify-between items-center text-[11px] py-1 bg-slate-50/40 px-2 rounded-lg border border-slate-100">
-                        <span className="text-slate-600 truncate max-w-[150px] font-semibold">{loc.name}</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn(
-                            "font-black",
-                            stock <= 0 ? "text-rose-500" : isLow ? "text-amber-600" : "text-slate-800"
-                          )}>{stock} units</span>
-                          <span className="text-[9px] text-slate-400 italic">(limit: {threshold})</span>
+                {isAdmin && (
+                  <div className="border-t border-slate-100 pt-3 space-y-1.5">
+                    <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between pb-1">
+                      <span>Stock Distribution by Branch</span>
+                      <MapPin className="w-3 h-3 text-[#D4AF37]" />
+                    </div>
+                    {locations.map(loc => {
+                      const threshold = product.locationThresholds?.[loc.id] ?? product.lowStockThreshold;
+                      const stock = product.stocks?.[loc.id] || 0;
+                      const isLow = stock > 0 && stock <= threshold;
+                      return (
+                        <div key={loc.id} className="flex justify-between items-center text-[11px] py-1 bg-slate-50/40 px-2 rounded-lg border border-slate-100">
+                          <span className="text-slate-600 truncate max-w-[150px] font-semibold">{loc.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn(
+                              "font-black",
+                              stock <= 0 ? "text-rose-500" : isLow ? "text-amber-600" : "text-slate-800"
+                            )}>{stock} units</span>
+                            <span className="text-[9px] text-slate-400 italic">(limit: {threshold})</span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </motion.div>
             );
           })
