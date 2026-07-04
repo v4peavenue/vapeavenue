@@ -524,8 +524,8 @@ export const POS: React.FC = () => {
     try {
       let finalCustomerId = selectedCustomerId;
 
-      // Create new customer if 'new' or 'walk-in' is selected
-      if (selectedCustomerId === 'new' || selectedCustomerId === 'walk-in') {
+      // Create new customer only if 'new' is selected (do not create for walk-in)
+      if (selectedCustomerId === 'new') {
         const customerRef = await addDoc(collection(db, 'customers'), {
           ...customerDetails,
           createdAt: Timestamp.now()
@@ -720,6 +720,22 @@ export const POS: React.FC = () => {
       setPaymentReference('');
       setActiveCategory('cash');
       setIsSplitPayment(false);
+      
+      // Reset customer to walk-in
+      setSelectedCustomerId('walk-in');
+      setSelectedTierId('');
+      const activeLocationId = selectedLocationId === 'all' ? checkoutLocationId : selectedLocationId;
+      const location = locations.find(l => l.id === activeLocationId);
+      setCustomerDetails({
+        name: 'Walk-In Customer',
+        billingAddress: location?.addressLine1 || '',
+        shippingAddress: location?.addressLine1 || '',
+        municipality: location?.municipality || '',
+        city: location?.city || '',
+        country: location?.country || 'Philippines',
+        zip: ''
+      });
+
       setIsCheckoutOpen(false);
       setIsSuccessOpen(true);
       toast.success(isPending ? 'Sale marked as pending' : 'Sale completed successfully');

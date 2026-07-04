@@ -540,6 +540,50 @@ export const SalesHistory: React.FC = () => {
     }
   };
 
+  const getPaymentMethodName = React.useCallback((id: string, splits?: any[]) => {
+    if (!id) return '';
+    const idLower = id.toLowerCase();
+    if (idLower === 'cash') return 'Cash';
+    if (idLower === 'card') return 'Card';
+    if (idLower === 'digital') return 'Digital Payment';
+    if (idLower === 'pending') return 'Pending/Unpaid';
+    if (idLower === 'split') return 'Split Payment';
+
+    const acc = accounts.find(a => a.id === id);
+    if (acc) return acc.name;
+
+    const opt = paymentOptions.find(o => o.id === id);
+    if (opt) return opt.name;
+
+    if (splits && splits.length > 0) {
+      const matchingSplit = splits.find(split => split.methodId === id);
+      if (matchingSplit && matchingSplit.methodName) {
+        return matchingSplit.methodName;
+      }
+    }
+    return id.charAt(0).toUpperCase() + id.slice(1);
+  }, [accounts, paymentOptions]);
+
+  const getUnifiedMethodId = React.useCallback((id: string) => {
+    if (!id) return 'cash';
+    const idLower = id.toLowerCase();
+    if (idLower === 'cash') return 'cash';
+    
+    // Find in paymentOptions
+    const opt = paymentOptions.find(o => o.id === id);
+    if (opt && (opt.id.toLowerCase() === 'cash' || opt.name.toLowerCase() === 'cash' || opt.type === 'cash')) {
+      return 'cash';
+    }
+
+    // Find in accounts
+    const acc = accounts.find(a => a.id === id);
+    if (acc && (acc.id.toLowerCase() === 'cash' || acc.name.toLowerCase() === 'cash')) {
+      return 'cash';
+    }
+
+    return id;
+  }, [paymentOptions, accounts]);
+
   const dynamicPaymentOptions = React.useMemo(() => {
     const methodsInUse = new Set<string>();
     sales.forEach(sale => {
@@ -556,42 +600,18 @@ export const SalesHistory: React.FC = () => {
     });
 
     const list: { id: string; name: string }[] = [];
+    const seenNames = new Set<string>();
+
     methodsInUse.forEach(id => {
-      let name = '';
-      if (id === 'cash') {
-        name = 'Cash';
-      } else if (id === 'card') {
-        name = 'Card';
-      } else if (id === 'digital') {
-        name = 'Digital Payment';
-      } else if (id === 'pending') {
-        name = 'Pending/Unpaid';
-      } else if (id === 'split') {
-        name = 'Split Payment';
-      } else {
-        const acc = accounts.find(a => a.id === id);
-        if (acc) {
-          name = acc.name;
-        } else {
-          const opt = paymentOptions.find(o => o.id === id);
-          if (opt) {
-            name = opt.name;
-          } else {
-            const matchingSplit = sales
-              .flatMap(s => s.paymentSplits || [])
-              .find(split => split.methodId === id);
-            if (matchingSplit && matchingSplit.methodName) {
-              name = matchingSplit.methodName;
-            } else {
-              name = id.charAt(0).toUpperCase() + id.slice(1);
-            }
-          }
-        }
+      const name = getPaymentMethodName(id, sales.flatMap(s => s.paymentSplits || []));
+      const nameKey = name.trim().toLowerCase();
+      if (!seenNames.has(nameKey)) {
+        seenNames.add(nameKey);
+        list.push({ id, name });
       }
-      list.push({ id, name });
     });
     return list;
-  }, [sales, accounts, paymentOptions]);
+  }, [sales, getPaymentMethodName]);
 
   const filteredSales = sales.filter(s => {
     // Search filter
@@ -623,8 +643,21 @@ export const SalesHistory: React.FC = () => {
       } else if (paymentFilter === 'pending') {
         matchesPayment = s.paymentMethod === 'pending' || s.status === 'pending';
       } else {
-        matchesPayment = s.paymentMethod === paymentFilter || 
-                         s.paymentSplits?.some(split => split.methodId === paymentFilter) === true;
+        const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter);
+        const filterName = selectedOption ? selectedOption.name.toLowerCase() : '';
+        if (filterName) {
+          const saleMethodName = getPaymentMethodName(s.paymentMethod, s.paymentSplits).toLowerCase();
+          const matchesMain = saleMethodName === filterName;
+          const matchesSplit = s.paymentSplits?.some(split => {
+            const splitMethodName = getPaymentMethodName(split.methodId, s.paymentSplits).toLowerCase();
+            return splitMethodName === filterName;
+          }) === true;
+
+          matchesPayment = matchesMain || matchesSplit;
+        } else {
+          matchesPayment = s.paymentMethod === paymentFilter || 
+                           s.paymentSplits?.some(split => split.methodId === paymentFilter) === true;
+        }
       }
     }
 
@@ -694,6 +727,10 @@ export const SalesHistory: React.FC = () => {
 
     // Initialize configured paymentOptions
     paymentOptions.forEach(opt => {
+      const unifiedId = getUnifiedMethodId(opt.id);
+      if (unifiedId === 'cash') {
+        return; // Merge/avoid duplicate 'Cash' options in KPI list
+      }
       totals[opt.id] = { name: opt.name, amount: 0, type: opt.type };
     });
 
@@ -702,10 +739,11 @@ export const SalesHistory: React.FC = () => {
     activeSales.forEach(sale => {
       if (sale.paymentSplits && sale.paymentSplits.length > 0) {
         sale.paymentSplits.forEach(split => {
-          const mId = split.methodId || 'cash';
+          const rawId = split.methodId || 'cash';
+          const mId = getUnifiedMethodId(rawId);
           if (!totals[mId]) {
             totals[mId] = { 
-              name: split.methodName || mId, 
+              name: mId === 'cash' ? 'Cash' : (split.methodName || mId), 
               amount: 0, 
               type: mId === 'cash' ? 'cash' : 'ewallet' 
             };
@@ -713,13 +751,14 @@ export const SalesHistory: React.FC = () => {
           totals[mId].amount += split.amount || 0;
         });
       } else {
-        const mId = sale.paymentMethod || 'cash';
+        const rawId = sale.paymentMethod || 'cash';
+        const mId = getUnifiedMethodId(rawId);
         if (!totals[mId]) {
           const opt = paymentOptions.find(o => o.id === mId);
           totals[mId] = { 
-            name: opt?.name || mId, 
+            name: mId === 'cash' ? 'Cash' : (opt?.name || mId), 
             amount: 0, 
-            type: opt?.type || (mId === 'cash' ? 'cash' : 'ewallet') 
+            type: mId === 'cash' ? 'cash' : (opt?.type || 'ewallet') 
           };
         }
         totals[mId].amount += sale.total || 0;

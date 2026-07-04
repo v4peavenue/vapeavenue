@@ -35,6 +35,14 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { Badge } from '@/components/ui/badge';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
 export const Directory: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -458,35 +466,55 @@ export const Directory: React.FC = () => {
                 <CardTitle className="font-heading text-2xl">Category List</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {categories
-                    .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((cat) => (
-                    <div key={cat.id} className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl border border-border group hover:border-primary/20 transition-all">
-                      <span className="font-semibold text-primary">{cat.name}</span>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditingCategory(cat)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('categories', cat.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <Table>
+                    <TableHeader className="bg-secondary/30">
+                      <TableRow>
+                        <TableHead className="font-heading">Category Name</TableHead>
+                        <TableHead className="text-right font-heading w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {categories.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
+                            No categories found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        categories
+                          .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((cat) => (
+                            <TableRow key={cat.id} className="group hover:bg-secondary/20">
+                              <TableCell className="font-semibold text-primary">{cat.name}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={() => setEditingCategory(cat)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete('categories', cat.id);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -523,35 +551,55 @@ export const Directory: React.FC = () => {
                 <CardTitle className="font-heading text-2xl">Brand List</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {brands
-                    .filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((brand) => (
-                    <div key={brand.id} className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl border border-border group hover:border-primary/20 transition-all">
-                      <span className="font-semibold text-primary">{brand.name}</span>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditingBrand(brand)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('brands', brand.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <Table>
+                    <TableHeader className="bg-secondary/30">
+                      <TableRow>
+                        <TableHead className="font-heading">Brand Name</TableHead>
+                        <TableHead className="text-right font-heading w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {brands.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
+                            No brands found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        brands
+                          .filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((brand) => (
+                            <TableRow key={brand.id} className="group hover:bg-secondary/20">
+                              <TableCell className="font-semibold text-primary">{brand.name}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={() => setEditingBrand(brand)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete('brands', brand.id);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -613,51 +661,61 @@ export const Directory: React.FC = () => {
                 <CardTitle className="font-heading text-2xl">Supplier Directory</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {suppliers
-                    .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((sup) => (
-                    <div key={sup.id} className="p-5 bg-secondary/50 rounded-2xl border border-border group hover:border-primary/20 transition-all flex justify-between items-start">
-                      <div className="space-y-1">
-                        <h4 className="font-bold text-primary text-lg">{sup.name}</h4>
-                        {sup.address && (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground/80">
-                            <MapPin className="w-3 h-3 text-[#D4AF37]" />
-                            {sup.address}
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Users className="w-3 h-3" />
-                          {sup.contact}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground/80">
-                          <BookOpen className="w-3 h-3" />
-                          {sup.email}
-                        </div>
-                      </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditingSupplier(sup)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('suppliers', sup.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <Table>
+                    <TableHeader className="bg-secondary/30">
+                      <TableRow>
+                        <TableHead className="font-heading">Supplier Name</TableHead>
+                        <TableHead className="font-heading">Contact Person</TableHead>
+                        <TableHead className="font-heading">Email</TableHead>
+                        <TableHead className="font-heading">Address</TableHead>
+                        <TableHead className="text-right font-heading w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {suppliers.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            No suppliers found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        suppliers
+                          .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((sup) => (
+                            <TableRow key={sup.id} className="group hover:bg-secondary/20">
+                              <TableCell className="font-semibold text-primary">{sup.name}</TableCell>
+                              <TableCell className="text-muted-foreground">{sup.contact || '-'}</TableCell>
+                              <TableCell className="text-muted-foreground">{sup.email || '-'}</TableCell>
+                              <TableCell className="text-muted-foreground">{sup.address || '-'}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={() => setEditingSupplier(sup)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete('suppliers', sup.id);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -721,47 +779,62 @@ export const Directory: React.FC = () => {
                   <CardTitle className="font-heading text-2xl">Business Locations</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {locations
-                      .filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                      .map((loc) => (
-                      <div key={loc.id} className="p-5 bg-secondary/50 rounded-2xl border border-border group hover:border-primary/20 transition-all flex justify-between items-start">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-secondary-foreground" />
-                            <h4 className="font-bold text-primary text-lg">{loc.name}</h4>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {loc.addressLine1}
-                          </p>
-                          <p className="text-xs text-muted-foreground/80">
-                            {loc.municipality}, {loc.city}
-                          </p>
-                        </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-muted-foreground hover:text-primary"
-                            onClick={() => setEditingLocation(loc)}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete('locations', loc.id);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <Table>
+                    <TableHeader className="bg-secondary/30">
+                      <TableRow>
+                        <TableHead className="font-heading">Location Name</TableHead>
+                        <TableHead className="font-heading">Address</TableHead>
+                        <TableHead className="font-heading">Municipality & City</TableHead>
+                        <TableHead className="text-right font-heading w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {locations.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                            No locations found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        locations
+                          .filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((loc) => (
+                            <TableRow key={loc.id} className="group hover:bg-secondary/20">
+                              <TableCell className="font-semibold text-primary">{loc.name}</TableCell>
+                              <TableCell className="text-muted-foreground">{loc.addressLine1 || '-'}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {loc.municipality ? `${loc.municipality}, ` : ''}{loc.city || ''}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={() => setEditingLocation(loc)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete('locations', loc.id);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
                 </CardContent>
               </Card>
             </div>
@@ -834,47 +907,69 @@ export const Directory: React.FC = () => {
                 <CardTitle className="font-heading text-2xl">Customer Database</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {customers
-                    .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((cust) => (
-                    <div key={cust.id} className="p-5 bg-secondary/50 rounded-2xl border border-border group hover:border-primary/20 transition-all flex justify-between items-start">
-                      <div className="space-y-1">
-                        <h4 className="font-bold text-primary text-lg">{cust.name}</h4>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Users className="w-3 h-3" />
-                          {cust.phone || 'No phone'}
-                        </div>
-                        <p className="text-xs text-muted-foreground/80">{cust.email || 'No email'}</p>
-                        {cust.priceTierId && (
-                          <Badge variant="secondary" className="mt-2 bg-indigo-50 text-indigo-700 border-none text-[10px]">
-                            {priceTiers.find(t => t.id === cust.priceTierId)?.name || 'Custom Tier'}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditingCustomer(cust)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('customers', cust.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <Table>
+                    <TableHeader className="bg-secondary/30">
+                      <TableRow>
+                        <TableHead className="font-heading">Customer Name</TableHead>
+                        <TableHead className="font-heading">Phone</TableHead>
+                        <TableHead className="font-heading">Email</TableHead>
+                        <TableHead className="font-heading">Price Tier</TableHead>
+                        <TableHead className="text-right font-heading w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {customers.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            No customers found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        customers
+                          .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((cust) => (
+                            <TableRow key={cust.id} className="group hover:bg-secondary/20">
+                              <TableCell className="font-semibold text-primary">{cust.name}</TableCell>
+                              <TableCell className="text-muted-foreground">{cust.phone || '-'}</TableCell>
+                              <TableCell className="text-muted-foreground">{cust.email || '-'}</TableCell>
+                              <TableCell>
+                                {cust.priceTierId ? (
+                                  <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50/80 border-none text-[11px]">
+                                    {priceTiers.find(t => t.id === cust.priceTierId)?.name || 'Custom Tier'}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Default Retail</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={() => setEditingCustomer(cust)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete('customers', cust.id);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
@@ -918,38 +1013,57 @@ export const Directory: React.FC = () => {
                 <CardTitle className="font-heading text-2xl">Price Tiers</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {priceTiers
-                    .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((tier) => (
-                    <div key={tier.id} className="p-5 bg-secondary/50 rounded-2xl border border-border group hover:border-primary/20 transition-all flex justify-between items-start">
-                      <div className="space-y-1">
-                        <h4 className="font-bold text-primary text-lg">{tier.name}</h4>
-                        <p className="text-sm text-muted-foreground">{tier.description || 'No description'}</p>
-                      </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                          onClick={() => setEditingPriceTier(tier)}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('priceTiers', tier.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto border border-border rounded-xl">
+                  <Table>
+                    <TableHeader className="bg-secondary/30">
+                      <TableRow>
+                        <TableHead className="font-heading">Tier Name</TableHead>
+                        <TableHead className="font-heading">Description</TableHead>
+                        <TableHead className="text-right font-heading w-[100px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {priceTiers.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                            No price tiers found
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        priceTiers
+                          .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .map((tier) => (
+                            <TableRow key={tier.id} className="group hover:bg-secondary/20">
+                              <TableCell className="font-semibold text-primary">{tier.name}</TableCell>
+                              <TableCell className="text-muted-foreground">{tier.description || '-'}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                    onClick={() => setEditingPriceTier(tier)}
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDelete('priceTiers', tier.id);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>

@@ -94,6 +94,10 @@ export const Attendance: React.FC = () => {
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [scheduleDateRange, setScheduleDateRange] = useState({ start: '', end: '' });
   const [scheduleSortBy, setScheduleSortBy] = useState('date_desc');
+  const [sortRules, setSortRules] = useState<{ field: 'date' | 'name' | 'startTime'; direction: 'asc' | 'desc' }[]>([
+    { field: 'date', direction: 'desc' },
+    { field: 'name', direction: 'asc' }
+  ]);
   const [newRequest, setNewRequest] = useState<Partial<AttendanceRequest>>({
     type: 'leave',
     status: 'pending',
@@ -499,8 +503,70 @@ export const Attendance: React.FC = () => {
     return schedules.find(s => s.userId === userId && s.date === dateStr);
   };
 
+  const upcomingDates = useMemo(() => {
+    return Array.from({ length: 7 }).map((_, i) => addDays(new Date(), i));
+  }, []);
+
+  const getUserScheduleStatusForDate = (userId: string, date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // 1. Check approved leave requests
+    const leave = requests.find(r => 
+      r.userId === userId && 
+      r.status === 'approved' && 
+      r.type === 'leave' && 
+      r.startDate <= dateStr && 
+      (r.endDate ? r.endDate >= dateStr : r.startDate === dateStr)
+    );
+    
+    if (leave) {
+      return {
+        type: 'leave' as const,
+        label: 'L',
+        fullName: 'On Leave',
+        colorClass: 'bg-rose-50 text-rose-600 border-rose-100 hover:bg-rose-100',
+        tooltip: `On Leave: ${leave.reason || 'No reason provided'}`
+      };
+    }
+    
+    // 2. Check schedules
+    const schedule = schedules.find(s => s.userId === userId && s.date === dateStr);
+    if (schedule) {
+      if (schedule.isDayOff) {
+        return {
+          type: 'off' as const,
+          label: 'Off',
+          fullName: 'Day Off',
+          colorClass: 'bg-slate-50 text-slate-400 border-slate-100 hover:bg-slate-100',
+          tooltip: 'Day Off'
+        };
+      } else {
+        return {
+          type: 'work' as const,
+          label: `${schedule.startTime}`,
+          fullName: `Working: ${schedule.startTime} - ${schedule.endTime}`,
+          colorClass: 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100',
+          tooltip: `Working: ${schedule.startTime} - ${schedule.endTime}`
+        };
+      }
+    }
+    
+    return {
+      type: 'none' as const,
+      label: '-',
+      fullName: 'No Schedule',
+      colorClass: 'bg-slate-50/50 text-slate-300 border-slate-100 hover:bg-slate-100/50',
+      tooltip: 'No Schedule Set'
+    };
+  };
+
   const filteredSchedules = useMemo(() => {
     let result = [...schedules];
+
+    // For staff users, only their schedule should be seen in the table.
+    if (!isAdmin && !isManager && profile?.id) {
+      result = result.filter(sch => sch.userId === profile.id);
+    }
 
     // Filter by search query
     if (scheduleSearch) {
@@ -522,35 +588,29 @@ export const Attendance: React.FC = () => {
       result = result.filter(sch => sch.date <= scheduleDateRange.end);
     }
 
-    // Sort options
+    // Multi-key sequential sorting
     result.sort((a, b) => {
-      if (scheduleSortBy === 'date_desc') {
-        return b.date.localeCompare(a.date);
-      }
-      if (scheduleSortBy === 'date_asc') {
-        return a.date.localeCompare(b.date);
-      }
-      if (scheduleSortBy === 'name_asc') {
-        const nameA = a.userName || allUsers.find(u => u.id === a.userId)?.name || a.userId;
-        const nameB = b.userName || allUsers.find(u => u.id === b.userId)?.name || b.userId;
-        return nameA.localeCompare(nameB);
-      }
-      if (scheduleSortBy === 'name_desc') {
-        const nameA = a.userName || allUsers.find(u => u.id === a.userId)?.name || a.userId;
-        const nameB = b.userName || allUsers.find(u => u.id === b.userId)?.name || b.userId;
-        return nameB.localeCompare(nameA);
-      }
-      if (scheduleSortBy === 'time_asc') {
-        return (a.startTime || '').localeCompare(b.startTime || '');
-      }
-      if (scheduleSortBy === 'time_desc') {
-        return (b.startTime || '').localeCompare(a.startTime || '');
+      for (const rule of sortRules) {
+        let comparison = 0;
+        if (rule.field === 'date') {
+          comparison = a.date.localeCompare(b.date);
+        } else if (rule.field === 'name') {
+          const nameA = a.userName || allUsers.find(u => u.id === a.userId)?.name || a.userId || '';
+          const nameB = b.userName || allUsers.find(u => u.id === b.userId)?.name || b.userId || '';
+          comparison = nameA.localeCompare(nameB);
+        } else if (rule.field === 'startTime') {
+          comparison = (a.startTime || '').localeCompare(b.startTime || '');
+        }
+        
+        if (comparison !== 0) {
+          return rule.direction === 'asc' ? comparison : -comparison;
+        }
       }
       return 0;
     });
 
     return result;
-  }, [schedules, scheduleSearch, scheduleDateRange, scheduleSortBy, allUsers]);
+  }, [schedules, scheduleSearch, scheduleDateRange, sortRules, allUsers, profile, isAdmin, isManager]);
 
   return (
     <div className="space-y-8 pb-12">
@@ -714,6 +774,90 @@ export const Attendance: React.FC = () => {
                   </div>
                 );
               })()}
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-xl bg-white/50 backdrop-blur-sm overflow-hidden mt-6">
+            <CardHeader className="bg-primary/5 border-b border-primary/5 pb-3">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-primary/40" />
+                Upcoming Team Calendar
+              </CardTitle>
+              <CardDescription className="text-[10px]">
+                Weekly schedule & leave indicator of all team members. Hover indicator for details.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/30">
+                      <th className="pl-4 pr-2 py-2.5 text-[9px] font-black text-slate-400 uppercase tracking-widest min-w-[90px]">Staff</th>
+                      {upcomingDates.map((date, idx) => (
+                        <th key={idx} className="px-1 py-2.5 text-center min-w-[42px]">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase">{format(date, 'EEE').substring(0, 2)}</p>
+                          <p className={cn(
+                            "text-xs font-black",
+                            isToday(date) ? "text-indigo-600 font-extrabold" : "text-slate-700"
+                          )}>{format(date, 'd')}</p>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {allUsers.map((user) => (
+                      <tr key={user.id} className="hover:bg-slate-50/40">
+                        <td className="pl-4 pr-2 py-2 text-xs font-bold text-slate-700 max-w-[100px] truncate">
+                          {user.name || user.email?.split('@')[0] || user.id}
+                        </td>
+                        {upcomingDates.map((date, idx) => {
+                          const status = getUserScheduleStatusForDate(user.id, date);
+                          return (
+                            <td key={idx} className="px-1 py-2 text-center align-middle">
+                              <div className="flex justify-center">
+                                <div className="relative group/cell">
+                                  {/* The indicator trigger */}
+                                  <div className={cn(
+                                    "w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black border transition-all cursor-help shadow-sm",
+                                    status.colorClass
+                                  )}>
+                                    {status.type === 'work' ? 'W' : status.label}
+                                  </div>
+                                  
+                                  {/* The Tooltip content */}
+                                  <div className="absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/cell:block w-48 bg-slate-950 text-white text-[11px] p-2.5 rounded-xl shadow-xl pointer-events-none text-center leading-relaxed">
+                                    <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">
+                                      {format(date, 'EEEE, MMMM dd')}
+                                    </p>
+                                    <p className="font-semibold text-slate-300">
+                                      {user.name || user.email || user.id}
+                                    </p>
+                                    <p className={cn(
+                                      "font-black mt-1",
+                                      status.type === 'leave' ? "text-rose-400" :
+                                      status.type === 'off' ? "text-slate-400" :
+                                      status.type === 'work' ? "text-emerald-400" : "text-slate-400"
+                                    )}>
+                                      {status.fullName}
+                                    </p>
+                                    {status.type === 'leave' && (
+                                      <p className="text-[10px] text-rose-300 italic mt-1 max-w-full break-words">
+                                        Reason: {status.tooltip.replace('On Leave: ', '')}
+                                      </p>
+                                    )}
+                                    {/* Arrow */}
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1040,21 +1184,62 @@ export const Attendance: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sort By</Label>
-                      <Select value={scheduleSortBy} onValueChange={setScheduleSortBy}>
-                        <SelectTrigger className="w-48 h-10 text-xs border-slate-200 bg-white text-primary">
-                          <SelectValue placeholder="Sort Schedule" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="date_desc">Date (Newest First)</SelectItem>
-                          <SelectItem value="date_asc">Date (Oldest First)</SelectItem>
-                          <SelectItem value="name_asc">Staff Name (A to Z)</SelectItem>
-                          <SelectItem value="name_desc">Staff Name (Z to A)</SelectItem>
-                          <SelectItem value="time_asc">Shift Start (Earliest)</SelectItem>
-                          <SelectItem value="time_desc">Shift Start (Latest)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="flex flex-col gap-2 w-full md:w-auto">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sort Priority:</span>
+                        {sortRules.map((rule, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl border border-indigo-100/50 text-[11px] font-bold">
+                            <span className="capitalize">{rule.field === 'startTime' ? 'Shift Start' : rule.field === 'name' ? 'Staff Name' : rule.field}</span>
+                            <button
+                              type="button"
+                              className="text-indigo-500 hover:text-indigo-800 transition-colors px-1 text-xs font-black"
+                              onClick={() => {
+                                const updated = [...sortRules];
+                                updated[idx].direction = updated[idx].direction === 'asc' ? 'desc' : 'asc';
+                                setSortRules(updated);
+                              }}
+                              title="Toggle direction"
+                            >
+                              {rule.direction === 'asc' ? '↑' : '↓'}
+                            </button>
+                            {sortRules.length > 1 && (
+                              <button
+                                type="button"
+                                className="text-indigo-400 hover:text-rose-600 transition-colors font-normal pl-1 ml-1 border-l border-indigo-200"
+                                onClick={() => {
+                                  setSortRules(sortRules.filter((_, i) => i !== idx));
+                                }}
+                              >
+                                <CloseIcon className="w-3 h-3 inline" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        
+                        {sortRules.length < 3 && (
+                          <Select
+                            value=""
+                            onValueChange={(val) => {
+                              if (val) {
+                                setSortRules([...sortRules, { field: val as any, direction: 'asc' }]);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-[120px] h-8 text-[11px] font-bold bg-slate-50 border-none rounded-xl text-primary">
+                              <Plus className="w-3 h-3 mr-1" /> Add Sort
+                            </SelectTrigger>
+                            <SelectContent>
+                              {['date', 'name', 'startTime']
+                                .filter(field => !sortRules.some(r => r.field === field))
+                                .map(field => (
+                                  <SelectItem key={field} value={field}>
+                                    {field === 'date' ? 'Date' : field === 'name' ? 'Staff Name' : 'Shift Start'}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
                     </div>
 
                     {(isAdmin || isManager) && (
