@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Clock, 
   MapPin, 
@@ -104,6 +105,19 @@ export const Attendance: React.FC = () => {
     startDate: format(new Date(), 'yyyy-MM-dd'),
     reason: ''
   });
+  const [hoveredSchedule, setHoveredSchedule] = useState<{
+    userName: string;
+    dateStr: string;
+    status: {
+      type: 'leave' | 'off' | 'work' | 'none';
+      label: string;
+      fullName: string;
+      colorClass: string;
+      tooltip: string;
+    };
+    top: number;
+    left: number;
+  } | null>(null);
   
   const [reportStartDate, setReportStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [reportEndDate, setReportEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -362,9 +376,68 @@ export const Attendance: React.FC = () => {
         reviewedByName: profile.name || profile.email,
         reviewedAt: serverTimestamp()
       });
+
+      if (status === 'approved') {
+        const req = requests.find(r => r.id === requestId);
+        if (req && req.type === 'time_correction') {
+          const q = query(
+            collection(db, 'attendance'),
+            where('userId', '==', req.userId),
+            where('date', '==', req.startDate),
+            limit(1)
+          );
+          const snap = await getDocs(q);
+          
+          let timeInTimestamp: Timestamp | null = null;
+          let timeInBackup: string | null = null;
+          if (req.newStartTime) {
+            const timeInDate = parse(`${req.startDate} ${req.newStartTime}`, 'yyyy-MM-dd HH:mm', new Date());
+            if (isValid(timeInDate)) {
+              timeInTimestamp = Timestamp.fromDate(timeInDate);
+              timeInBackup = timeInDate.toISOString();
+            }
+          }
+          
+          let timeOutTimestamp: Timestamp | null = null;
+          let timeOutBackup: string | null = null;
+          if (req.newEndTime) {
+            const timeOutDate = parse(`${req.startDate} ${req.newEndTime}`, 'yyyy-MM-dd HH:mm', new Date());
+            if (isValid(timeOutDate)) {
+              timeOutTimestamp = Timestamp.fromDate(timeOutDate);
+              timeOutBackup = timeOutDate.toISOString();
+            }
+          }
+
+          const locationId = req.locationId || locations[0]?.id || 'all';
+          const locationName = req.locationName || locations[0]?.name || 'Default';
+
+          if (!snap.empty) {
+            const attDoc = snap.docs[0];
+            await updateDoc(doc(db, 'attendance', attDoc.id), {
+              ...(timeInTimestamp ? { timeIn: timeInTimestamp, timeInBackup } : {}),
+              ...(timeOutTimestamp ? { timeOut: timeOutTimestamp, timeOutBackup } : {})
+            });
+          } else {
+            await addDoc(collection(db, 'attendance'), {
+              userId: req.userId,
+              userName: req.userName,
+              date: req.startDate,
+              timeIn: timeInTimestamp || Timestamp.now(),
+              timeInBackup: timeInBackup || new Date().toISOString(),
+              timeOut: timeOutTimestamp,
+              timeOutBackup,
+              locationId,
+              locationName,
+              notes: 'Time correction requested and approved'
+            });
+          }
+        }
+      }
+
       toast.success(`Request ${status}`);
       await logAction(profile, `REQUEST_${status.toUpperCase()}`, `Request ${requestId} was ${status}`);
     } catch (error) {
+      console.error('Error updating request:', error);
       toast.error('Failed to update request');
     }
   };
@@ -815,39 +888,25 @@ export const Attendance: React.FC = () => {
                           return (
                             <td key={idx} className="px-1 py-2 text-center align-middle">
                               <div className="flex justify-center">
-                                <div className="relative group/cell">
-                                  {/* The indicator trigger */}
-                                  <div className={cn(
+                                {/* The indicator trigger */}
+                                <div 
+                                  className={cn(
                                     "w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black border transition-all cursor-help shadow-sm",
                                     status.colorClass
-                                  )}>
-                                    {status.type === 'work' ? 'W' : status.label}
-                                  </div>
-                                  
-                                  {/* The Tooltip content */}
-                                  <div className="absolute z-30 bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/cell:block w-48 bg-slate-950 text-white text-[11px] p-2.5 rounded-xl shadow-xl pointer-events-none text-center leading-relaxed">
-                                    <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white">
-                                      {format(date, 'EEEE, MMMM dd')}
-                                    </p>
-                                    <p className="font-semibold text-slate-300">
-                                      {user.name || user.email || user.id}
-                                    </p>
-                                    <p className={cn(
-                                      "font-black mt-1",
-                                      status.type === 'leave' ? "text-rose-400" :
-                                      status.type === 'off' ? "text-slate-400" :
-                                      status.type === 'work' ? "text-emerald-400" : "text-slate-400"
-                                    )}>
-                                      {status.fullName}
-                                    </p>
-                                    {status.type === 'leave' && (
-                                      <p className="text-[10px] text-rose-300 italic mt-1 max-w-full break-words">
-                                        Reason: {status.tooltip.replace('On Leave: ', '')}
-                                      </p>
-                                    )}
-                                    {/* Arrow */}
-                                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
-                                  </div>
+                                  )}
+                                  onMouseEnter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredSchedule({
+                                      userName: user.name || user.email || user.id,
+                                      dateStr: format(date, 'EEEE, MMMM dd'),
+                                      status,
+                                      top: rect.top,
+                                      left: rect.left + rect.width / 2,
+                                    });
+                                  }}
+                                  onMouseLeave={() => setHoveredSchedule(null)}
+                                >
+                                  {status.type === 'work' ? 'W' : status.label}
                                 </div>
                               </div>
                             </td>
@@ -918,9 +977,9 @@ export const Attendance: React.FC = () => {
                           <div className="flex items-center gap-4">
                             <div className={cn(
                               "w-12 h-12 rounded-2xl flex items-center justify-center",
-                              req.type === 'leave' ? "bg-rose-50 text-rose-500" : "bg-indigo-50 text-indigo-500"
+                              req.type === 'leave' ? "bg-rose-50 text-rose-500" : req.type === 'time_correction' ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-500"
                             )}>
-                              {req.type === 'leave' ? <CalendarOff className="w-6 h-6" /> : <ArrowRightLeft className="w-6 h-6" />}
+                              {req.type === 'leave' ? <CalendarOff className="w-6 h-6" /> : req.type === 'time_correction' ? <Clock className="w-6 h-6" /> : <ArrowRightLeft className="w-6 h-6" />}
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
@@ -935,7 +994,7 @@ export const Attendance: React.FC = () => {
                                 </Badge>
                               </div>
                               <p className="text-xs text-slate-500 font-medium">
-                                {req.type === 'leave' ? 'Leave Request' : 'Schedule Change'} • {formatSafeDate(req.startDate)}
+                                {req.type === 'leave' ? 'Leave Request' : req.type === 'time_correction' ? 'Actual Time Correction' : 'Schedule Change'} • {formatSafeDate(req.startDate)}
                                 {req.endDate && ` to ${formatSafeDate(req.endDate)}`}
                               </p>
                             </div>
@@ -950,6 +1009,20 @@ export const Attendance: React.FC = () => {
                               <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-indigo-600">
                                 <Clock className="w-3 h-3" />
                                 Proposed: {req.newStartTime} - {req.newEndTime}
+                              </div>
+                            )}
+                            {req.type === 'time_correction' && (
+                              <div className="mt-2 space-y-1">
+                                <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600">
+                                  <Clock className="w-3 h-3" />
+                                  Correction: {req.newStartTime || '--:--'} - {req.newEndTime || '--:--'}
+                                </div>
+                                {req.locationName && (
+                                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                                    <MapPin className="w-3 h-3" />
+                                    Location: {req.locationName}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -1436,7 +1509,7 @@ export const Attendance: React.FC = () => {
             <DialogHeader>
               <DialogTitle className="text-2xl font-black italic">Submit Request</DialogTitle>
               <DialogDescription className="text-white/60 font-medium pt-2">
-                Apply for leave or propose a schedule change.
+                Apply for leave, propose a schedule change, or request actual clock in/out correction.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -1455,6 +1528,7 @@ export const Attendance: React.FC = () => {
                   <SelectContent>
                     <SelectItem value="leave">Leave of Absence</SelectItem>
                     <SelectItem value="schedule_change">Schedule Change</SelectItem>
+                    <SelectItem value="time_correction">Actual Time IN/OUT Change</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1501,6 +1575,55 @@ export const Attendance: React.FC = () => {
                     value={newRequest.newEndTime || ''}
                     onChange={(e) => setNewRequest(prev => ({ ...prev, newEndTime: e.target.value }))}
                   />
+                </div>
+              </div>
+            )}
+
+            {newRequest.type === 'time_correction' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-slate-400">Correct Actual IN</Label>
+                    <Input 
+                      type="time" 
+                      className="bg-slate-50 border-none h-12 rounded-xl text-xs font-bold"
+                      value={newRequest.newStartTime || ''}
+                      onChange={(e) => setNewRequest(prev => ({ ...prev, newStartTime: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase text-slate-400">Correct Actual OUT</Label>
+                    <Input 
+                      type="time" 
+                      className="bg-slate-50 border-none h-12 rounded-xl text-xs font-bold"
+                      value={newRequest.newEndTime || ''}
+                      onChange={(e) => setNewRequest(prev => ({ ...prev, newEndTime: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400">Correction Location</Label>
+                  <Select 
+                    value={newRequest.locationId || (locations.filter(l => l.id !== 'all')[0]?.id || '')} 
+                    onValueChange={(val) => {
+                      const loc = locations.find(l => l.id === val);
+                      setNewRequest(prev => ({ 
+                        ...prev, 
+                        locationId: val, 
+                        locationName: loc?.name || '' 
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="bg-slate-50 border-none h-12 rounded-xl text-xs font-bold">
+                      <SelectValue placeholder="Select Location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.filter(l => l.id !== 'all').map(loc => (
+                        <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             )}
@@ -1751,6 +1874,40 @@ export const Attendance: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {hoveredSchedule && createPortal(
+        <div 
+          className="fixed z-[9999] pointer-events-none bg-slate-950 text-white text-[11px] p-2.5 rounded-xl shadow-2xl text-center leading-relaxed"
+          style={{
+            top: `${hoveredSchedule.top - 8}px`,
+            left: `${hoveredSchedule.left}px`,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <p className="font-bold border-b border-white/10 pb-1 mb-1 text-white whitespace-nowrap">
+            {hoveredSchedule.dateStr}
+          </p>
+          <p className="font-semibold text-slate-300 whitespace-nowrap">
+            {hoveredSchedule.userName}
+          </p>
+          <p className={cn(
+            "font-black mt-1 whitespace-nowrap",
+            hoveredSchedule.status.type === 'leave' ? "text-rose-400" :
+            hoveredSchedule.status.type === 'off' ? "text-slate-400" :
+            hoveredSchedule.status.type === 'work' ? "text-emerald-400" : "text-slate-400"
+          )}>
+            {hoveredSchedule.status.fullName}
+          </p>
+          {hoveredSchedule.status.type === 'leave' && (
+            <p className="text-[10px] text-rose-300 italic mt-1 max-w-[180px] break-words leading-tight">
+              Reason: {hoveredSchedule.status.tooltip.replace('On Leave: ', '')}
+            </p>
+          )}
+          {/* Arrow */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-950" />
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

@@ -286,12 +286,14 @@ export interface AttendanceRequest {
   id: string;
   userId: string;
   userName: string;
-  type: 'leave' | 'schedule_change';
+  type: 'leave' | 'schedule_change' | 'time_correction';
   status: 'pending' | 'approved' | 'rejected';
   startDate: string; // YYYY-MM-DD
   endDate?: string | null; // YYYY-MM-DD
   newStartTime?: string | null; // HH:mm
   newEndTime?: string | null; // HH:mm
+  locationId?: string;
+  locationName?: string;
   reason: string;
   reviewedBy?: string;
   reviewedByName?: string;

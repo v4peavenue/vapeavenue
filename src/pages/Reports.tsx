@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   TrendingUp, 
   DollarSign, 
@@ -46,7 +46,7 @@ import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subDays, subMon
 import { cn } from '@/lib/utils';
 import { exportToCSV } from '@/lib/export';
 
-type ReportType = 'sales' | 'inventory' | 'profit' | 'stock-adjustments';
+type ReportType = 'sales' | 'inventory' | 'profit' | 'stock-adjustments' | 'sales-by-seller';
 
 export const Reports: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
@@ -63,6 +63,13 @@ export const Reports: React.FC = () => {
   const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [searchTerm, setSearchTerm] = useState('');
+
+  // New states for the requested seller, category, brand, and product filters
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [selectedSeller, setSelectedSeller] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  const [selectedProduct, setSelectedProduct] = useState<string>('all');
 
   const getPaymentMethodName = (methodId: string) => {
     if (!methodId) return 'N/A';
@@ -143,6 +150,10 @@ export const Reports: React.FC = () => {
       handleFirestoreError(error, OperationType.LIST, 'products');
     });
 
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     const adjQ = query(
       collection(db, 'stockAdjustments'),
       where('timestamp', '>=', Timestamp.fromDate(start)),
@@ -169,6 +180,7 @@ export const Reports: React.FC = () => {
     return () => {
       unsubscribeSales();
       unsubscribeProducts();
+      unsubscribeUsers();
       unsubscribeAdjustments();
       unsubscribePayments();
       unsubscribeAccounts();
@@ -238,6 +250,17 @@ export const Reports: React.FC = () => {
         Reason: a.reason,
         By: a.adjustedByName
       }));
+    } else if (reportType === 'sales-by-seller') {
+      name = 'Sales_by_Seller_Report';
+      data = salesBySellerData.map(d => ({
+        'Seller Name': d.sellerName,
+        Role: d.sellerRole,
+        'Orders Count': d.ordersCount,
+        'Items Sold': d.itemsCount,
+        Revenue: d.revenue.toFixed(2),
+        'Gross Profit': d.profit.toFixed(2),
+        'Avg Order Value': (d.revenue / (d.ordersCount || 1)).toFixed(2)
+      }));
     }
 
     if (data.length === 0) {
@@ -253,33 +276,144 @@ export const Reports: React.FC = () => {
     window.print();
   };
 
-  const totalRevenue = sales.reduce((sum, s) => {
-    const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
-    const netTotal = Math.max(0, (s.total ?? 0) - returnedAmount);
-    return sum + netTotal;
-  }, 0);
+  const uniqueCategories = useMemo(() => {
+    const cats = products.map(p => p.category).filter(Boolean);
+    return Array.from(new Set(cats)).sort();
+  }, [products]);
 
-  const totalProfit = sales.reduce((sum, s) => {
-    const saleProfit = (s.items || []).reduce((pSum, item) => {
-      const product = products.find(p => p.id === item.productId);
-      const cost = product?.cost || 0;
-      const netQty = Math.max(0, (item.quantity ?? 0) - (item.returnedQuantity || 0));
-      const itemSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
-      const itemCost = cost * netQty;
-      return pSum + (itemSubtotal - itemCost);
+  const uniqueBrands = useMemo(() => {
+    const brands = products.map(p => p.brand).filter(Boolean) as string[];
+    return Array.from(new Set(brands)).sort();
+  }, [products]);
+
+  const processedSales = useMemo(() => {
+    return sales.map(s => {
+      // Filter items based on category, brand, product
+      const matchingItems = s.items.filter(item => {
+        const product = products.find(p => p.id === item.productId);
+        
+        if (selectedCategory !== 'all' && (!product || product.category !== selectedCategory)) {
+          return false;
+        }
+        if (selectedBrand !== 'all' && (!product || product.brand !== selectedBrand)) {
+          return false;
+        }
+        if (selectedProduct !== 'all' && item.productId !== selectedProduct) {
+          return false;
+        }
+        return true;
+      });
+
+      // Calculate total revenue and profit for matching items in this sale
+      const returnedAmount = matchingItems.reduce((sum, item) => sum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+      const originalSubtotal = matchingItems.reduce((sum, item) => sum + (item.subtotal ?? 0), 0);
+      const netTotal = Math.max(0, originalSubtotal - returnedAmount);
+
+      const netProfit = matchingItems.reduce((pSum, item) => {
+        const product = products.find(p => p.id === item.productId);
+        const cost = product?.cost || 0;
+        const netQty = Math.max(0, (item.quantity ?? 0) - (item.returnedQuantity || 0));
+        const itemSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
+        const itemCost = cost * netQty;
+        return pSum + (itemSubtotal - itemCost);
+      }, 0);
+
+      return {
+        ...s,
+        matchingItems,
+        netTotal,
+        netProfit,
+        hasMatchingItems: matchingItems.length > 0
+      };
+    });
+  }, [sales, products, selectedCategory, selectedBrand, selectedProduct]);
+
+  const filteredSales = useMemo(() => {
+    return processedSales.filter(s => {
+      // Must have matching items if any item filter is applied
+      const hasFilterActive = selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all';
+      if (hasFilterActive && !s.hasMatchingItems) return false;
+
+      // Seller filter
+      if (selectedSeller !== 'all' && s.staffId !== selectedSeller) return false;
+
+      // Search term
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        const sellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
+        const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
+          sellerName.includes(searchLower) ||
+          s.items.some(i => i.name.toLowerCase().includes(searchLower));
+        if (!matchesSearch) return false;
+      }
+
+      return true;
+    });
+  }, [processedSales, selectedSeller, searchTerm, selectedCategory, selectedBrand, selectedProduct, usersList]);
+
+  const totalRevenue = useMemo(() => {
+    return filteredSales.reduce((sum, s) => sum + s.netTotal, 0);
+  }, [filteredSales]);
+
+  const totalProfit = useMemo(() => {
+    return filteredSales.reduce((sum, s) => sum + s.netProfit, 0);
+  }, [filteredSales]);
+
+  const inventoryValue = useMemo(() => {
+    return products.reduce((sum, p) => {
+      const stock = selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0);
+      return sum + (p.cost * stock);
     }, 0);
-    return sum + saleProfit;
-  }, 0);
+  }, [products, selectedLocationId]);
 
-  const filteredSales = sales.filter(s => 
-    s.items.some(i => i.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    s.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const salesBySellerData = useMemo(() => {
+    const groups: { [staffId: string]: {
+      sellerId: string;
+      sellerName: string;
+      sellerRole: string;
+      ordersCount: number;
+      itemsCount: number;
+      revenue: number;
+      profit: number;
+    }} = {};
 
-  const inventoryValue = products.reduce((sum, p) => {
-    const stock = selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0);
-    return sum + (p.cost * stock);
-  }, 0);
+    usersList.forEach(u => {
+      groups[u.id] = {
+        sellerId: u.id,
+        sellerName: u.name || 'Unknown',
+        sellerRole: u.role || 'Staff',
+        ordersCount: 0,
+        itemsCount: 0,
+        revenue: 0,
+        profit: 0
+      };
+    });
+
+    filteredSales.forEach(s => {
+      const staffId = s.staffId || 'anonymous';
+      const staffName = s.staffName || 'Staff';
+      if (!groups[staffId]) {
+        groups[staffId] = {
+          sellerId: staffId,
+          sellerName: staffName,
+          sellerRole: 'Staff',
+          ordersCount: 0,
+          itemsCount: 0,
+          revenue: 0,
+          profit: 0
+        };
+      }
+
+      const group = groups[staffId];
+      group.ordersCount += 1;
+      const netItemsQty = s.matchingItems.reduce((sum, item) => sum + Math.max(0, item.quantity - (item.returnedQuantity || 0)), 0);
+      group.itemsCount += netItemsQty;
+      group.revenue += s.netTotal;
+      group.profit += s.netProfit;
+    });
+
+    return Object.values(groups).sort((a, b) => b.revenue - a.revenue);
+  }, [filteredSales, usersList]);
 
   return (
     <div className="space-y-8 pb-12">
@@ -352,9 +486,9 @@ export const Reports: React.FC = () => {
 
       <Card className="shadow-sm border-slate-200/60">
         <CardHeader className="border-b border-slate-100 bg-slate-50/30">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-lg p-1">
                 <Button 
                   variant={reportType === 'sales' ? 'secondary' : 'ghost'} 
                   size="sm" 
@@ -362,6 +496,14 @@ export const Reports: React.FC = () => {
                   onClick={() => setReportType('sales')}
                 >
                   Sales
+                </Button>
+                <Button 
+                  variant={reportType === 'sales-by-seller' ? 'secondary' : 'ghost'} 
+                  size="sm" 
+                  className="text-xs h-8"
+                  onClick={() => setReportType('sales-by-seller')}
+                >
+                  Sales by Seller
                 </Button>
                 <Button 
                   variant={reportType === 'inventory' ? 'secondary' : 'ghost'} 
@@ -444,6 +586,99 @@ export const Reports: React.FC = () => {
               />
             </div>
           </div>
+
+          <div className="h-px bg-slate-100 my-4" />
+          
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-indigo-500" />
+                Filter Report Data
+              </span>
+              {(selectedSeller !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || searchTerm !== '') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setSelectedSeller('all');
+                    setSelectedCategory('all');
+                    setSelectedBrand('all');
+                    setSelectedProduct('all');
+                    setSearchTerm('');
+                  }}
+                  className="text-xs h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                >
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Category Filter */}
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category</Label>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {uniqueCategories.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Brand Filter */}
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Brand</Label>
+                <Select value={selectedBrand} onValueChange={setSelectedBrand}>
+                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                    <SelectValue placeholder="All Brands" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Brands</SelectItem>
+                    {uniqueBrands.map(brand => (
+                      <SelectItem key={brand} value={brand}>{brand}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Product Filter */}
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product</Label>
+                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                    <SelectValue placeholder="All Products" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Products</SelectItem>
+                    {products.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Seller Filter */}
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Seller Name</Label>
+                <Select value={selectedSeller} onValueChange={setSelectedSeller}>
+                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                    <SelectValue placeholder="All Sellers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sellers</SelectItem>
+                    {usersList.map(u => (
+                      <SelectItem key={u.id} value={u.id}>{u.name || u.email || 'Unknown'}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           {reportType === 'sales' && (
@@ -508,6 +743,75 @@ export const Reports: React.FC = () => {
                   ))
                 )}
               </TableBody>
+            </Table>
+          )}
+
+          {reportType === 'sales-by-seller' && (
+            <Table>
+              <TableHeader className="bg-slate-50/50">
+                <TableRow>
+                  <TableHead>Seller Name</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead className="text-center">Orders Count</TableHead>
+                  <TableHead className="text-center">Items Sold</TableHead>
+                  <TableHead className="text-right">Total Revenue</TableHead>
+                  <TableHead className="text-right">Gross Profit</TableHead>
+                  <TableHead className="text-right">Avg Order Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {salesBySellerData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12 text-slate-400 italic">
+                      No sales records found for this period
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  salesBySellerData.map((data) => (
+                    <TableRow key={data.sellerId} className="hover:bg-slate-50/50 transition-colors">
+                      <TableCell className="font-semibold text-slate-900">{data.sellerName}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-600 border-slate-200">
+                          {data.sellerRole}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center text-xs font-medium text-slate-700">{data.ordersCount}</TableCell>
+                      <TableCell className="text-center text-xs font-medium text-slate-700">{data.itemsCount}</TableCell>
+                      <TableCell className="text-right font-bold text-slate-900">
+                        {settings.currency}{data.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-emerald-600">
+                        {settings.currency}{data.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-indigo-600 text-xs">
+                        {settings.currency}{(data.revenue / (data.ordersCount || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+              {salesBySellerData.length > 0 && (
+                <tfoot className="bg-slate-50 font-bold">
+                  <TableRow>
+                    <TableCell colSpan={2}>TOTAL</TableCell>
+                    <TableCell className="text-center text-xs">
+                      {salesBySellerData.reduce((sum, d) => sum + d.ordersCount, 0)}
+                    </TableCell>
+                    <TableCell className="text-center text-xs">
+                      {salesBySellerData.reduce((sum, d) => sum + d.itemsCount, 0)}
+                    </TableCell>
+                    <TableCell className="text-right text-slate-900">
+                      {settings.currency}{salesBySellerData.reduce((sum, d) => sum + d.revenue, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-right text-emerald-600">
+                      {settings.currency}{salesBySellerData.reduce((sum, d) => sum + d.profit, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-right text-indigo-600">
+                      {settings.currency}{(salesBySellerData.reduce((sum, d) => sum + d.revenue, 0) / (salesBySellerData.reduce((sum, d) => sum + d.ordersCount, 0) || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </TableCell>
+                  </TableRow>
+                </tfoot>
+              )}
             </Table>
           )}
 

@@ -91,6 +91,7 @@ export const SalesHistory: React.FC = () => {
   const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [usersList, setUsersList] = useState<any[]>([]);
   const [dateRange, setDateRange] = useState(() => {
     const today = format(new Date(), 'yyyy-MM-dd');
     return { start: today, end: today };
@@ -132,10 +133,15 @@ export const SalesHistory: React.FC = () => {
       });
     }
 
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
     return () => {
       unsubscribeTiers();
       unsubscribePayments();
       unsubscribeAccounts();
+      unsubscribeUsers();
     };
   }, [profile, user]);
 
@@ -616,9 +622,11 @@ export const SalesHistory: React.FC = () => {
   const filteredSales = sales.filter(s => {
     // Search filter
     const searchLower = searchTerm.toLowerCase();
+    const sellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
     const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
       s.customerDetails?.name.toLowerCase().includes(searchLower) ||
-      s.items.some(item => item.name.toLowerCase().includes(searchLower));
+      s.items.some(item => item.name.toLowerCase().includes(searchLower)) ||
+      sellerName.includes(searchLower);
 
     // Date range filter
     let matchesDate = true;
@@ -666,10 +674,11 @@ export const SalesHistory: React.FC = () => {
 
   const filteredReturns = returnTransactions.filter(r => {
     const searchLower = searchTerm.toLowerCase();
+    const returnSellerName = (usersList.find(u => u.id === r.staffId)?.name || r.staffName || 'Staff').toLowerCase();
     const matchesSearch = r.id.toLowerCase().includes(searchLower) ||
       r.originalSaleId.toLowerCase().includes(searchLower) ||
       (r.items && r.items.some((item: any) => item.name.toLowerCase().includes(searchLower))) ||
-      (r.staffName && r.staffName.toLowerCase().includes(searchLower)) ||
+      returnSellerName.includes(searchLower) ||
       (r.reason && r.reason.toLowerCase().includes(searchLower));
 
     let matchesDate = true;
@@ -691,9 +700,10 @@ export const SalesHistory: React.FC = () => {
 
   const filteredPendingSales = pendingSales.filter(s => {
     const searchLower = searchTerm.toLowerCase();
+    const pendingSellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
     const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
       (s.customerDetails?.name && s.customerDetails.name.toLowerCase().includes(searchLower)) ||
-      (s.staffName && s.staffName.toLowerCase().includes(searchLower)) ||
+      pendingSellerName.includes(searchLower) ||
       (s.items && s.items.some(item => item.name.toLowerCase().includes(searchLower)));
 
     let matchesDate = true;
@@ -1009,7 +1019,7 @@ export const SalesHistory: React.FC = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs font-semibold text-slate-600">
-                    {sale.staffName || 'Staff'}
+                    {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-slate-900 max-w-[200px] truncate">
@@ -1158,7 +1168,7 @@ export const SalesHistory: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs font-semibold text-slate-600">
-                        {sale.staffName || 'Staff'}
+                        {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm text-slate-900 max-w-[200px] truncate">
@@ -1227,7 +1237,9 @@ export const SalesHistory: React.FC = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Sold by seller</span>
-                    <span className="font-medium text-slate-800">{sale.staffName || 'Staff'}</span>
+                    <span className="font-medium text-slate-800">
+                      {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Location branch</span>
@@ -1404,7 +1416,9 @@ export const SalesHistory: React.FC = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Sold by seller</span>
-                    <span className="font-medium text-slate-800">{sale.staffName || 'Staff'}</span>
+                    <span className="font-medium text-slate-800">
+                      {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Location branch</span>
@@ -1528,15 +1542,24 @@ export const SalesHistory: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-between items-start">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Transaction ID</p>
-                  <p className="font-mono text-sm">{selectedSale.id}</p>
+                  <p className="font-mono text-xs text-slate-700">{selectedSale.id}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Date</p>
-                  <p className="text-sm">{format(selectedSale.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Sold By</p>
+                  <p className="text-sm font-medium text-slate-700">
+                    {usersList.find(u => u.id === selectedSale.staffId)?.name || selectedSale.staffName || 'Staff'}
+                  </p>
                 </div>
+              </div>
+
+              <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border">
+                <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Transaction Date</span>
+                <span className="text-xs font-semibold text-slate-800">
+                  {format(selectedSale.timestamp.toDate(), 'MMM dd, yyyy HH:mm:ss')}
+                </span>
               </div>
 
               <div className="border rounded-lg overflow-hidden">
@@ -1987,7 +2010,9 @@ export const SalesHistory: React.FC = () => {
                 </div>
                 <div>
                   <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Processed By</Label>
-                  <p className="text-xs font-semibold text-slate-800 mt-0.5">{selectedReturn.staffName || 'Staff'}</p>
+                  <p className="text-xs font-semibold text-slate-800 mt-0.5">
+                    {usersList.find(u => u.id === selectedReturn.staffId)?.name || selectedReturn.staffName || 'Staff'}
+                  </p>
                 </div>
                 <div>
                   <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Overall Reason</Label>
