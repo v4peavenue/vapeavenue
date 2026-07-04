@@ -51,7 +51,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { logAction } from '@/lib/audit';
 import { cn } from '@/lib/utils';
-import { MapPin } from 'lucide-react';
+import { MapPin, LayoutGrid, LayoutList } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const POS: React.FC = () => {
@@ -96,6 +96,7 @@ export const POS: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'products' | 'cart'>('products');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const visibleProducts = products.filter(p => {
     if (isAdmin) return true;
@@ -130,6 +131,29 @@ export const POS: React.FC = () => {
     
     return matchesSearch && matchesLocation && matchesCategory && matchesBrand;
   });
+
+  const groupedProducts = React.useMemo(() => {
+    const groups: {
+      [category: string]: {
+        [brand: string]: Product[]
+      }
+    } = {};
+
+    filteredProducts.forEach(product => {
+      const category = product.category || 'Uncategorized';
+      const brand = product.brand || 'No Brand';
+
+      if (!groups[category]) {
+        groups[category] = {};
+      }
+      if (!groups[category][brand]) {
+        groups[category][brand] = [];
+      }
+      groups[category][brand].push(product);
+    });
+
+    return groups;
+  }, [filteredProducts]);
 
   const getProductStock = (product: Product) => {
     if (!selectedLocationId) return 0;
@@ -757,8 +781,8 @@ export const POS: React.FC = () => {
               <p className="font-bold">Viewing all locations. You will need to select a specific branch at checkout.</p>
             </div>
           )}
-          <div className="relative flex-1 w-full flex items-center gap-3">
-            <div className="relative flex-1 flex gap-2">
+          <div className="relative flex-1 w-full flex flex-wrap md:flex-nowrap items-center gap-3">
+            <div className="relative flex-1 flex gap-2 min-w-[200px]">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <Input 
@@ -780,39 +804,75 @@ export const POS: React.FC = () => {
               </Button>
             </div>
 
-            <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-12 shrink-0 select-none">
+            <div className="flex items-center gap-3 shrink-0">
+              {/* Add Qty Selector */}
+              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-12 select-none">
+                <span className="text-[10px] font-black uppercase text-[#1A2B4B] tracking-wider pl-2 pr-1">Add Qty:</span>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
+                  type="button"
+                  onClick={() => setAddQtyMulti(prev => Math.max(1, prev - 1))}
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </Button>
+                <Input 
+                  type="number"
+                  className="w-10 h-8 text-center font-black text-sm border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
+                  value={addQtyMulti}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val) && val >= 1) {
+                      setAddQtyMulti(val);
+                    }
+                  }}
+                  min={1}
+                />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
+                  type="button"
+                  onClick={() => setAddQtyMulti(prev => prev + 1)}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </Button>
+              </div>
 
-              <span className="text-[10px] font-black uppercase text-[#1A2B4B] tracking-wider pl-2 pr-1">Add Qty:</span>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
-                type="button"
-                onClick={() => setAddQtyMulti(prev => Math.max(1, prev - 1))}
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </Button>
-              <Input 
-                type="number"
-                className="w-10 h-8 text-center font-black text-sm border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
-                value={addQtyMulti}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value);
-                  if (!isNaN(val) && val >= 1) {
-                    setAddQtyMulti(val);
-                  }
-                }}
-                min={1}
-              />
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
-                type="button"
-                onClick={() => setAddQtyMulti(prev => prev + 1)}
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </Button>
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-12 select-none">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  className={cn(
+                    "h-10 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
+                    viewMode === 'list' 
+                      ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
+                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                  )}
+                  onClick={() => setViewMode('list')}
+                >
+                  <LayoutList className="w-3.5 h-3.5" />
+                  <span>List</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  className={cn(
+                    "h-10 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
+                    viewMode === 'grid' 
+                      ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
+                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                  )}
+                  onClick={() => setViewMode('grid')}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Grid</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -898,60 +958,174 @@ export const POS: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5 pb-6">
-            {filteredProducts.map((product, index) => {
-              const currentStock = getProductStock(product);
-              return (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.02 }}
-                >
-                  <Card 
-                    className={cn(
-                      "cursor-pointer transition-all duration-300 hover:shadow-xl active:scale-95 group relative overflow-hidden border-slate-200/60 rounded-2xl bg-white/50 backdrop-blur-sm",
-                      currentStock <= 0 ? "opacity-60 grayscale cursor-not-allowed" : "hover:border-[#D4AF37]/50 hover:-translate-y-1"
-                    )}
-                    onClick={() => currentStock > 0 && addToCart(product)}
+          {filteredProducts.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 p-12 text-center bg-white/30 backdrop-blur-sm rounded-2xl border border-slate-100/80">
+              <Package className="w-12 h-12 text-slate-300 mb-4 animate-bounce" />
+              <p className="text-base font-bold text-[#1A2B4B]">No products found</p>
+              <p className="text-xs mt-1 text-slate-500">Try adjusting your filters or search term.</p>
+            </div>
+          ) : viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5 pb-6">
+              {filteredProducts.map((product, index) => {
+                const currentStock = getProductStock(product);
+                return (
+                  <motion.div
+                    key={product.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.02 }}
                   >
-                    <CardContent className="p-0">
-                      <div className="aspect-[4/3] bg-slate-50 flex items-center justify-center text-slate-300 overflow-hidden relative">
-                        {product.imageUrl ? (
-                          <img 
-                            src={product.imageUrl} 
-                            alt={product.name} 
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <Package className="w-12 h-12" />
-                        )}
-                        <div className="absolute top-2 right-2">
-                          <Badge className={cn(
-                            "shadow-sm border-none",
-                            currentStock <= 5 ? "bg-rose-500" : "bg-[#1A2B4B]"
-                          )}>
-                            {currentStock}
-                          </Badge>
-                        </div>
-                      </div>
-                      <div className="p-4">
-                        <p className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider mb-1">{product.category}</p>
-                        <h3 className="font-bold text-[#1A2B4B] truncate text-sm mb-2">{product.name}</h3>
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-black text-[#1A2B4B]">{settings.currency}{(product.price ?? 0).toFixed(2)}</span>
-                          <div className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center group-hover:bg-[#1A2B4B] group-hover:text-white transition-colors shadow-sm">
-                            <Plus className="w-4 h-4" />
+                    <Card 
+                      className={cn(
+                        "cursor-pointer transition-all duration-300 hover:shadow-xl active:scale-95 group relative overflow-hidden border-slate-200/60 rounded-2xl bg-white/50 backdrop-blur-sm",
+                        currentStock <= 0 ? "opacity-60 grayscale cursor-not-allowed" : "hover:border-[#D4AF37]/50 hover:-translate-y-1"
+                      )}
+                      onClick={() => currentStock > 0 && addToCart(product)}
+                    >
+                      <CardContent className="p-0">
+                        <div className="aspect-[4/3] bg-slate-50 flex items-center justify-center text-slate-300 overflow-hidden relative">
+                          {product.imageUrl ? (
+                            <img 
+                              src={product.imageUrl} 
+                              alt={product.name} 
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <Package className="w-12 h-12" />
+                          )}
+                          <div className="absolute top-2 right-2">
+                            <Badge className={cn(
+                              "shadow-sm border-none",
+                              currentStock <= 5 ? "bg-rose-500" : "bg-[#1A2B4B]"
+                            )}>
+                              {currentStock}
+                            </Badge>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </div>
+                        <div className="p-4">
+                          <p className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider mb-1">{product.category}</p>
+                          <h3 className="font-bold text-[#1A2B4B] truncate text-sm mb-2">{product.name}</h3>
+                          <div className="flex items-center justify-between">
+                            <span className="text-lg font-black text-[#1A2B4B]">{settings.currency}{(product.price ?? 0).toFixed(2)}</span>
+                            <div className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center group-hover:bg-[#1A2B4B] group-hover:text-white transition-colors shadow-sm">
+                              <Plus className="w-4 h-4" />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Grouped List View */
+            <div className="space-y-8 pb-6">
+              {Object.keys(groupedProducts).sort().map((category) => {
+                const brands = groupedProducts[category] as Record<string, Product[]>;
+                return (
+                  <div key={category} className="space-y-4">
+                    {/* Category Title Header */}
+                    <div className="flex items-center gap-3 border-b border-[#1A2B4B]/10 pb-2">
+                      <h2 className="text-base font-bold text-[#1A2B4B] tracking-tight">{category}</h2>
+                      <Badge className="bg-[#1A2B4B]/10 text-[#1A2B4B] hover:bg-[#1A2B4B]/15 border-none font-bold text-[10px] h-5 px-2">
+                        {Object.values(brands).reduce((sum, prods) => sum + prods.length, 0)} Items
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-6 pl-2 sm:pl-4">
+                      {Object.keys(brands).sort().map((brand) => {
+                        const prods = brands[brand];
+                        return (
+                          <div key={brand} className="space-y-3">
+                            {/* Brand Header */}
+                            <h3 className="text-[10px] font-black uppercase tracking-wider text-[#D4AF37] flex items-center gap-2">
+                              <span>{brand}</span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" />
+                              <span className="text-[9px] text-slate-400 font-medium lowercase">({prods.length} products)</span>
+                            </h3>
+
+                            {/* List of Products */}
+                            <div className="grid gap-2.5">
+                              {prods.map((product) => {
+                                const currentStock = getProductStock(product);
+                                return (
+                                  <div
+                                    key={product.id}
+                                    className={cn(
+                                      "flex items-center justify-between p-3 bg-white border border-slate-200/60 rounded-xl transition-all hover:border-[#D4AF37]/40 hover:shadow-md cursor-pointer select-none group",
+                                      currentStock <= 0 && "opacity-60 grayscale cursor-not-allowed"
+                                    )}
+                                    onClick={() => currentStock > 0 && addToCart(product)}
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      {/* Thumbnail */}
+                                      <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 overflow-hidden shrink-0 border border-slate-100">
+                                        {product.imageUrl ? (
+                                          <img
+                                            src={product.imageUrl}
+                                            alt={product.name}
+                                            className="w-full h-full object-cover"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                        ) : (
+                                          <Package className="w-5 h-5" />
+                                        )}
+                                      </div>
+
+                                      {/* Name & Identifiers */}
+                                      <div className="min-w-0">
+                                        <h4 className="font-bold text-[#1A2B4B] text-xs sm:text-sm group-hover:text-[#D4AF37] transition-colors truncate">
+                                          {product.name}
+                                        </h4>
+                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                                          {product.sku && (
+                                            <span className="font-mono text-[9px] text-slate-400 font-semibold uppercase">
+                                              SKU: {product.sku}
+                                            </span>
+                                          )}
+                                          {product.barcode && (
+                                            <span className="font-mono text-[9px] text-slate-400 font-semibold uppercase">
+                                              UPC: {product.barcode}
+                                            </span>
+                                          )}
+                                          <Badge className={cn(
+                                            "text-[8px] h-3.5 px-1.5 border-none font-bold",
+                                            currentStock <= 0 
+                                              ? "bg-rose-500/10 text-rose-600" 
+                                              : currentStock <= 5 
+                                                ? "bg-amber-500/10 text-amber-700" 
+                                                : "bg-[#1A2B4B]/5 text-[#1A2B4B]"
+                                          )}>
+                                            {currentStock <= 0 ? 'Out of stock' : `${currentStock} in stock`}
+                                          </Badge>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Action & Price */}
+                                    <div className="flex items-center gap-3 shrink-0 pl-2">
+                                      <span className="font-black text-sm sm:text-base text-[#1A2B4B]">
+                                        {settings.currency}{(product.price ?? 0).toFixed(2)}
+                                      </span>
+                                      <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-[#1A2B4B] group-hover:text-white group-hover:border-[#1A2B4B] transition-all shadow-sm">
+                                        <Plus className="w-3.5 h-3.5" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
