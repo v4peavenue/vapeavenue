@@ -21,18 +21,15 @@ This document outlines the operational boundaries, milestones, and technical spe
 *   **Role-Based Security Tiers:** Distinct system behaviors for `Admin` vs. `Staff` (Cashier) profiles.
 *   **Branch/Location Assignment:** Every user profile is assigned a specific active branch/location (e.g., Main Branch, Warehouse, North Branch).
 
-### Milestone 2: Multi-Tier Catalog & Assigned-Location Inventory
+### Milestone 2: Multi-Tier Catalog & Branch Inventory Control
 *   **Multi-Branch Stocks Tracking:** Multi-variable inventory quantities associated with unique branches.
-*   **Location-Bound Visibility for Staff:** Cashier/Staff accounts are strictly limited to seeing product stock counts associated with their assigned location. Staff accounts are forbidden from viewing global stock distribution.
-*   **Admin Global Dashboard:** Admin views can query and inspect the full stock matrix, threshold levels, and supply health metrics across all operating branches.
+*   **Admin & Staff Stock Views:** Access to standard catalog records and inventory items to facilitate store transactions.
 *   **Multi-Tier Pricing:** Independent pricing metrics configurable per product (e.g., Standard Retail, VIP Member Price, Employee Price, Wholesale Tier).
-*   **Dynamic low-stock Alert Thresholds:** Customizable warning levels per location to highlight products nearing depletion.
+*   **Dynamic Low-Stock Alert Thresholds:** Customizable warning levels per location to highlight products nearing depletion.
 
 ### Milestone 3: POS Register System & Checkout Flow
-*   **Grouped List View (Default Layout):** Products are automatically grouped hierarchically by **Category** and **Brand** for optimized, high-speed visual scans during busy retail shifts.
-*   **Grid View Toggle:** Simple visual controls to alternate between a structured list directory and a graphic grid-card layout.
+*   **Visual Grid Catalog:** Displays product cards styled with live pricing and categorical tags inside the register panel.
 *   **Dynamic Pricing Engine:** Cart updates price-level calculations instantly based on the selected customer account tier.
-*   **Flexible Cart Multipliers:** Custom "Add Qty" indicators to increment cart entries in blocks.
 *   **Barcode & SKU Indexing:** Integrated fast-filter fields supporting keyboard enter-submission for physical scan triggers.
 *   **Financial Checkout Calculations:** Real-time summary detailing Gross Totals, **12% VAT calculations**, custom discounts, and dual-ledger split payment capabilities (Cash, Card, E-Wallet, Split).
 
@@ -87,7 +84,22 @@ The software is provided "as-is" without any express or implied warranties. The 
 
 ---
 
-## 6. REVISION AND SIGN-OFF
+## 6. SYSTEM PATCH NOTES & REVISION HISTORY
+
+To preserve the pristine definitions of the core milestones while accounting for the latest system releases, this section documents all feature improvements and security updates implemented as part of post-milestone patches.
+
+### Patch v1.1: Multi-Mode Register POS Views
+*   **Hierarchical Grouped List View (Default Layout):** Added a highly organized layout to the POS register that automatically groups all products by **Category** and **Brand**. This addresses retail scalability, enabling high-speed lookups and reduced visual clutter for cashiers.
+*   **Visual Grid Toggle:** Implemented an on-screen view-toggle control to seamlessly switch between the new Grouped List layout and the traditional card-based Grid layout.
+*   **Add Qty Multiplier Panel:** Integrated block quantity controls directly into the top search bar, allowing cashiers to scale cart inputs quickly before selection.
+
+### Patch v1.2: Branch-Level Inventory Permissions
+*   **Role-Based Security Bounds:** Enforced localized stock visibility for non-administrative profiles. Staff accounts are isolated to seeing inventory levels only at their assigned operating branch.
+*   **Admin Command Deck:** Kept global, multi-branch stock distribution tables restricted exclusively to authorized administrative logins to prevent sensitive asset leakages.
+
+---
+
+## 7. REVISION AND SIGN-OFF
 
 The specifications mapped inside this Scope of Work represent the finalized, compiled, and tested system deliverables. No further features will be introduced beyond these defined functional parameters without a formal change order.
 

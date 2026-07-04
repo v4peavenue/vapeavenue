@@ -132,13 +132,11 @@ The Agos codebase compiles through a clean modular structure, with a clear separ
 ### Screen-by-Screen Breakdown
 
 #### 1. POS Registry Checkout (`/src/pages/POS.tsx`)
-* **What the Cashier Sees:** A dual-column register view. The left-hand segment holds product groupings, search boxes, category filters, toggleable view controls, and product displays. The right-hand segment displays the transaction cart, tax calculations (12% VAT), and quick-action payment keys.
-* **Flexible View Modes:** Includes a highly organized **Grouped List View** (the default layout) that groups products hierarchically by Category and Brand for streamlined, professional lookups, alongside a standard visual **Grid View** option.
+* **What the Cashier Sees:** A dual-column register view. The left-hand segment holds product groupings, search boxes, category filters, and product grid cards with live pricing. The right-hand segment displays the transaction cart, tax calculations (12% VAT), and quick-action payment keys.
 * **Interaction Flow:** Scanning a barcode instantly pulls product details into the cart. Selecting a custom account matches their designated Price Tier, automatically recalculating sub-totals. Cashiers click `Pay`, confirm the cash/card/split allocation, and hit complete. The transaction is instantly pushed to Firestore, updating database quantities and logging financial entries in real-time.
 
 #### 2. Inventory and Multi-Tier Catalogs (`/src/pages/Inventory.tsx`)
 * **What the Inspector Sees:** A density-optimized listing containing warning chips for items running below minimum stock. Features tools for creating, editing, and deleting products.
-* **Assigned-Location Stock Visibility & Permissions:** To prevent cashier confusion and secure sensitive distribution data, staff members are restricted to viewing stock levels only for their assigned location. The global multi-branch stock distribution map is securely visible exclusively to administrative accounts.
 * **Component Form:** Product details allow assigning dynamic, tier-specific selling variables directly. This allows a product with standard pricing of $100 to be assigned individual tier costs: $90 for VIP customers, and $85 for internal staff.
 
 #### 3. General Ledger Business Hub (`/src/pages/Finance.tsx`)
@@ -201,6 +199,19 @@ The system will initialize a local dev server, accessible directly at `http://lo
    * **Build Command:** `npm run build`
    * **Output Directory:** `dist`
 4. Copy all required keys and parameters from your local `.env` file, paste them into the **Environment Variables** panel in Vercel settings, and trigger build.
+
+### 5.5 Software Patch Notes (Revision History)
+
+To maintain a clean tracking records index without altering the core operational scopes of the system, this section details subsequent incremental updates, features, and patches released to production.
+
+#### Patch v1.1: Flexible POS View Modes & Grouped Hierarchy
+*   **Feature Integration:** Implemented toggleable register layouts in the Point-of-Sale (POS) interface (`/src/pages/POS.tsx`), adding interactive **List Mode** and **Grid Mode** selectors.
+*   **Aesthetic Organization:** In List Mode, products are hierarchically grouped by **Category** and **Brand** out-of-the-box. This delivers structured catalog visibility, high-speed cash register workflows, and cleaner lists under heavy inventory counts.
+*   **Add Qty Multiplier:** Added high-performance quantity increment/decrement blocks directly next to the search filter, enabling rapid bulk entry.
+
+#### Patch v1.2: Branch-Level Inventory Permissions & Isolation
+*   **Security Isolation:** Programmed strict location boundaries in the Inventory panel (`/src/pages/Inventory.tsx`). Non-administrative Staff (Cashiers) are strictly isolated to view only the stock counts associated with their assigned branch/location.
+*   **Global Distribution Map:** Secured the multi-branch global stock grid, keeping it visible exclusively to authorized Admin accounts to deter unauthorized distribution leaks.
 
 ---
 
