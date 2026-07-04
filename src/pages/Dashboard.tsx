@@ -22,7 +22,9 @@ import {
   History,
   ArrowRight,
   BarChart3,
-  CheckCircle2
+  CheckCircle2,
+  Terminal,
+  ShieldCheck
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -770,7 +772,7 @@ export const Dashboard: React.FC = () => {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Low Stock Alerts - existing but updated */}
         <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
           <CardHeader>
@@ -848,6 +850,64 @@ export const Dashboard: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* System Patch Notes - Admin Restricted */}
+        {isAdmin && (
+          <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm flex flex-col">
+            <CardHeader className="pb-3 shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-lg font-heading text-[#1A2B4B] flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-[#D4AF37]" />
+                  System Patch Notes
+                </CardTitle>
+                <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200 text-[8px] uppercase font-bold tracking-wider py-0.5 shrink-0">
+                  <ShieldCheck className="w-3 h-3 mr-1 inline-block" />
+                  Admin Secure
+                </Badge>
+              </div>
+              <CardDescription>Official release history & developer protections</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 max-h-[380px] overflow-y-auto pr-1 flex-1">
+              {/* Support Terms Warning */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs space-y-1.5">
+                <div className="font-bold text-amber-800 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
+                  <span>⚠️ Developer Support Guarantee</span>
+                </div>
+                <p className="text-slate-600 text-[10px] leading-relaxed">
+                  This system receives <strong>permanent technical support</strong> (lifetime bug-fixes, database updates, and performance optimizations). 
+                </p>
+                <p className="text-slate-600 text-[10px] leading-relaxed font-semibold">
+                  Note: Any duplication, redistribution, or resale of this application to third parties will result in immediate, automatic termination of free lifetime support.
+                </p>
+              </div>
+
+              {/* Patch 1.2 */}
+              <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.2: Stock Permissions</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Security Bounds:</strong> Staff accounts are strictly restricted to seeing inventory stock quantities associated only with their assigned branch/location.</li>
+                  <li><strong>Admin Deck:</strong> Multi-branch global distribution matrix and stock maps remain restricted to authorized Admin accounts to deter unauthorized leaks.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.1 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.1: Multi-Mode POS</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Grouped List View:</strong> Introduced default Category & Brand hierarchically grouped register view to streamline lists under deep catalogs.</li>
+                  <li><strong>Grid View Toggle:</strong> Enabled interactive controls to alternate list layouts with standard graphic product cards.</li>
+                  <li><strong>Bulk Cart Controls:</strong> Added fast-action "Add Qty" increment blocks to scale register feeds.</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </motion.div>
   );
