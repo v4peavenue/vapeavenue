@@ -90,10 +90,10 @@ export default function App() {
                   <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
                   <Route path="/sales" element={<ProtectedRoute><SalesHistory /></ProtectedRoute>} />
                   <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
-                  <Route path="/finance" element={<ManagerRoute><Finance /></ManagerRoute>} />
+                  <Route path="/finance" element={<AdminRoute><Finance /></AdminRoute>} />
                   <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
                   <Route path="/directory" element={<ManagerRoute><Directory /></ManagerRoute>} />
-                  <Route path="/settings" element={<AdminRoute><Settings /></AdminRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 </Routes>
               </Router>
               <Toaster position="top-right" richColors />

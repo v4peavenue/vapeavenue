@@ -26,7 +26,8 @@ import {
   increment, 
   Timestamp,
   setDoc,
-  getDoc 
+  getDoc,
+  where 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -90,14 +91,18 @@ export const SalesHistory: React.FC = () => {
   const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [dateRange, setDateRange] = useState(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    return { start: today, end: today };
+  });
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [voidAccountId, setVoidAccountId] = useState('');
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'sales' | 'returns'>('sales');
+  const [activeTab, setActiveTab] = useState<'sales' | 'returns' | 'pending'>('sales');
+  const [pendingSales, setPendingSales] = useState<Sale[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<any[]>([]);
   const [selectedReturn, setSelectedReturn] = useState<any | null>(null);
   const [returnToReverse, setReturnToReverse] = useState<any | null>(null);
@@ -148,6 +153,32 @@ export const SalesHistory: React.FC = () => {
       setSales(salesList);
       setLoading(false);
     });
+    return () => unsubscribe();
+  }, [selectedLocationId, profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+    
+    const q = query(
+      collection(db, 'sales'), 
+      where('status', '==', 'pending')
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
+      if (selectedLocationId !== 'all') {
+        list = list.filter(s => s.locationId === selectedLocationId);
+      }
+      list.sort((a, b) => {
+        const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+        const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+        return timeB - timeA;
+      });
+      setPendingSales(list);
+    }, (err) => {
+      console.warn("Failed to query pending sales directly:", err);
+    });
+    
     return () => unsubscribe();
   }, [selectedLocationId, profile]);
 
@@ -509,6 +540,59 @@ export const SalesHistory: React.FC = () => {
     }
   };
 
+  const dynamicPaymentOptions = React.useMemo(() => {
+    const methodsInUse = new Set<string>();
+    sales.forEach(sale => {
+      if (sale.paymentMethod) {
+        methodsInUse.add(sale.paymentMethod);
+      }
+      if (sale.paymentSplits && sale.paymentSplits.length > 0) {
+        sale.paymentSplits.forEach(split => {
+          if (split.methodId) {
+            methodsInUse.add(split.methodId);
+          }
+        });
+      }
+    });
+
+    const list: { id: string; name: string }[] = [];
+    methodsInUse.forEach(id => {
+      let name = '';
+      if (id === 'cash') {
+        name = 'Cash';
+      } else if (id === 'card') {
+        name = 'Card';
+      } else if (id === 'digital') {
+        name = 'Digital Payment';
+      } else if (id === 'pending') {
+        name = 'Pending/Unpaid';
+      } else if (id === 'split') {
+        name = 'Split Payment';
+      } else {
+        const acc = accounts.find(a => a.id === id);
+        if (acc) {
+          name = acc.name;
+        } else {
+          const opt = paymentOptions.find(o => o.id === id);
+          if (opt) {
+            name = opt.name;
+          } else {
+            const matchingSplit = sales
+              .flatMap(s => s.paymentSplits || [])
+              .find(split => split.methodId === id);
+            if (matchingSplit && matchingSplit.methodName) {
+              name = matchingSplit.methodName;
+            } else {
+              name = id.charAt(0).toUpperCase() + id.slice(1);
+            }
+          }
+        }
+      }
+      list.push({ id, name });
+    });
+    return list;
+  }, [sales, accounts, paymentOptions]);
+
   const filteredSales = sales.filter(s => {
     // Search filter
     const searchLower = searchTerm.toLowerCase();
@@ -534,7 +618,14 @@ export const SalesHistory: React.FC = () => {
     // Payment filter
     let matchesPayment = true;
     if (paymentFilter !== 'all') {
-      matchesPayment = s.paymentMethod === paymentFilter;
+      if (paymentFilter === 'split') {
+        matchesPayment = s.paymentMethod === 'split';
+      } else if (paymentFilter === 'pending') {
+        matchesPayment = s.paymentMethod === 'pending' || s.status === 'pending';
+      } else {
+        matchesPayment = s.paymentMethod === paymentFilter || 
+                         s.paymentSplits?.some(split => split.methodId === paymentFilter) === true;
+      }
     }
 
     return matchesSearch && matchesDate && matchesPayment;
@@ -565,11 +656,78 @@ export const SalesHistory: React.FC = () => {
     return matchesSearch && matchesDate;
   });
 
+  const filteredPendingSales = pendingSales.filter(s => {
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
+      (s.customerDetails?.name && s.customerDetails.name.toLowerCase().includes(searchLower)) ||
+      (s.staffName && s.staffName.toLowerCase().includes(searchLower)) ||
+      (s.items && s.items.some(item => item.name.toLowerCase().includes(searchLower)));
+
+    let matchesDate = true;
+    if (dateRange.start) {
+      const saleDate = s.timestamp.toDate();
+      const start = new Date(dateRange.start);
+      start.setHours(0, 0, 0, 0);
+      matchesDate = matchesDate && saleDate >= start;
+    }
+    if (dateRange.end) {
+      const saleDate = s.timestamp.toDate();
+      const end = new Date(dateRange.end);
+      end.setHours(23, 59, 59, 999);
+      matchesDate = matchesDate && saleDate <= end;
+    }
+
+    return matchesSearch && matchesDate;
+  });
+
   const clearFilters = () => {
     setDateRange({ start: '', end: '' });
     setPaymentFilter('all');
     setSearchTerm('');
   };
+
+  const accountTotals = (() => {
+    const totals: { [accountId: string]: { name: string; amount: number; type: string } } = {};
+    
+    // Initialize with cash
+    totals['cash'] = { name: 'Cash', amount: 0, type: 'cash' };
+
+    // Initialize configured paymentOptions
+    paymentOptions.forEach(opt => {
+      totals[opt.id] = { name: opt.name, amount: 0, type: opt.type };
+    });
+
+    const activeSales = filteredSales.filter(s => s.status !== 'voided');
+
+    activeSales.forEach(sale => {
+      if (sale.paymentSplits && sale.paymentSplits.length > 0) {
+        sale.paymentSplits.forEach(split => {
+          const mId = split.methodId || 'cash';
+          if (!totals[mId]) {
+            totals[mId] = { 
+              name: split.methodName || mId, 
+              amount: 0, 
+              type: mId === 'cash' ? 'cash' : 'ewallet' 
+            };
+          }
+          totals[mId].amount += split.amount || 0;
+        });
+      } else {
+        const mId = sale.paymentMethod || 'cash';
+        if (!totals[mId]) {
+          const opt = paymentOptions.find(o => o.id === mId);
+          totals[mId] = { 
+            name: opt?.name || mId, 
+            amount: 0, 
+            type: opt?.type || (mId === 'cash' ? 'cash' : 'ewallet') 
+          };
+        }
+        totals[mId].amount += sale.total || 0;
+      }
+    });
+
+    return Object.values(totals);
+  })();
 
   return (
     <div className="space-y-6">
@@ -628,6 +786,91 @@ export const SalesHistory: React.FC = () => {
         </div>
       </div>
 
+      {/* Payment Method KPIs */}
+      {activeTab === 'sales' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+          {/* Cash KPI */}
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Cash Sales
+              </span>
+              <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded">Active Range</span>
+            </div>
+            <div>
+              <span className="text-2xl font-black text-slate-900">
+                {settings.currency}{accountTotals.filter(a => a.type === 'cash').reduce((sum, a) => sum + a.amount, 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="pt-2 border-t border-slate-100 space-y-1">
+              {accountTotals.filter(a => a.type === 'cash').map((acc, i) => (
+                <div key={i} className="flex justify-between text-xs text-slate-500">
+                  <span>{acc.name}</span>
+                  <span className="font-bold text-slate-800">{settings.currency}{acc.amount.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* E-Wallet KPI */}
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                E-Wallet Sales
+              </span>
+              <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded">Active Range</span>
+            </div>
+            <div>
+              <span className="text-2xl font-black text-slate-900">
+                {settings.currency}{accountTotals.filter(a => a.type === 'ewallet').reduce((sum, a) => sum + a.amount, 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="pt-2 border-t border-slate-100 space-y-1">
+              {accountTotals.filter(a => a.type === 'ewallet').length > 0 ? (
+                accountTotals.filter(a => a.type === 'ewallet').map((acc, i) => (
+                  <div key={i} className="flex justify-between text-xs text-slate-500">
+                    <span>{acc.name}</span>
+                    <span className="font-bold text-slate-800">{settings.currency}{acc.amount.toFixed(2)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-slate-400 italic">No e-wallet sales in this range</div>
+              )}
+            </div>
+          </div>
+
+          {/* Bank Transfer KPI */}
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                Bank Sales
+              </span>
+              <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded">Active Range</span>
+            </div>
+            <div>
+              <span className="text-2xl font-black text-slate-900">
+                {settings.currency}{accountTotals.filter(a => a.type === 'bank' || a.type === 'card').reduce((sum, a) => sum + a.amount, 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="pt-2 border-t border-slate-100 space-y-1">
+              {accountTotals.filter(a => a.type === 'bank' || a.type === 'card').length > 0 ? (
+                accountTotals.filter(a => a.type === 'bank' || a.type === 'card').map((acc, i) => (
+                  <div key={i} className="flex justify-between text-xs text-slate-500">
+                    <span>{acc.name}</span>
+                    <span className="font-bold text-slate-800">{settings.currency}{acc.amount.toFixed(2)}</span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-xs text-slate-400 italic">No bank transfer sales in this range</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => {
@@ -657,6 +900,25 @@ export const SalesHistory: React.FC = () => {
         >
           Returns History
         </button>
+        {(isAdmin || isManager) && (
+          <button
+            onClick={() => {
+              setActiveTab('pending');
+              clearFilters();
+            }}
+            className={cn(
+              "pb-3 pt-1 px-4 text-sm font-bold border-b-2 transition-all relative flex items-center gap-1.5",
+              activeTab === 'pending'
+                ? "border-rose-600 text-rose-600 font-extrabold"
+                : "border-transparent text-slate-500 hover:text-rose-600"
+            )}
+          >
+            Pending Payments
+            {pendingSales.length > 0 && (
+              <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+            )}
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -670,6 +932,7 @@ export const SalesHistory: React.FC = () => {
                   <TableHead>Sale ID</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Location</TableHead>
+                  <TableHead>Seller</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead>Total</TableHead>
@@ -679,11 +942,11 @@ export const SalesHistory: React.FC = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">Loading transactions...</TableCell>
+                    <TableCell colSpan={9} className="h-24 text-center">Loading transactions...</TableCell>
                   </TableRow>
                 ) : filteredSales.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-slate-500">No transactions found.</TableCell>
+                    <TableCell colSpan={9} className="h-24 text-center text-slate-500">No transactions found.</TableCell>
                   </TableRow>
                 ) : (
               filteredSales.map((sale) => (
@@ -705,6 +968,9 @@ export const SalesHistory: React.FC = () => {
                     <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none">
                       {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs font-semibold text-slate-600">
+                    {sale.staffName || 'Staff'}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-slate-900 max-w-[200px] truncate">
@@ -738,7 +1004,7 @@ export const SalesHistory: React.FC = () => {
             )}
           </TableBody>
           </>
-          ) : (
+          ) : activeTab === 'returns' ? (
             <>
               <TableHeader className="bg-slate-50">
                 <TableRow>
@@ -807,6 +1073,76 @@ export const SalesHistory: React.FC = () => {
                 )}
               </TableBody>
             </>
+          ) : (
+            <>
+              <TableHeader className="bg-slate-50">
+                <TableRow>
+                  <TableHead>Date & Time</TableHead>
+                  <TableHead>Sale ID</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Seller</TableHead>
+                  <TableHead>Items</TableHead>
+                  <TableHead>Payment</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-24 text-center">Loading pending payments...</TableCell>
+                  </TableRow>
+                ) : filteredPendingSales.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-24 text-center text-slate-500">No pending payments found.</TableCell>
+                  </TableRow>
+                ) : (
+                  filteredPendingSales.map((sale) => (
+                    <TableRow key={sale.id} className="hover:bg-slate-50/50">
+                      <TableCell className="whitespace-nowrap">
+                        <div className="font-medium text-slate-900">
+                          {format(sale.timestamp.toDate(), 'MMM dd, yyyy')}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {format(sale.timestamp.toDate(), 'HH:mm:ss')}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-slate-500">{sale.id.substring(0, 8)}...</TableCell>
+                      <TableCell>
+                        <div className="font-medium text-slate-900">{sale.customerDetails?.name || 'Walk-In'}</div>
+                        <div className="text-[10px] text-slate-500 truncate max-w-[120px]">{sale.customerDetails?.city}</div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none">
+                          {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-semibold text-slate-600">
+                        {sale.staffName || 'Staff'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-slate-900 max-w-[200px] truncate">
+                          {sale.items.map(i => i.name).join(', ')}
+                        </div>
+                        <div className="text-xs text-slate-500">{sale.items.length} items</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize border-slate-200 font-medium bg-amber-50 text-amber-600 border-amber-200 animate-pulse">
+                          Pending
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-bold text-slate-900">{settings.currency}{(sale.total ?? 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => setSelectedSale(sale)}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </>
           )}
         </Table>
       </div>
@@ -849,6 +1185,10 @@ export const SalesHistory: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Customer</span>
                     <span className="font-bold text-slate-800">{sale.customerDetails?.name || 'Walk-In'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Sold by seller</span>
+                    <span className="font-medium text-slate-800">{sale.staffName || 'Staff'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-slate-400">Location branch</span>
@@ -898,7 +1238,7 @@ export const SalesHistory: React.FC = () => {
               </motion.div>
             ))
           )
-        ) : (
+        ) : activeTab === 'returns' ? (
           loading ? (
             <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
               Loading returns history...
@@ -986,6 +1326,85 @@ export const SalesHistory: React.FC = () => {
               </motion.div>
             ))
           )
+        ) : (
+          loading ? (
+            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
+              Loading pending payments...
+            </div>
+          ) : filteredPendingSales.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
+              No pending payments found.
+            </div>
+          ) : (
+            filteredPendingSales.map((sale, index) => (
+              <motion.div
+                key={sale.id}
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: Math.min(index * 0.01, 0.15) }}
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-900">
+                      {format(sale.timestamp.toDate(), 'MMM dd, yyyy')}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {format(sale.timestamp.toDate(), 'HH:mm:ss')}
+                    </span>
+                  </div>
+                  <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                    #{sale.id.substring(0, 8)}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 py-1 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Customer</span>
+                    <span className="font-bold text-slate-800">{sale.customerDetails?.name || 'Walk-In'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Sold by seller</span>
+                    <span className="font-medium text-slate-800">{sale.staffName || 'Staff'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Location branch</span>
+                    <Badge variant="secondary" className="bg-[#1A2B4B]/5 text-[#1A2B4B] hover:bg-[#1A2B4B]/10 py-0 px-1.5 border-none font-bold text-[10px]">
+                      {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <span className="text-slate-400 shrink-0">Purchased items</span>
+                    <span className="text-slate-700 font-medium text-right max-w-[170px] truncate block" title={sale.items.map(i => i.name).join(', ')}>
+                      {sale.items.map(i => i.name).join(', ')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-slate-50 pt-1.5 mt-1 align-middle">
+                    <span className="text-slate-400 font-semibold">Total Amount Due</span>
+                    <span className="font-black text-slate-900 text-sm">
+                      {settings.currency}{(sale.total ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                  <Badge variant="outline" className="capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5 bg-amber-50 text-amber-600 border-amber-200 animate-pulse">
+                    Pending
+                  </Badge>
+
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
+                    onClick={() => setSelectedSale(sale)}
+                  >
+                    <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                    Invoice Receipt
+                  </Button>
+                </div>
+              </motion.div>
+            ))
+          )
         )}
       </div>
     </div>
@@ -1032,13 +1451,7 @@ export const SalesHistory: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Methods</SelectItem>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="digital">Digital Payment</SelectItem>
-                  <SelectItem value="pending">Pending/Unpaid</SelectItem>
-                  <SelectItem value="split">Split Payment</SelectItem>
-                  <Separator className="my-2" />
-                  {paymentOptions.map(opt => (
+                  {dynamicPaymentOptions.map(opt => (
                     <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
                   ))}
                 </SelectContent>

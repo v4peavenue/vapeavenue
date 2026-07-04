@@ -10,7 +10,8 @@ import {
   AlertTriangle,
   MoreVertical,
   ArrowUpDown,
-  ShoppingCart
+  ShoppingCart,
+  ArrowRightLeft
 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -45,6 +46,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ProductForm } from '@/components/ProductForm';
 import { StockAdjustmentForm } from '@/components/StockAdjustmentForm';
+import { StockTransferForm } from '@/components/StockTransferForm';
 import { toast } from 'sonner';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { cn } from '@/lib/utils';
@@ -71,6 +73,7 @@ export const Inventory: React.FC = () => {
   const [brandFilter, setBrandFilter] = useState('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProductId, setAdjustingProductId] = useState<string | undefined>(undefined);
 
@@ -203,7 +206,11 @@ export const Inventory: React.FC = () => {
           <p className="text-slate-500">Manage your products and stock levels.</p>
         </div>
         {isManager && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+            <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5" onClick={() => setIsTransferOpen(true)}>
+              <ArrowRightLeft className="w-4 h-4" />
+              Transfer Stock
+            </Button>
             <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5" onClick={() => {
               setAdjustingProductId(undefined);
               setIsAdjustmentOpen(true);
@@ -619,6 +626,13 @@ export const Inventory: React.FC = () => {
         products={visibleProducts}
         locations={locations}
         initialProductId={adjustingProductId}
+      />
+
+      <StockTransferForm
+        isOpen={isTransferOpen}
+        onClose={() => setIsTransferOpen(false)}
+        products={visibleProducts}
+        locations={locations}
       />
     </motion.div>
   );

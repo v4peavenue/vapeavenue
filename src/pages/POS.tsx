@@ -80,7 +80,7 @@ export const POS: React.FC = () => {
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [paymentSplits, setPaymentSplits] = useState<PaymentSplit[]>([]);
   const [isSplitPayment, setIsSplitPayment] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<'cash' | 'card' | 'digital'>('cash');
+  const [activeCategory, setActiveCategory] = useState<'cash' | 'ewallet' | 'bank'>('cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [addQtyMulti, setAddQtyMulti] = useState<number>(1);
   const [customerDetails, setCustomerDetails] = useState({
@@ -640,6 +640,7 @@ export const POS: React.FC = () => {
         paymentSplits: isPending ? [] : resolvedSplits,
         status: isPending ? 'pending' : 'completed',
         staffId: profile?.id || 'anonymous',
+        staffName: profile?.name || 'Staff',
         locationId: checkoutLocationId,
         customerId: finalCustomerId,
         customerDetails: {
@@ -1467,6 +1468,7 @@ export const POS: React.FC = () => {
                   <div className="space-y-4">
                     <div className="grid grid-cols-3 gap-2">
                       <Button 
+                        type="button"
                         variant={activeCategory === 'cash' ? 'default' : 'outline'}
                         className={cn("h-14 flex-col gap-1 px-1", activeCategory === 'cash' ? "bg-[#1A2B4B] text-white" : "bg-[#FDFCF8] border-slate-200")}
                         onClick={() => {
@@ -1478,33 +1480,38 @@ export const POS: React.FC = () => {
                         <span className="text-[10px] font-bold">CASH</span>
                       </Button>
                       <Button 
-                        variant={activeCategory === 'card' ? 'default' : 'outline'}
-                        className={cn("h-14 flex-col gap-1 px-1", activeCategory === 'card' ? "bg-[#1A2B4B] text-white" : "bg-[#FDFCF8] border-slate-200")}
+                        type="button"
+                        variant={activeCategory === 'ewallet' ? 'default' : 'outline'}
+                        className={cn("h-14 flex-col gap-1 px-1", activeCategory === 'ewallet' ? "bg-[#1A2B4B] text-white" : "bg-[#FDFCF8] border-slate-200")}
                         onClick={() => {
-                          setActiveCategory('card');
-                          // If there are specific card types, pick the first one, else default to 'card'
-                          const cardOpts = paymentOptions.filter(o => o.type === 'card' && o.active);
-                          setPaymentMethod(cardOpts.length > 0 ? cardOpts[0].id : 'card');
-                        }}
-                      >
-                        <CreditCard className="w-5 h-5" />
-                        <span className="text-[10px] font-bold">CARD</span>
-                      </Button>
-                      <Button 
-                        variant={activeCategory === 'digital' ? 'default' : 'outline'}
-                        className={cn("h-14 flex-col gap-1 px-1", activeCategory === 'digital' ? "bg-[#1A2B4B] text-white" : "bg-[#FDFCF8] border-slate-200")}
-                        onClick={() => {
-                          setActiveCategory('digital');
-                          const digitalOpts = paymentOptions.filter(o => (o.type === 'ewallet' || o.type === 'bank') && o.active);
-                          if (digitalOpts.length > 0) {
-                            setPaymentMethod(digitalOpts[0].id);
+                          setActiveCategory('ewallet');
+                          const ewalletOpts = paymentOptions.filter(o => o.type === 'ewallet' && o.active);
+                          if (ewalletOpts.length > 0) {
+                            setPaymentMethod(ewalletOpts[0].id);
                           } else {
-                            setPaymentMethod('digital'); // Fallback
+                            setPaymentMethod('ewallet');
                           }
                         }}
                       >
                         <Wallet className="w-5 h-5" />
-                        <span className="text-[10px] font-bold">DIGITAL</span>
+                        <span className="text-[10px] font-bold">EWALLET</span>
+                      </Button>
+                      <Button 
+                        type="button"
+                        variant={activeCategory === 'bank' ? 'default' : 'outline'}
+                        className={cn("h-14 flex-col gap-1 px-1", activeCategory === 'bank' ? "bg-[#1A2B4B] text-white" : "bg-[#FDFCF8] border-slate-200")}
+                        onClick={() => {
+                          setActiveCategory('bank');
+                          const bankOpts = paymentOptions.filter(o => o.type === 'bank' && o.active);
+                          if (bankOpts.length > 0) {
+                            setPaymentMethod(bankOpts[0].id);
+                          } else {
+                            setPaymentMethod('bank');
+                          }
+                        }}
+                      >
+                        <Building className="w-5 h-5" />
+                        <span className="text-[10px] font-bold">BANK</span>
                       </Button>
                     </div>
 
@@ -1513,38 +1520,8 @@ export const POS: React.FC = () => {
                       <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 space-y-3">
                         <Label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Select Option</Label>
                         <div className="flex flex-wrap gap-2">
-                          {activeCategory === 'card' ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setPaymentMethod('card')}
-                                className={cn(
-                                  "px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
-                                  paymentMethod === 'card' 
-                                    ? "bg-[#1A2B4B] text-white border-[#1A2B4B] shadow-md" 
-                                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-                                )}
-                              >
-                                Generic Card
-                              </button>
-                              {paymentOptions.filter(o => o.type === 'card' && o.active).map(opt => (
-                                <button
-                                  key={opt.id}
-                                  type="button"
-                                  onClick={() => setPaymentMethod(opt.id)}
-                                  className={cn(
-                                    "px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
-                                    paymentMethod === opt.id 
-                                      ? "bg-[#1A2B4B] text-white border-[#1A2B4B] shadow-md" 
-                                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-                                  )}
-                                >
-                                  {opt.name}
-                                </button>
-                              ))}
-                            </>
-                          ) : (
-                            paymentOptions.filter(o => (o.type === 'ewallet' || o.type === 'bank') && o.active).map(opt => (
+                          {paymentOptions.filter(o => o.type === activeCategory && o.active).length > 0 ? (
+                            paymentOptions.filter(o => o.type === activeCategory && o.active).map(opt => (
                               <button
                                 key={opt.id}
                                 type="button"
@@ -1556,10 +1533,24 @@ export const POS: React.FC = () => {
                                     : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                                 )}
                               >
-                                {opt.type === 'ewallet' ? <Wallet className="w-2.5 h-2.5" /> : <Building className="w-2.5 h-2.5" />}
+                                {activeCategory === 'ewallet' ? <Wallet className="w-2.5 h-2.5" /> : <Building className="w-2.5 h-2.5" />}
                                 {opt.name}
                               </button>
                             ))
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPaymentMethod(activeCategory)}
+                              className={cn(
+                                "px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border flex items-center gap-1.5",
+                                paymentMethod === activeCategory 
+                                  ? "bg-[#1A2B4B] text-white border-[#1A2B4B] shadow-md" 
+                                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                              )}
+                            >
+                              {activeCategory === 'ewallet' ? <Wallet className="w-2.5 h-2.5" /> : <Building className="w-2.5 h-2.5" />}
+                              Default {activeCategory === 'ewallet' ? 'E-Wallet' : 'Bank Transfer'}
+                            </button>
                           )}
                         </div>
                         

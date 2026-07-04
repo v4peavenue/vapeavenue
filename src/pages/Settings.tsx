@@ -1353,41 +1353,39 @@ export const Settings: React.FC = () => {
       className="space-y-8"
     >
       <div>
-        <h1 className="text-4xl font-bold text-primary tracking-tight font-heading">System</h1>
-        <p className="text-muted-foreground">Manage system configurations and user access.</p>
+        <h1 className="text-4xl font-bold text-primary tracking-tight font-heading">
+          {isAdmin ? 'System' : 'My Profile'}
+        </h1>
+        <p className="text-muted-foreground">
+          {isAdmin ? 'Manage system configurations and user access.' : 'View and update your profile details.'}
+        </p>
       </div>
 
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="bg-secondary p-1 rounded-xl">
-          <TabsTrigger value="profile" className="gap-2 rounded-lg px-6">
-            <User className="w-4 h-4" />
-            Profile
-          </TabsTrigger>
-          {isAdmin && (
+        {isAdmin && (
+          <TabsList className="bg-secondary p-1 rounded-xl">
+            <TabsTrigger value="profile" className="gap-2 rounded-lg px-6">
+              <User className="w-4 h-4" />
+              Profile
+            </TabsTrigger>
             <TabsTrigger value="users" className="gap-2 rounded-lg px-6">
               <Users className="w-4 h-4" />
               Users
             </TabsTrigger>
-          )}
-          {isAdmin && (
             <TabsTrigger value="business" className="gap-2 rounded-lg px-6">
               <Coins className="w-4 h-4" />
               Store
             </TabsTrigger>
-          )}
-          {isAdmin && (
             <TabsTrigger value="system" className="gap-2 rounded-lg px-6">
               <Shield className="w-4 h-4" />
               Settings
             </TabsTrigger>
-          )}
-          {isAdmin && (
             <TabsTrigger value="audit" className="gap-2 rounded-lg px-6">
               <History className="w-4 h-4" />
               Audit
             </TabsTrigger>
-          )}
-        </TabsList>
+          </TabsList>
+        )}
 
         <TabsContent value="profile">
           <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">

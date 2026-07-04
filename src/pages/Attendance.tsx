@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Clock, 
   MapPin, 
@@ -92,6 +92,8 @@ export const Attendance: React.FC = () => {
   });
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [scheduleSearch, setScheduleSearch] = useState('');
+  const [scheduleDateRange, setScheduleDateRange] = useState({ start: '', end: '' });
+  const [scheduleSortBy, setScheduleSortBy] = useState('date_desc');
   const [newRequest, setNewRequest] = useState<Partial<AttendanceRequest>>({
     type: 'leave',
     status: 'pending',
@@ -114,6 +116,27 @@ export const Attendance: React.FC = () => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     return isValid(d) ? format(d, formatStr) : dateStr;
+  };
+
+  const formatSafeTime = (ts: any, fallbackStr?: string) => {
+    if (!ts) return '--:--';
+    try {
+      if (typeof ts.toDate === 'function') {
+        return format(ts.toDate(), 'HH:mm');
+      }
+      if (ts && typeof ts === 'object' && 'seconds' in ts) {
+        return format(new Date(ts.seconds * 1000), 'HH:mm');
+      }
+      if (fallbackStr) {
+        const d = new Date(fallbackStr);
+        if (isValid(d)) return format(d, 'HH:mm');
+      }
+      const d = new Date(ts);
+      if (isValid(d)) return format(d, 'HH:mm');
+    } catch (e) {
+      console.error(e);
+    }
+    return '--:--';
   };
 
   useEffect(() => {
@@ -169,40 +192,36 @@ export const Attendance: React.FC = () => {
       setPersonalLogs(logs.slice(0, 10));
     });
 
-    // Listen to all users (for schedule management)
+    // Listen to all users and schedules (needed for everyone to view schedule)
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
+    });
+
+    const unsubscribeSchedules = onSnapshot(collection(db, 'schedules'), (snapshot) => {
+      setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
+    });
+
+    let unsubscribeAllLogs = () => {};
     if (isAdmin || isManager) {
-      const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-        setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
-      });
-
-      const unsubscribeSchedules = onSnapshot(collection(db, 'schedules'), (snapshot) => {
-        setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
-      });
-
-      const unsubscribeAllLogs = onSnapshot(
+      unsubscribeAllLogs = onSnapshot(
         query(collection(db, 'attendance'), orderBy('date', 'desc'), limit(1000)),
         (snapshot) => {
           setAllLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
           setLoading(false);
         }
       );
-
-      return () => {
-        unsubscribeRequests();
-        unsubscribeToday();
-        unsubscribeHistory();
-        unsubscribeUsers();
-        unsubscribeSchedules();
-        unsubscribeAllLogs();
-      };
     } else {
       setLoading(false);
-      return () => {
-        unsubscribeRequests();
-        unsubscribeToday();
-        unsubscribeHistory();
-      };
     }
+
+    return () => {
+      unsubscribeRequests();
+      unsubscribeToday();
+      unsubscribeHistory();
+      unsubscribeUsers();
+      unsubscribeSchedules();
+      unsubscribeAllLogs();
+    };
   }, [profile?.id, isAdmin, isManager]);
 
   const handleTimeIn = async () => {
@@ -221,6 +240,7 @@ export const Attendance: React.FC = () => {
         userName: profile.name || 'Staff',
         date: todayStr,
         timeIn: serverTimestamp(),
+        timeInBackup: new Date().toISOString(),
         timeOut: null,
         locationId: selectedLocationId,
         locationName: location?.name || 'Unknown',
@@ -242,7 +262,8 @@ export const Attendance: React.FC = () => {
     try {
       const docRef = doc(db, 'attendance', currentUserAttendance.id);
       await updateDoc(docRef, {
-        timeOut: serverTimestamp()
+        timeOut: serverTimestamp(),
+        timeOutBackup: new Date().toISOString()
       });
       toast.success('Successfully timed out!');
       await logAction(profile, 'TIME_OUT', `Timed out from ${currentUserAttendance.locationName}`);
@@ -478,14 +499,58 @@ export const Attendance: React.FC = () => {
     return schedules.find(s => s.userId === userId && s.date === dateStr);
   };
 
-  const filteredSchedules = schedules.filter(sch => {
-    const searchLower = scheduleSearch.toLowerCase();
-    const staffName = sch.userName || allUsers.find(u => u.id === sch.userId)?.name || sch.userId;
-    return (
-      staffName?.toLowerCase().includes(searchLower) ||
-      sch.date.includes(searchLower)
-    );
-  });
+  const filteredSchedules = useMemo(() => {
+    let result = [...schedules];
+
+    // Filter by search query
+    if (scheduleSearch) {
+      const searchLower = scheduleSearch.toLowerCase();
+      result = result.filter(sch => {
+        const staffName = sch.userName || allUsers.find(u => u.id === sch.userId)?.name || sch.userId;
+        return (
+          staffName?.toLowerCase().includes(searchLower) ||
+          sch.date.includes(searchLower)
+        );
+      });
+    }
+
+    // Filter by date range
+    if (scheduleDateRange.start) {
+      result = result.filter(sch => sch.date >= scheduleDateRange.start);
+    }
+    if (scheduleDateRange.end) {
+      result = result.filter(sch => sch.date <= scheduleDateRange.end);
+    }
+
+    // Sort options
+    result.sort((a, b) => {
+      if (scheduleSortBy === 'date_desc') {
+        return b.date.localeCompare(a.date);
+      }
+      if (scheduleSortBy === 'date_asc') {
+        return a.date.localeCompare(b.date);
+      }
+      if (scheduleSortBy === 'name_asc') {
+        const nameA = a.userName || allUsers.find(u => u.id === a.userId)?.name || a.userId;
+        const nameB = b.userName || allUsers.find(u => u.id === b.userId)?.name || b.userId;
+        return nameA.localeCompare(nameB);
+      }
+      if (scheduleSortBy === 'name_desc') {
+        const nameA = a.userName || allUsers.find(u => u.id === a.userId)?.name || a.userId;
+        const nameB = b.userName || allUsers.find(u => u.id === b.userId)?.name || b.userId;
+        return nameB.localeCompare(nameA);
+      }
+      if (scheduleSortBy === 'time_asc') {
+        return (a.startTime || '').localeCompare(b.startTime || '');
+      }
+      if (scheduleSortBy === 'time_desc') {
+        return (b.startTime || '').localeCompare(a.startTime || '');
+      }
+      return 0;
+    });
+
+    return result;
+  }, [schedules, scheduleSearch, scheduleDateRange, scheduleSortBy, allUsers]);
 
   return (
     <div className="space-y-8 pb-12">
@@ -560,7 +625,7 @@ export const Attendance: React.FC = () => {
                   <div className="space-y-2 text-center text-white">
                     <p className="text-sm font-bold opacity-60 uppercase tracking-widest">Shift Started</p>
                     <p className="text-3xl font-black">
-                      {currentUserAttendance.timeIn ? format(currentUserAttendance.timeIn.toDate(), 'HH:mm') : '--:--'}
+                      {formatSafeTime(currentUserAttendance.timeIn, currentUserAttendance.timeInBackup)}
                     </p>
                     <div className="flex items-center justify-center gap-2 text-xs font-medium opacity-80">
                       <MapPin className="w-3 h-3" />
@@ -589,14 +654,14 @@ export const Attendance: React.FC = () => {
                     <div className="text-center">
                       <p className="text-[10px] font-bold text-slate-400 uppercase">In</p>
                       <p className="text-sm font-bold text-primary">
-                        {currentUserAttendance.timeIn ? format(currentUserAttendance.timeIn.toDate(), 'HH:mm') : '--:--'}
+                        {formatSafeTime(currentUserAttendance.timeIn, currentUserAttendance.timeInBackup)}
                       </p>
                     </div>
                     <div className="w-px h-8 bg-slate-100" />
                     <div className="text-center">
                       <p className="text-[10px] font-bold text-slate-400 uppercase">Out</p>
                       <p className="text-sm font-bold text-primary">
-                        {currentUserAttendance.timeOut ? format(currentUserAttendance.timeOut.toDate(), 'HH:mm') : '--:--'}
+                        {formatSafeTime(currentUserAttendance.timeOut, currentUserAttendance.timeOutBackup)}
                       </p>
                     </div>
                   </div>
@@ -661,6 +726,9 @@ export const Attendance: React.FC = () => {
                 <TabsTrigger value="history" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
                   My History
                 </TabsTrigger>
+                <TabsTrigger value="schedules" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
+                  Team Schedules
+                </TabsTrigger>
                 <TabsTrigger value="requests" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
                   Requests
                 </TabsTrigger>
@@ -668,9 +736,6 @@ export const Attendance: React.FC = () => {
                   <>
                     <TabsTrigger value="report" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
                       Report
-                    </TabsTrigger>
-                    <TabsTrigger value="schedules" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                      Manage Schedules
                     </TabsTrigger>
                     <TabsTrigger value="compare" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
                       Comparison
@@ -900,14 +965,14 @@ export const Attendance: React.FC = () => {
                       <div className="text-center">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Time In</p>
                         <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-black tabular-nums">
-                          {log.timeIn ? format(log.timeIn.toDate(), 'HH:mm') : '--:--'}
+                          {formatSafeTime(log.timeIn, log.timeInBackup)}
                         </Badge>
                       </div>
                       <div className="text-center">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Time Out</p>
                         {log.timeOut ? (
                           <Badge variant="outline" className="bg-amber-50/50 text-amber-700 border-amber-100 font-black tabular-nums">
-                            {format(log.timeOut.toDate(), 'HH:mm')}
+                            {formatSafeTime(log.timeOut, log.timeOutBackup)}
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="bg-rose-50 text-rose-500 border-rose-100 font-bold italic">
@@ -930,35 +995,90 @@ export const Attendance: React.FC = () => {
 
             <TabsContent value="schedules">
               <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm">
-                  <div className="flex items-center gap-4 flex-1 max-w-sm">
-                    <Search className="w-4 h-4 text-slate-400" />
-                    <Input 
-                      placeholder="Search staff schedules..." 
-                      className="bg-slate-50 border-none h-10 text-xs" 
-                      value={scheduleSearch}
-                      onChange={(e) => setScheduleSearch(e.target.value)}
-                    />
+                <div className="flex flex-col gap-4 bg-white p-4 rounded-2xl border border-slate-200/60 shadow-sm">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 flex-1 max-w-sm">
+                      <Search className="w-4 h-4 text-slate-400" />
+                      <Input 
+                        placeholder="Search staff schedules..." 
+                        className="bg-slate-50 border-none h-10 text-xs text-primary" 
+                        value={scheduleSearch}
+                        onChange={(e) => setScheduleSearch(e.target.value)}
+                      />
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-[10px] text-slate-400 font-bold uppercase">From</Label>
+                        <Input 
+                          type="date"
+                          className="h-10 text-xs w-36 border-slate-200 bg-white text-primary"
+                          value={scheduleDateRange.start}
+                          onChange={(e) => setScheduleDateRange(prev => ({ ...prev, start: e.target.value }))}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-[10px] text-slate-400 font-bold uppercase">To</Label>
+                        <Input 
+                          type="date"
+                          className="h-10 text-xs w-36 border-slate-200 bg-white text-primary"
+                          value={scheduleDateRange.end}
+                          onChange={(e) => setScheduleDateRange(prev => ({ ...prev, end: e.target.value }))}
+                        />
+                      </div>
+                      {(scheduleDateRange.start || scheduleDateRange.end) && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                          onClick={() => setScheduleDateRange({ start: '', end: '' })}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      variant="outline"
-                      className="border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-xl gap-2 font-bold text-xs"
-                      onClick={() => setIsBulkDialogOpen(true)}
-                    >
-                      <ArrowRightLeft className="w-4 h-4" />
-                      Bulk Populate
-                    </Button>
-                    <Button 
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 font-bold text-xs"
-                      onClick={() => {
-                        setEditingSchedule({ date: format(new Date(), 'yyyy-MM-dd') });
-                        setIsScheduleDialogOpen(true);
-                      }}
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Single Date
-                    </Button>
+
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <Label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sort By</Label>
+                      <Select value={scheduleSortBy} onValueChange={setScheduleSortBy}>
+                        <SelectTrigger className="w-48 h-10 text-xs border-slate-200 bg-white text-primary">
+                          <SelectValue placeholder="Sort Schedule" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="date_desc">Date (Newest First)</SelectItem>
+                          <SelectItem value="date_asc">Date (Oldest First)</SelectItem>
+                          <SelectItem value="name_asc">Staff Name (A to Z)</SelectItem>
+                          <SelectItem value="name_desc">Staff Name (Z to A)</SelectItem>
+                          <SelectItem value="time_asc">Shift Start (Earliest)</SelectItem>
+                          <SelectItem value="time_desc">Shift Start (Latest)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {(isAdmin || isManager) && (
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="outline"
+                          className="border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-xl gap-2 font-bold text-xs h-10"
+                          onClick={() => setIsBulkDialogOpen(true)}
+                        >
+                          <ArrowRightLeft className="w-4 h-4" />
+                          Bulk Populate
+                        </Button>
+                        <Button 
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 font-bold text-xs h-10"
+                          onClick={() => {
+                            setEditingSchedule({ date: format(new Date(), 'yyyy-MM-dd') });
+                            setIsScheduleDialogOpen(true);
+                          }}
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Single Date
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -970,7 +1090,7 @@ export const Attendance: React.FC = () => {
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Staff</th>
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Shift</th>
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                        <th className="px-6 py-4 text-right"></th>
+                        {(isAdmin || isManager) && <th className="px-6 py-4 text-right"></th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -998,32 +1118,34 @@ export const Attendance: React.FC = () => {
                               {sch.isDayOff ? 'Day Off' : 'Working'}
                             </Badge>
                           </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-slate-400 hover:text-indigo-600"
-                                onClick={() => {
-                                  setEditingSchedule(sch);
-                                  setIsScheduleDialogOpen(true);
-                                }}
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-slate-400 hover:text-rose-600"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteSchedule(sch.id);
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </td>
+                          {(isAdmin || isManager) && (
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-slate-400 hover:text-indigo-600"
+                                  onClick={() => {
+                                    setEditingSchedule(sch);
+                                    setIsScheduleDialogOpen(true);
+                                  }}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSchedule(sch.id);
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

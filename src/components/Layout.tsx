@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocations } from '../contexts/LocationContext';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -39,9 +40,9 @@ const navItems = [
   { name: 'Directory', path: '/directory', icon: BookOpen, roles: ['admin', 'manager'] },
   { name: 'Sales History', path: '/sales', icon: History, roles: ['admin', 'manager', 'staff'] },
   { name: 'Reports', path: '/reports', icon: TrendingUp, roles: ['admin'] },
-  { name: 'Finance', path: '/finance', icon: Wallet, roles: ['admin', 'manager'] },
+  { name: 'Finance', path: '/finance', icon: Wallet, roles: ['admin'] },
   { name: 'Attendance', path: '/attendance', icon: Clock, roles: ['admin', 'manager', 'staff'] },
-  { name: 'System', path: '/settings', icon: Settings, roles: ['admin'] },
+  { name: 'System', path: '/settings', icon: Settings, roles: ['admin', 'manager', 'staff'] },
 ];
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -51,6 +52,28 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
+  const [pendingCount, setPendingCount] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!profile) return;
+    
+    const canViewSales = isAdmin || isManager || ['admin', 'manager', 'staff'].includes(profile.role);
+    if (!canViewSales) return;
+
+    const q = query(collection(db, 'sales'), where('status', '==', 'pending'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let count = snapshot.docs.length;
+      if (selectedLocationId !== 'all') {
+        count = snapshot.docs.filter(doc => doc.data().locationId === selectedLocationId).length;
+      }
+      setPendingCount(count);
+    }, (err) => {
+      console.warn("Failed to listen to pending sales for badge:", err);
+    });
+
+    return () => unsubscribe();
+  }, [profile, isAdmin, isManager, selectedLocationId]);
 
   React.useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -141,6 +164,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           })
           .map((item) => {
             const isActive = location.pathname === item.path;
+            const displayName = (item.path === '/settings' && !isAdmin) ? 'Profile' : item.name;
+            const showPendingBadge = item.path === '/sales' && pendingCount > 0;
             return (
               <Link
                 key={item.path}
@@ -154,8 +179,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 )}
               >
                 <item.icon className={cn("w-4 h-4 transition-transform duration-300 group-hover:scale-110", isActive ? "text-primary stroke-[2.5px]" : "text-white/40 group-hover:text-white")} />
-                <span className="font-semibold text-xs">{item.name}</span>
-                {isActive && (
+                <span className="font-semibold text-xs">{displayName}</span>
+                {showPendingBadge && (
+                  <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[9px] font-black leading-none text-white bg-rose-500 rounded-full animate-pulse shadow-sm">
+                    {pendingCount}
+                  </span>
+                )}
+                {isActive && !showPendingBadge && (
                   <motion.div 
                     layoutId="activeNav"
                     className="ml-auto w-1 h-1 rounded-full bg-primary" 
