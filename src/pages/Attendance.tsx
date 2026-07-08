@@ -23,7 +23,13 @@ import {
   X as CloseIcon, 
   MessageSquare, 
   CalendarOff,
-  BarChart3
+  BarChart3,
+  DollarSign,
+  Coins,
+  Download,
+  Save,
+  Percent,
+  Printer
 } from 'lucide-react';
 import { 
   collection, 
@@ -33,6 +39,7 @@ import {
   onSnapshot, 
   addDoc, 
   updateDoc, 
+  setDoc,
   doc, 
   deleteDoc,
   Timestamp,
@@ -93,6 +100,49 @@ export const Attendance: React.FC = () => {
   });
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [scheduleSearch, setScheduleSearch] = useState('');
+  const [compareUserFilter, setCompareUserFilter] = useState('all');
+
+  const staffAndManagers = useMemo(() => {
+    return allUsers.filter(u => u.role === 'staff' || u.role === 'manager');
+  }, [allUsers]);
+
+  const filteredCompareUsers = useMemo(() => {
+    if (compareUserFilter === 'all') {
+      return staffAndManagers;
+    }
+    return staffAndManagers.filter(u => u.id === compareUserFilter);
+  }, [staffAndManagers, compareUserFilter]);
+
+  // Helper to get previous week's Saturday to current week's Monday
+  const defaultRange = useMemo(() => {
+    const today = new Date();
+    const currentMonday = new Date(today);
+    const day = today.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    currentMonday.setDate(today.getDate() + diffToMonday);
+    
+    const prevSaturday = new Date(currentMonday);
+    prevSaturday.setDate(currentMonday.getDate() - 2);
+    
+    return {
+      start: format(prevSaturday, 'yyyy-MM-dd'),
+      end: format(currentMonday, 'yyyy-MM-dd')
+    };
+  }, []);
+
+  // Payslip states
+  const [payslipStartDate, setPayslipStartDate] = useState(defaultRange.start);
+  const [payslipEndDate, setPayslipEndDate] = useState(defaultRange.end);
+  const [selectedPayslipUser, setSelectedPayslipUser] = useState<string>('');
+  const [ratesList, setRatesList] = useState<any[]>([]);
+  const [payslipHourlyRate, setPayslipHourlyRate] = useState<string>('15');
+  const [payslipOtRate, setPayslipOtRate] = useState<string>('22.5');
+  const [payslipIncentiveAmount, setPayslipIncentiveAmount] = useState<string>('0');
+  const [payslipIncentiveReason, setPayslipIncentiveReason] = useState<string>('');
+  const [payslipDeductionAmount, setPayslipDeductionAmount] = useState<string>('0');
+  const [payslipDeductionReason, setPayslipDeductionReason] = useState<string>('');
+  const [isSavingRates, setIsSavingRates] = useState(false);
+
   const [scheduleDateRange, setScheduleDateRange] = useState({ start: '', end: '' });
   const [scheduleSortBy, setScheduleSortBy] = useState('date_desc');
   const [sortRules, setSortRules] = useState<{ field: 'date' | 'name' | 'startTime'; direction: 'asc' | 'desc' }[]>([
@@ -220,6 +270,7 @@ export const Attendance: React.FC = () => {
     });
 
     let unsubscribeAllLogs = () => {};
+    let unsubscribeRates = () => {};
     if (isAdmin || isManager) {
       unsubscribeAllLogs = onSnapshot(
         query(collection(db, 'attendance'), orderBy('date', 'desc'), limit(1000)),
@@ -228,6 +279,9 @@ export const Attendance: React.FC = () => {
           setLoading(false);
         }
       );
+      unsubscribeRates = onSnapshot(collection(db, 'staffRates'), (snapshot) => {
+        setRatesList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
     } else {
       setLoading(false);
     }
@@ -239,8 +293,188 @@ export const Attendance: React.FC = () => {
       unsubscribeUsers();
       unsubscribeSchedules();
       unsubscribeAllLogs();
+      unsubscribeRates();
     };
   }, [profile?.id, isAdmin, isManager]);
+
+  // Auto-select first staff/manager for Payslips
+  useEffect(() => {
+    if (staffAndManagers.length > 0 && !selectedPayslipUser) {
+      setSelectedPayslipUser(staffAndManagers[0].id);
+    }
+  }, [staffAndManagers, selectedPayslipUser]);
+
+  // Load current staff rates
+  const currentStaffRates = useMemo(() => {
+    const rateDoc = ratesList.find(r => r.id === selectedPayslipUser);
+    return {
+      hourlyRate: rateDoc?.hourlyRate ?? 15,
+      otRate: rateDoc?.otRate ?? 22.5,
+      incentiveAmount: rateDoc?.incentiveAmount ?? 0,
+      incentiveReason: rateDoc?.incentiveReason ?? '',
+      manualDeduction: rateDoc?.manualDeduction ?? 0,
+      deductionReason: rateDoc?.deductionReason ?? ''
+    };
+  }, [ratesList, selectedPayslipUser]);
+
+  // Sync inputs with saved rates
+  useEffect(() => {
+    setPayslipHourlyRate(currentStaffRates.hourlyRate.toString());
+    setPayslipOtRate(currentStaffRates.otRate.toString());
+    setPayslipIncentiveAmount(currentStaffRates.incentiveAmount.toString());
+    setPayslipIncentiveReason(currentStaffRates.incentiveReason);
+    setPayslipDeductionAmount(currentStaffRates.manualDeduction.toString());
+    setPayslipDeductionReason(currentStaffRates.deductionReason);
+  }, [currentStaffRates]);
+
+  // Save rates to Firestore
+  const handleSaveRates = async () => {
+    if (!selectedPayslipUser) return;
+    setIsSavingRates(true);
+    try {
+      await setDoc(doc(db, 'staffRates', selectedPayslipUser), {
+        hourlyRate: parseFloat(payslipHourlyRate) || 0,
+        otRate: parseFloat(payslipOtRate) || 0,
+        incentiveAmount: parseFloat(payslipIncentiveAmount) || 0,
+        incentiveReason: payslipIncentiveReason,
+        manualDeduction: parseFloat(payslipDeductionAmount) || 0,
+        deductionReason: payslipDeductionReason,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      toast.success('Rates and adjustments updated successfully');
+    } catch (err) {
+      console.error('Error saving rates:', err);
+      toast.error('Failed to save rates');
+    } finally {
+      setIsSavingRates(false);
+    }
+  };
+
+  // Calculate Payslip breakdown
+  const payslipData = useMemo(() => {
+    if (!selectedPayslipUser || !payslipStartDate || !payslipEndDate) {
+      return { days: [], totalScheduledHours: 0, totalActualHours: 0, totalRegularHours: 0, totalOtHours: 0, lateDeductionsCount: 0, totalLateMinutes: 0 };
+    }
+
+    const start = startOfDay(new Date(payslipStartDate));
+    const end = endOfDay(new Date(payslipEndDate));
+
+    if (!isValid(start) || !isValid(end)) {
+      return { days: [], totalScheduledHours: 0, totalActualHours: 0, totalRegularHours: 0, totalOtHours: 0, lateDeductionsCount: 0, totalLateMinutes: 0 };
+    }
+
+    const daysInterval = eachDayOfInterval({ start, end });
+    const staffSchedules = schedules.filter(s => s.userId === selectedPayslipUser);
+    const staffLogs = allLogs.filter(l => l.userId === selectedPayslipUser);
+    const staffRequests = requests.filter(r => r.userId === selectedPayslipUser && r.status === 'approved');
+
+    let totalScheduledHours = 0;
+    let totalActualHours = 0;
+    let totalRegularHours = 0;
+    let totalOtHours = 0;
+    let lateDeductionsCount = 0;
+    let totalLateMinutes = 0;
+
+    const daysBreakdown = daysInterval.map(day => {
+      const dayStr = format(day, 'yyyy-MM-dd');
+      const schedule = staffSchedules.find(s => s.date === dayStr);
+      const log = staffLogs.find(l => l.date === dayStr);
+      const leaveRequest = staffRequests.find(r => r.type === 'leave' && r.startDate <= dayStr && (r.endDate || r.startDate) >= dayStr);
+      const schChange = staffRequests.find(r => r.type === 'schedule_change' && r.startDate === dayStr);
+
+      let status: 'off' | 'leave' | 'absent' | 'worked' | 'none' = 'none';
+      let scheduledHrs = 0;
+      let actualHrs = 0;
+      let regHrs = 0;
+      let otHrs = 0;
+      let lateMins = 0;
+      let isLateDeducted = false;
+
+      // Calculate scheduled hours
+      if (schedule && !schedule.isDayOff) {
+        status = 'absent';
+        if (schedule.startTime && schedule.endTime) {
+          const sMin = getTimeInMinutes(schedule.startTime);
+          const eMin = getTimeInMinutes(schedule.endTime);
+          scheduledHrs = Math.max(0, (eMin - sMin) / 60);
+          totalScheduledHours += scheduledHrs;
+        }
+      } else if (schedule?.isDayOff) {
+        status = 'off';
+      }
+
+      if (leaveRequest) {
+        status = 'leave';
+      }
+
+      if (log) {
+        status = 'worked';
+        if (log.timeIn && log.timeOut) {
+          const clockedDuration = differenceInMinutes(log.timeOut.toDate(), log.timeIn.toDate());
+          actualHrs = Math.max(0, clockedDuration / 60);
+          totalActualHours += actualHrs;
+        }
+
+        // Calculate late minutes
+        const effectiveStartTime = schChange?.newStartTime || schedule?.startTime;
+        if (effectiveStartTime && log.timeIn) {
+          const sMin = getTimeInMinutes(effectiveStartTime);
+          const timeInObj = log.timeIn.toDate();
+          const actualInMin = timeInObj.getHours() * 60 + timeInObj.getMinutes();
+          if (actualInMin > sMin) {
+            lateMins = actualInMin - sMin;
+            totalLateMinutes += lateMins;
+            if (lateMins >= 5) {
+              isLateDeducted = true;
+              lateDeductionsCount++;
+            }
+          }
+        }
+
+        // Calculate regular vs overtime hours
+        const baseLimit = scheduledHrs > 0 ? scheduledHrs : 8.0; // default to 8 hours limit if no schedule
+        
+        let calculatedRegHrs = Math.min(actualHrs, baseLimit);
+        let calculatedOtHrs = Math.max(0, actualHrs - baseLimit);
+
+        if (isLateDeducted) {
+          // Late by 5 mins or more -> 1 hour deduction
+          calculatedRegHrs = Math.max(0, calculatedRegHrs - 1.0);
+        }
+
+        regHrs = calculatedRegHrs;
+        otHrs = calculatedOtHrs;
+        totalRegularHours += regHrs;
+        totalOtHours += otHrs;
+      }
+
+      return {
+        dateStr: dayStr,
+        dateFormatted: format(day, 'EEE, MMM dd'),
+        status,
+        scheduledHrs,
+        actualHrs,
+        regHrs,
+        otHrs,
+        lateMins,
+        isLateDeducted,
+        timeInStr: log?.timeIn ? format(log.timeIn.toDate(), 'HH:mm') : null,
+        timeOutStr: log?.timeOut ? format(log.timeOut.toDate(), 'HH:mm') : null,
+        scheduleInStr: schChange?.newStartTime || schedule?.startTime || null,
+        scheduleOutStr: schChange?.newEndTime || schedule?.endTime || null
+      };
+    });
+
+    return {
+      days: daysBreakdown,
+      totalScheduledHours,
+      totalActualHours,
+      totalRegularHours,
+      totalOtHours,
+      lateDeductionsCount,
+      totalLateMinutes
+    };
+  }, [selectedPayslipUser, payslipStartDate, payslipEndDate, schedules, allLogs, requests]);
 
   const handleTimeIn = async () => {
     if (!profile) return;
@@ -943,6 +1177,9 @@ export const Attendance: React.FC = () => {
                     <TabsTrigger value="compare" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
                       Comparison
                     </TabsTrigger>
+                    <TabsTrigger value="payslips" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
+                      Payslips
+                    </TabsTrigger>
                   </>
                 )}
               </TabsList>
@@ -1427,15 +1664,32 @@ export const Attendance: React.FC = () => {
               <div className="space-y-4">
                 <Card className="border-none shadow-xl overflow-hidden rounded-3xl">
                   <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       <div>
                         <CardTitle className="text-lg font-bold">Daily Comparison Report</CardTitle>
                         <CardDescription>Comparing scheduled vs actual attendance for today.</CardDescription>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Badge className="bg-indigo-50 text-indigo-700 border-indigo-100">Today</Badge>
-                        <div className="h-4 w-px bg-slate-200" />
-                        <p className="text-xs font-bold text-slate-400">{format(new Date(), 'MMM dd, yyyy')}</p>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <div className="w-56 sm:w-64">
+                          <Select value={compareUserFilter} onValueChange={setCompareUserFilter}>
+                            <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200/80 rounded-xl focus:ring-1 focus:ring-indigo-500">
+                              <SelectValue placeholder="All Staff & Managers" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Staff & Managers</SelectItem>
+                              {staffAndManagers.map(u => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.name || u.email || u.id} ({u.role === 'manager' ? 'Manager' : 'Staff'})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-3 justify-end">
+                          <Badge className="bg-indigo-50 text-indigo-700 border-indigo-100">Today</Badge>
+                          <div className="h-4 w-px bg-slate-200" />
+                          <p className="text-xs font-bold text-slate-400">{format(new Date(), 'MMM dd, yyyy')}</p>
+                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -1453,49 +1707,599 @@ export const Attendance: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                          {allUsers.map((user) => {
-                            const todayStr = format(new Date(), 'yyyy-MM-dd');
-                            const schedule = getDateSchedule(user.id, todayStr);
-                            const attendance = allLogs.find(l => l.userId === user.id && l.date === todayStr);
+                          {filteredCompareUsers.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} className="text-center py-12 text-slate-400 italic text-sm">
+                                No matching staff members found.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredCompareUsers.map((user) => {
+                              const todayStr = format(new Date(), 'yyyy-MM-dd');
+                              const schedule = getDateSchedule(user.id, todayStr);
+                              const attendance = allLogs.find(l => l.userId === user.id && l.date === todayStr);
 
-                            const isInLate = schedule && !schedule.isDayOff && attendance && attendance.timeIn && (
-                              format(attendance.timeIn.toDate(), 'HH:mm') > (schedule.startTime || '00:00')
-                            );
+                              const isInLate = schedule && !schedule.isDayOff && attendance && attendance.timeIn && (
+                                format(attendance.timeIn.toDate(), 'HH:mm') > (schedule.startTime || '00:00')
+                              );
 
-                            return (
-                              <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-6 py-4 font-bold text-sm text-primary">{user.name || user.email || user.id}</td>
-                                <td className="px-6 py-4 text-xs font-medium text-slate-400 tabular-nums">
-                                  {schedule?.isDayOff ? 'DAY OFF' : schedule?.startTime || '--:--'}
-                                </td>
-                                <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
-                                  {attendance?.timeIn ? format(attendance.timeIn.toDate(), 'HH:mm') : '--:--'}
-                                </td>
-                                <td className="px-6 py-4 text-xs font-medium text-slate-400 tabular-nums">
-                                  {schedule?.isDayOff ? 'DAY OFF' : schedule?.endTime || '--:--'}
-                                </td>
-                                <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
-                                  {attendance?.timeOut ? format(attendance.timeOut.toDate(), 'HH:mm') : '--:--'}
-                                </td>
-                                <td className="px-6 py-4">
-                                  {schedule?.isDayOff ? (
-                                    <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-100 font-bold uppercase text-[9px] tracking-widest">Off</Badge>
-                                  ) : !attendance ? (
-                                    <Badge variant="outline" className="bg-rose-50 text-rose-500 border-rose-100 font-bold uppercase text-[9px] tracking-widest">Absent</Badge>
-                                  ) : isInLate ? (
-                                    <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-100 font-bold uppercase text-[9px] tracking-widest">Late Arrival</Badge>
-                                  ) : (
-                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 font-bold uppercase text-[9px] tracking-widest">On Time</Badge>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
+                              return (
+                                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-6 py-4 font-bold text-sm text-primary">{user.name || user.email || user.id}</td>
+                                  <td className="px-6 py-4 text-xs font-medium text-slate-400 tabular-nums">
+                                    {schedule?.isDayOff ? 'DAY OFF' : schedule?.startTime || '--:--'}
+                                  </td>
+                                  <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
+                                    {attendance?.timeIn ? format(attendance.timeIn.toDate(), 'HH:mm') : '--:--'}
+                                  </td>
+                                  <td className="px-6 py-4 text-xs font-medium text-slate-400 tabular-nums">
+                                    {schedule?.isDayOff ? 'DAY OFF' : schedule?.endTime || '--:--'}
+                                  </td>
+                                  <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
+                                    {attendance?.timeOut ? format(attendance.timeOut.toDate(), 'HH:mm') : '--:--'}
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    {schedule?.isDayOff ? (
+                                      <Badge variant="outline" className="bg-slate-50 text-slate-400 border-slate-100 font-bold uppercase text-[9px] tracking-widest">Off</Badge>
+                                    ) : !attendance ? (
+                                      <Badge variant="outline" className="bg-rose-50 text-rose-500 border-rose-100 font-bold uppercase text-[9px] tracking-widest">Absent</Badge>
+                                    ) : isInLate ? (
+                                      <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-100 font-bold uppercase text-[9px] tracking-widest">Late Arrival</Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 font-bold uppercase text-[9px] tracking-widest">On Time</Badge>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
                         </tbody>
                       </table>
                     </div>
                   </CardContent>
                 </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="payslips">
+              <div className="space-y-6">
+                {/* Print styles injected locally */}
+                <style>{`
+                  @media print {
+                    body * {
+                      visibility: hidden !important;
+                    }
+                    #printable-payslip-area, #printable-payslip-area * {
+                      visibility: visible !important;
+                    }
+                    #printable-payslip-area {
+                      position: absolute !important;
+                      left: 0 !important;
+                      top: 0 !important;
+                      width: 100% !important;
+                      margin: 0 !important;
+                      padding: 24px !important;
+                      background: white !important;
+                      color: black !important;
+                      box-shadow: none !important;
+                      border: none !important;
+                    }
+                    .no-print {
+                      display: none !important;
+                    }
+                  }
+                `}</style>
+
+                {/* Configuration controls card */}
+                <Card className="border-none shadow-xl overflow-hidden rounded-3xl no-print">
+                  <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div>
+                        <CardTitle className="text-lg font-bold">Staff Payslips Manager</CardTitle>
+                        <CardDescription>Generate, adjust, and download payslips based on schedule and attendance.</CardDescription>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-400 uppercase font-bold">Staff Member</Label>
+                          <Select value={selectedPayslipUser} onValueChange={setSelectedPayslipUser}>
+                            <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                              <SelectValue placeholder="Select Staff...">
+                                {selectedPayslipUser ? (staffAndManagers.find(u => u.id === selectedPayslipUser)?.name || staffAndManagers.find(u => u.id === selectedPayslipUser)?.email || selectedPayslipUser) : undefined}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {staffAndManagers.map(u => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.name || u.email || u.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-400 uppercase font-bold">Start Date</Label>
+                          <Input 
+                            type="date" 
+                            className="bg-white border-slate-200 h-9 text-xs"
+                            value={payslipStartDate}
+                            onChange={(e) => setPayslipStartDate(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-slate-400 uppercase font-bold">End Date</Label>
+                          <Input 
+                            type="date" 
+                            className="bg-white border-slate-200 h-9 text-xs"
+                            value={payslipEndDate}
+                            onChange={(e) => setPayslipEndDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                  {/* Left Side: Manipulation controls (Rates, Incentives, Deductions) */}
+                  <div className="lg:col-span-4 space-y-6 no-print">
+                    <Card className="border-none shadow-xl rounded-3xl">
+                      <CardHeader className="border-b border-slate-100/80 bg-slate-50/50">
+                        <div className="flex items-center gap-2">
+                          <Coins className="w-4 h-4 text-indigo-500" />
+                          <CardTitle className="text-sm font-bold">Compensation & Adjustments</CardTitle>
+                        </div>
+                        <CardDescription>Customize rates, overtime parameters, and extra pay.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-6 space-y-4">
+                        {/* Regular hourly rate */}
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold text-slate-600">Regular Hourly Rate ({settings.currency})</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                            <Input 
+                              type="number" 
+                              min="0"
+                              step="0.01"
+                              className="pl-7 h-9 text-xs"
+                              value={payslipHourlyRate}
+                              onChange={(e) => setPayslipHourlyRate(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Overtime rate */}
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold text-slate-600">Overtime Hourly Rate ({settings.currency})</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                            <Input 
+                              type="number" 
+                              min="0"
+                              step="0.01"
+                              className="pl-7 h-9 text-xs"
+                              value={payslipOtRate}
+                              onChange={(e) => setPayslipOtRate(e.target.value)}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-medium">Applied to clocked hours exceeding scheduled shift length.</span>
+                        </div>
+
+                        {/* Incentives */}
+                        <div className="border-t border-slate-100 pt-4 space-y-4">
+                          <div className="space-y-1">
+                            <Label className="text-xs font-semibold text-slate-600">Add Incentives ({settings.currency})</Label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                              <Input 
+                                type="number" 
+                                min="0"
+                                step="0.01"
+                                className="pl-7 h-9 text-xs"
+                                value={payslipIncentiveAmount}
+                                onChange={(e) => setPayslipIncentiveAmount(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs font-semibold text-slate-600">Incentive Reason</Label>
+                            <Input 
+                              placeholder="e.g. Bonus, Overtime Bonus, Travel Allowance"
+                              className="h-9 text-xs"
+                              value={payslipIncentiveReason}
+                              onChange={(e) => setPayslipIncentiveReason(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Deductions */}
+                        <div className="border-t border-slate-100 pt-4 space-y-4">
+                          <div className="space-y-1">
+                            <Label className="text-xs font-semibold text-slate-600">Manual Deduction ({settings.currency})</Label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                              <Input 
+                                type="number" 
+                                min="0"
+                                step="0.01"
+                                className="pl-7 h-9 text-xs"
+                                value={payslipDeductionAmount}
+                                onChange={(e) => setPayslipDeductionAmount(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs font-semibold text-slate-600">Deduction Reason</Label>
+                            <Input 
+                              placeholder="e.g. Uniform fee, equipment damage"
+                              className="h-9 text-xs"
+                              value={payslipDeductionReason}
+                              onChange={(e) => setPayslipDeductionReason(e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Save adjustments */}
+                        <Button 
+                          className="w-full mt-2 h-10 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wide gap-2 rounded-xl"
+                          disabled={isSavingRates || !selectedPayslipUser}
+                          onClick={handleSaveRates}
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          {isSavingRates ? 'Saving Settings...' : 'Save Rates & settings'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    {/* Rule Alert Card */}
+                    <Card className="border-none shadow-md bg-amber-50/50 border border-amber-100 rounded-3xl">
+                      <CardContent className="p-4 space-y-2 text-xs text-amber-800">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                          Late Deduction Rule Active
+                        </div>
+                        <p className="leading-relaxed">
+                          Staff arriving <strong>5 minutes or more</strong> past their scheduled start time are penalized by <strong>1 hour deduction</strong> from their payable regular hours for that day.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Right Side: Payslip Printable Statement */}
+                  <div className="lg:col-span-8 space-y-6">
+                    {/* Payslip view */}
+                    <Card id="printable-payslip-area" className="border border-slate-200/80 shadow-xl overflow-hidden rounded-3xl bg-white">
+                      <CardContent className="p-8 space-y-8">
+                        {/* Header of Payslip */}
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-6 gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black italic">A</div>
+                              <span className="font-black tracking-wider text-slate-800">ATTENDANCE PRO</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mt-1">Salary Payment Slip</p>
+                          </div>
+                          <div className="text-left md:text-right">
+                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider text-[10px]">
+                              CONFIDENTIAL
+                            </span>
+                            <p className="text-xs text-slate-400 font-semibold mt-1">
+                              Period: {isValid(new Date(payslipStartDate)) ? format(new Date(payslipStartDate), 'MMM dd, yyyy') : ''} – {isValid(new Date(payslipEndDate)) ? format(new Date(payslipEndDate), 'MMM dd, yyyy') : ''}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Employee details row */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Employee Name</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">
+                              {staffAndManagers.find(u => u.id === selectedPayslipUser)?.name || staffAndManagers.find(u => u.id === selectedPayslipUser)?.email || selectedPayslipUser || 'Unknown'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Designation / Role</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5 capitalize">
+                              {staffAndManagers.find(u => u.id === selectedPayslipUser)?.role || 'Staff'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Date of Statement</p>
+                            <p className="text-sm font-bold text-slate-800 mt-0.5">{format(new Date(), 'MMM dd, yyyy')}</p>
+                          </div>
+                        </div>
+
+                        {/* Breakdown grids: Earnings vs Deductions */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          {/* Earnings side */}
+                          <div className="space-y-4">
+                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">1. Earnings & Income</h4>
+                            <div className="space-y-2.5">
+                              {/* Regular hours */}
+                              <div className="flex justify-between items-center text-xs text-slate-600">
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold">Regular Hours Worked</p>
+                                  <p className="text-[10px] text-slate-400">({payslipData.totalRegularHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipHourlyRate).toFixed(2)}/hr)</p>
+                                </div>
+                                <span className="font-bold text-slate-800">
+                                  {settings.currency}{(payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+
+                              {/* Overtime hours */}
+                              <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold">Overtime Hours</p>
+                                  <p className="text-[10px] text-slate-400">({payslipData.totalOtHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipOtRate).toFixed(2)}/hr)</p>
+                                </div>
+                                <span className="font-bold text-slate-800">
+                                  {settings.currency}{(payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+
+                              {/* Incentives */}
+                              {(parseFloat(payslipIncentiveAmount) || 0) > 0 && (
+                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                  <div className="space-y-0.5">
+                                    <p className="font-semibold">Incentives / Allowance</p>
+                                    {payslipIncentiveReason && <p className="text-[10px] text-slate-400">({payslipIncentiveReason})</p>}
+                                  </div>
+                                  <span className="font-bold text-emerald-600">
+                                    +{settings.currency}{parseFloat(payslipIncentiveAmount).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Deductions side */}
+                          <div className="space-y-4">
+                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2. Deductions</h4>
+                            <div className="space-y-2.5">
+                              {/* Late deductions */}
+                              <div className="flex justify-between items-center text-xs text-slate-600">
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold">Late Penalties (Late &gt;= 5m)</p>
+                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} = {payslipData.lateDeductionsCount} hr{payslipData.lateDeductionsCount !== 1 ? 's' : ''} deducted)</p>
+                                </div>
+                                <span className="font-bold text-rose-600">
+                                  -{settings.currency}{(payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+
+                              {/* Manual deduction */}
+                              {(parseFloat(payslipDeductionAmount) || 0) > 0 && (
+                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                  <div className="space-y-0.5">
+                                    <p className="font-semibold">Other Adjustments</p>
+                                    {payslipDeductionReason && <p className="text-[10px] text-slate-400">({payslipDeductionReason})</p>}
+                                  </div>
+                                  <span className="font-bold text-rose-600">
+                                    -{settings.currency}{parseFloat(payslipDeductionAmount).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {(!payslipData.lateDeductionsCount && !(parseFloat(payslipDeductionAmount) || 0)) && (
+                                <div className="text-xs text-slate-400 italic py-2">
+                                  No deductions applied to this pay period.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Pay summary totals */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-slate-100 py-6 mt-4">
+                          <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
+                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Gross Earnings</span>
+                            <p className="text-lg font-extrabold text-slate-800 mt-0.5">
+                              {settings.currency}{(
+                                (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
+                                (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
+                                (parseFloat(payslipIncentiveAmount) || 0) +
+                                (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0))
+                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+
+                          <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
+                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Total Deductions</span>
+                            <p className="text-lg font-extrabold text-rose-600 mt-0.5">
+                              {settings.currency}{(
+                                (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)) +
+                                (parseFloat(payslipDeductionAmount) || 0)
+                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+
+                          <div className="text-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                            <span className="text-[10px] text-indigo-500 font-black uppercase tracking-wider">Net Payable Pay</span>
+                            <p className="text-lg font-black text-indigo-700 mt-0.5">
+                              {settings.currency}{(
+                                (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
+                                (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
+                                (parseFloat(payslipIncentiveAmount) || 0) -
+                                (parseFloat(payslipDeductionAmount) || 0)
+                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Daily Work & Earnings Breakdown inside the printable payslip */}
+                        <div className="space-y-3 mt-6 border-t border-slate-100 pt-6">
+                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest pb-1">3. Daily Work & Earnings Breakdown</h4>
+                          <div className="overflow-hidden border border-slate-100 rounded-2xl">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-slate-50/70 border-b border-slate-100">
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Date</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">Status</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">Regular Hrs</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">OT Hrs</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">Late Penalty</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">Daily Earnings</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-50">
+                                {payslipData.days.map(day => {
+                                  const regularPay = day.regHrs * (parseFloat(payslipHourlyRate) || 0);
+                                  const otPay = day.otHrs * (parseFloat(payslipOtRate) || 0);
+                                  const dailyEarned = regularPay + otPay;
+                                  return (
+                                    <tr key={day.dateStr} className="text-xs hover:bg-slate-50/50">
+                                      <td className="py-2 px-4 font-semibold text-slate-700">{day.dateFormatted}</td>
+                                      <td className="py-2 px-4 text-center">
+                                        {day.status === 'worked' ? (
+                                          <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">WORKED</span>
+                                        ) : day.status === 'leave' ? (
+                                          <span className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">LEAVE</span>
+                                        ) : day.status === 'off' ? (
+                                          <span className="text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">OFF</span>
+                                        ) : day.status === 'absent' ? (
+                                          <span className="text-rose-700 font-bold bg-rose-50 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">ABSENT</span>
+                                        ) : (
+                                          <span className="text-slate-300">—</span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-4 text-right font-medium text-slate-600">
+                                        {day.regHrs > 0 ? `${day.regHrs.toFixed(1)} hrs` : '—'}
+                                      </td>
+                                      <td className="py-2 px-4 text-right font-medium text-indigo-600">
+                                        {day.otHrs > 0 ? `${day.otHrs.toFixed(1)} hrs` : '—'}
+                                      </td>
+                                      <td className="py-2 px-4 text-right">
+                                        {day.isLateDeducted ? (
+                                          <span className="text-rose-600 font-black text-[10px]">-1.0 hr</span>
+                                        ) : '—'}
+                                      </td>
+                                      <td className="py-2 px-4 text-right font-bold text-slate-800">
+                                        {dailyEarned > 0 ? (
+                                          `${settings.currency}${dailyEarned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                        ) : (
+                                          `${settings.currency}0.00`
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Bottom notes and signatures */}
+                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 pt-4 text-xs">
+                          <div className="space-y-1">
+                            <p className="font-bold text-slate-700">Remarks & Note:</p>
+                            <p className="text-slate-400 text-[11px] leading-relaxed max-w-sm">
+                              This statement was generated electronically according to the verified schedule and clock logs. Hours are rounded and calculations follow company late policy guidelines.
+                            </p>
+                          </div>
+                          <div className="text-center space-y-4 pt-4 sm:pt-0">
+                            <div className="h-0.5 w-40 bg-slate-200" />
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authorized Signature</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Print controls */}
+                    <div className="flex justify-end gap-3 no-print">
+                      <Button 
+                        variant="outline" 
+                        className="rounded-xl border-slate-200 hover:bg-slate-50 font-bold text-xs uppercase tracking-wide gap-2 h-10 px-5"
+                        onClick={() => window.print()}
+                      >
+                        <Printer className="w-4 h-4 text-indigo-500" />
+                        Print / Save as PDF
+                      </Button>
+                    </div>
+
+                    {/* Attendance audit detail table */}
+                    <Card className="border-none shadow-xl overflow-hidden rounded-3xl no-print">
+                      <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                        <CardTitle className="text-xs font-black uppercase tracking-wider text-slate-500">Daily Attendance Audit Log</CardTitle>
+                        <CardDescription>Verify raw calculations for regular and overtime hours.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-100">
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Date</th>
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">Status</th>
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Schedule Shift</th>
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Clocked Period</th>
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Reg Pay Hrs</th>
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">OT Hrs</th>
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider">Late Penalty</th>
+                                <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase tracking-wider text-right">Daily Earnings</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                              {payslipData.days.map(day => {
+                                const regularPay = day.regHrs * (parseFloat(payslipHourlyRate) || 0);
+                                const otPay = day.otHrs * (parseFloat(payslipOtRate) || 0);
+                                const dailyEarned = regularPay + otPay;
+                                return (
+                                  <tr key={day.dateStr} className="hover:bg-slate-50/50 transition-colors text-xs">
+                                    <td className="px-5 py-3.5 font-semibold text-slate-700">{day.dateFormatted}</td>
+                                    <td className="px-5 py-3.5 text-center">
+                                      {day.status === 'worked' ? (
+                                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wide">WORKED</span>
+                                      ) : day.status === 'leave' ? (
+                                        <span className="bg-blue-50 text-blue-700 border border-blue-100 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wide">LEAVE</span>
+                                      ) : day.status === 'off' ? (
+                                        <span className="bg-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wide">OFF</span>
+                                      ) : day.status === 'absent' ? (
+                                        <span className="bg-rose-50 text-rose-700 border border-rose-100 font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wide">ABSENT</span>
+                                      ) : (
+                                        <span className="text-slate-300 font-medium">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-slate-500 font-medium">
+                                      {day.scheduleInStr ? `${day.scheduleInStr} - ${day.scheduleOutStr} (${day.scheduledHrs.toFixed(1)}h)` : '—'}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-slate-700 font-bold">
+                                      {day.timeInStr ? `${day.timeInStr} - ${day.timeOutStr || '??'} (${day.actualHrs.toFixed(1)}h)` : '—'}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-right font-black text-slate-800">
+                                      {day.regHrs > 0 ? `${day.regHrs.toFixed(1)} hr` : '—'}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-right font-bold text-indigo-600">
+                                      {day.otHrs > 0 ? `${day.otHrs.toFixed(1)} hr` : '—'}
+                                    </td>
+                                    <td className="px-5 py-3.5">
+                                      {day.isLateDeducted ? (
+                                        <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-100 text-[10px] font-bold">
+                                          Late {day.lateMins}m (-1h)
+                                        </Badge>
+                                      ) : day.lateMins > 0 ? (
+                                        <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-100 text-[10px] font-bold">
+                                          Late {day.lateMins}m (Grace)
+                                        </Badge>
+                                      ) : '—'}
+                                    </td>
+                                    <td className="px-5 py-3.5 text-right font-bold text-slate-800">
+                                      {dailyEarned > 0 ? (
+                                        `${settings.currency}${dailyEarned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                      ) : (
+                                        `${settings.currency}0.00`
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
