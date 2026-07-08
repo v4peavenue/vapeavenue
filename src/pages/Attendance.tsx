@@ -2002,10 +2002,10 @@ export const Attendance: React.FC = () => {
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-6 gap-4">
                           <div>
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black italic">A</div>
-                              <span className="font-black tracking-wider text-slate-800">ATTENDANCE PRO</span>
+                              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black italic">S</div>
+                              <span className="font-black tracking-wider text-slate-800 uppercase">SALARY PAYMENT SLIP</span>
                             </div>
-                            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mt-1">Salary Payment Slip</p>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mt-1">Official Statement of Earnings</p>
                           </div>
                           <div className="text-left md:text-right">
                             <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider text-[10px]">
