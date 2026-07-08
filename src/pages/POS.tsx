@@ -15,7 +15,10 @@ import {
   Ticket,
   Percent,
   Building,
-  Scan
+  Scan,
+  Lock,
+  ShieldAlert,
+  KeyRound
 } from 'lucide-react';
 
 import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
@@ -78,6 +81,12 @@ export const POS: React.FC = () => {
   const [selectedTierId, setSelectedTierId] = useState<string>('');
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
+  const [isPromoApprovalOpen, setIsPromoApprovalOpen] = useState(false);
+  const [selectedApproverId, setSelectedApproverId] = useState<string>('');
+  const [approverPasscode, setApproverPasscode] = useState<string>('');
+  const [approvedByInfo, setApprovedByInfo] = useState<{ name: string; id: string } | null>(null);
+  const [pendingCheckoutType, setPendingCheckoutType] = useState<boolean | null>(null);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [paymentSplits, setPaymentSplits] = useState<PaymentSplit[]>([]);
   const [isSplitPayment, setIsSplitPayment] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'cash' | 'ewallet' | 'bank'>('cash');
@@ -380,12 +389,19 @@ export const POS: React.FC = () => {
       console.warn("POS: Error listening to priceTiers collection:", error);
     });
 
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("POS: Error listening to users collection:", error);
+    });
+
     return () => {
       unsubscribe();
       unsubscribeCustomers();
       unsubscribePromos();
       unsubscribePayments();
       unsubscribeTiers();
+      unsubscribeUsers();
       if (unsubscribeAccounts) unsubscribeAccounts();
     };
   }, [profile, user]);
@@ -497,6 +513,52 @@ export const POS: React.FC = () => {
 
     setAppliedPromo(promo);
     toast.success(`Promo code ${code} applied (-${settings.currency}${promo.amount})`);
+  };
+
+  useEffect(() => {
+    if (isPromoApprovalOpen) {
+      if (profile?.role === 'admin' || profile?.role === 'manager') {
+        setSelectedApproverId('current');
+      } else {
+        setSelectedApproverId('');
+      }
+    }
+  }, [isPromoApprovalOpen, profile]);
+
+  const handlePromoApprove = () => {
+    const correctPasscodes = ['1234', '8888', 'admin', 'approve'];
+    if (!selectedApproverId) {
+      toast.error('Please select an authorizing administrator or manager');
+      return;
+    }
+    if (!correctPasscodes.includes(approverPasscode)) {
+      toast.error('Invalid authorization PIN / passcode');
+      return;
+    }
+
+    let approverName = 'System Administrator';
+    if (selectedApproverId === 'current') {
+      approverName = profile?.name || 'Administrator';
+    } else {
+      const found = allUsers.find(u => u.id === selectedApproverId);
+      if (found) {
+        approverName = found.name;
+      }
+    }
+
+    const approverInfo = {
+      id: selectedApproverId === 'current' ? (profile?.id || 'admin') : selectedApproverId,
+      name: approverName
+    };
+
+    setApprovedByInfo(approverInfo);
+    setIsPromoApprovalOpen(false);
+    toast.success(`Promo approved by ${approverName}!`);
+
+    // Automatically resume checkout
+    setTimeout(() => {
+      handleCheckout(pendingCheckoutType ?? false);
+    }, 150);
   };
 
   const handleCheckout = async (isPending: boolean = false) => {
@@ -638,7 +700,7 @@ export const POS: React.FC = () => {
         discount,
         paymentMethod: isPending ? 'pending' : (isSplitPayment ? 'split' : resolvedPaymentMethod),
         paymentSplits: isPending ? [] : resolvedSplits,
-        status: isPending ? 'pending' : 'completed',
+        status: isPending ? 'pending' : (appliedPromo ? 'pending_promo_approval' : 'completed'),
         staffId: profile?.id || 'anonymous',
         staffName: profile?.name || 'Staff',
         locationId: checkoutLocationId,
@@ -658,14 +720,20 @@ export const POS: React.FC = () => {
       if (appliedPromo) {
         saleData.promoId = appliedPromo.id;
         saleData.promoCode = appliedPromo.code;
+        if (approvedByInfo) {
+          saleData.promoApprovedBy = approvedByInfo.name;
+          saleData.promoApprovedById = approvedByInfo.id;
+          saleData.promoApprovedAt = Timestamp.now();
+        }
       }
 
       // 1. Record the sale
       const saleRef = await addDoc(collection(db, 'sales'), saleData);
       setLastSaleId(saleRef.id);
 
-      // 4. Update financial accounts (ONLY IF NOT PENDING)
-      if (!isPending) {
+      // 4. Update financial accounts (ONLY IF NOT PENDING AND NOT PENDING PROMO APPROVAL)
+      const isPromoPending = !!appliedPromo && !approvedByInfo;
+      if (!isPending && !isPromoPending) {
         for (const split of resolvedSplits) {
           const account = accounts.find(a => a.id === split.methodId) || { name: split.methodName, balance: 0 };
           const currentBalance = account.balance || 0;
@@ -716,6 +784,10 @@ export const POS: React.FC = () => {
       setCart([]);
       setAppliedPromo(null);
       setPromoCodeInput('');
+      setApprovedByInfo(null);
+      setPendingCheckoutType(null);
+      setApproverPasscode('');
+      setSelectedApproverId('');
       setPaymentSplits([]);
       setPaymentReference('');
       setActiveCategory('cash');
@@ -1701,6 +1773,98 @@ export const POS: React.FC = () => {
               disabled={processing}
             >
               {processing ? 'Processing...' : 'Confirm Payment'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Promo Code Approval Dialog */}
+      <Dialog open={isPromoApprovalOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsPromoApprovalOpen(false);
+          setApproverPasscode('');
+        }
+      }}>
+        <DialogContent className="sm:max-w-[450px] bg-white/95 backdrop-blur-md border-[#D4AF37]/20 p-6 rounded-3xl shadow-2xl">
+          <DialogHeader className="items-center text-center space-y-3 pb-2">
+            <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-800 tracking-tight">Manager Approval Required</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500 leading-relaxed max-w-sm">
+              An active promo code <span className="font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">"{appliedPromo?.code}"</span> has been applied to this checkout, offering a discount of <span className="font-bold text-emerald-600">{settings.currency}{(appliedPromo?.amount ?? 0).toFixed(2)}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="space-y-2">
+              <Label className="text-xs font-black text-slate-700 uppercase tracking-wider">Select Approver</Label>
+              <Select 
+                value={selectedApproverId} 
+                onValueChange={setSelectedApproverId}
+              >
+                <SelectTrigger className="bg-slate-50 border-slate-200 rounded-xl h-11 text-xs">
+                  <SelectValue placeholder="Select Administrator or Manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(profile?.role === 'admin' || profile?.role === 'manager') && (
+                    <SelectItem value="current">🔑 Approve as Current Session ({profile.name})</SelectItem>
+                  )}
+                  {allUsers
+                    .filter(u => u.role === 'admin' || u.role === 'manager')
+                    .map(u => (
+                      <SelectItem key={u.id} value={u.id}>
+                        👤 {u.name} ({u.role?.toUpperCase()})
+                      </SelectItem>
+                    ))}
+                  {allUsers.filter(u => u.role === 'admin' || u.role === 'manager').length === 0 && (
+                    <SelectItem value="system">👤 System Administrator (Default)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label className="text-xs font-black text-slate-700 uppercase tracking-wider">Authorization PIN</Label>
+                <span className="text-[10px] text-amber-500 font-medium">Master/Default PIN: 1234</span>
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  type="password"
+                  value={approverPasscode}
+                  onChange={(e) => setApproverPasscode(e.target.value)}
+                  placeholder="••••"
+                  maxLength={6}
+                  className="bg-slate-50 border-slate-200 rounded-xl pl-10 h-11 text-center font-bold tracking-widest text-lg"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handlePromoApprove();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="grid grid-cols-2 gap-3 pt-3 border-t">
+            <Button 
+              variant="outline" 
+              className="rounded-xl border-slate-200 font-bold text-xs uppercase tracking-wider text-slate-700"
+              onClick={() => {
+                setIsPromoApprovalOpen(false);
+                setApproverPasscode('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl font-bold text-xs uppercase tracking-wider gap-2 h-10"
+              onClick={handlePromoApprove}
+            >
+              <KeyRound className="w-4 h-4" />
+              Authorize
             </Button>
           </DialogFooter>
         </DialogContent>

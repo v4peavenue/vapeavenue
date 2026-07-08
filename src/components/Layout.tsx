@@ -53,6 +53,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isOnline, setIsOnline] = React.useState(navigator.onLine);
   const [pendingCount, setPendingCount] = React.useState(0);
+  const [pendingPromoCount, setPendingPromoCount] = React.useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = React.useState(0);
 
   React.useEffect(() => {
     if (!profile) return;
@@ -61,6 +63,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     if (!canViewSales) return;
 
     const q = query(collection(db, 'sales'), where('status', '==', 'pending'));
+    const qPromo = query(collection(db, 'sales'), where('status', '==', 'pending_promo_approval'));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let count = snapshot.docs.length;
@@ -72,7 +75,34 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       console.warn("Failed to listen to pending sales for badge:", err);
     });
 
-    return () => unsubscribe();
+    const unsubscribePromo = onSnapshot(qPromo, (snapshot) => {
+      let count = snapshot.docs.length;
+      if (selectedLocationId !== 'all') {
+        count = snapshot.docs.filter(doc => doc.data().locationId === selectedLocationId).length;
+      }
+      setPendingPromoCount(count);
+    }, (err) => {
+      console.warn("Failed to listen to pending promo approvals for badge:", err);
+    });
+
+    // Listen to pending attendance requests for admins/managers
+    let unsubscribeRequests = () => {};
+    if (isAdmin || isManager) {
+      const qRequests = query(collection(db, 'attendanceRequests'), where('status', '==', 'pending'));
+      unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
+        setPendingRequestsCount(snapshot.docs.length);
+      }, (err) => {
+        console.warn("Failed to listen to pending attendance requests for badge:", err);
+      });
+    } else {
+      setPendingRequestsCount(0);
+    }
+
+    return () => {
+      unsubscribe();
+      unsubscribePromo();
+      unsubscribeRequests();
+    };
   }, [profile, isAdmin, isManager, selectedLocationId]);
 
   React.useEffect(() => {
@@ -165,7 +195,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           .map((item) => {
             const isActive = location.pathname === item.path;
             const displayName = (item.path === '/settings' && !isAdmin) ? 'Profile' : item.name;
-            const showPendingBadge = item.path === '/sales' && pendingCount > 0;
+            const showPendingBadge = item.path === '/sales' && (isAdmin || isManager) && pendingCount > 0;
+            const showPromoDot = isAdmin && item.path === '/sales' && pendingPromoCount > 0;
+            const showPendingRequestBadge = item.path === '/attendance' && (isAdmin || isManager) && pendingRequestsCount > 0;
             return (
               <Link
                 key={item.path}
@@ -178,14 +210,24 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     : "text-white/60 hover:bg-white/5 hover:text-white"
                 )}
               >
-                <item.icon className={cn("w-4 h-4 transition-transform duration-300 group-hover:scale-110", isActive ? "text-primary stroke-[2.5px]" : "text-white/40 group-hover:text-white")} />
+                <div className="relative">
+                  <item.icon className={cn("w-4 h-4 transition-transform duration-300 group-hover:scale-110", isActive ? "text-primary stroke-[2.5px]" : "text-white/40 group-hover:text-white")} />
+                  {showPromoDot && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-[#1C2D4E] animate-pulse" />
+                  )}
+                </div>
                 <span className="font-semibold text-xs">{displayName}</span>
                 {showPendingBadge && (
                   <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[9px] font-black leading-none text-white bg-rose-500 rounded-full animate-pulse shadow-sm">
                     {pendingCount}
                   </span>
                 )}
-                {isActive && !showPendingBadge && (
+                {showPendingRequestBadge && (
+                  <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[9px] font-black leading-none text-white bg-rose-500 rounded-full animate-pulse shadow-sm">
+                    {pendingRequestsCount}
+                  </span>
+                )}
+                {isActive && !showPendingBadge && !showPendingRequestBadge && (
                   <motion.div 
                     layoutId="activeNav"
                     className="ml-auto w-1 h-1 rounded-full bg-primary" 

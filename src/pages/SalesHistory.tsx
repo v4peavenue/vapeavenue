@@ -238,6 +238,95 @@ export const SalesHistory: React.FC = () => {
     setIsVoidDialogOpen(true);
   };
 
+  const [approvingPromoId, setApprovingPromoId] = useState<string | null>(null);
+
+  const handleApprovePromo = async (sale: Sale) => {
+    if (!isAdmin && !isManager) {
+      toast.error('Only administrators or managers can approve promo sales');
+      return;
+    }
+    
+    setApprovingPromoId(sale.id);
+    
+    try {
+      const batch = writeBatch(db);
+      const saleRef = doc(db, 'sales', sale.id);
+      
+      const nextStatus = sale.paymentMethod === 'pending' ? 'pending' : 'completed';
+
+      // Process financial splits ONLY if the payment is NOT pending
+      if (sale.paymentMethod !== 'pending') {
+        let splitsToProcess: any[] = [];
+        if (sale.paymentMethod === 'split' && sale.paymentSplits && sale.paymentSplits.length > 0) {
+          splitsToProcess = sale.paymentSplits;
+        } else if (sale.paymentMethod) {
+          splitsToProcess = [{
+            methodId: sale.paymentMethod,
+            methodName: accounts.find(a => a.id === sale.paymentMethod)?.name || sale.paymentMethod,
+            amount: sale.total
+          }];
+        }
+
+        // Process each payment split
+        for (const split of splitsToProcess) {
+          const account = accounts.find(a => a.id === split.methodId) || { name: split.methodName, balance: 0 };
+          const currentBalance = account.balance || 0;
+          const newBalance = currentBalance + split.amount;
+
+          const accountRef = doc(db, 'accounts', split.methodId);
+          batch.update(accountRef, {
+            balance: increment(split.amount),
+            lastUpdated: Timestamp.now()
+          });
+
+          // Create financial transaction record
+          const transRef = doc(collection(db, 'financialTransactions'));
+          batch.set(transRef, {
+            amount: split.amount,
+            type: 'income',
+            accountId: split.methodId,
+            accountName: split.methodName,
+            locationId: sale.locationId || null,
+            locationName: locations.find(l => l.id === sale.locationId)?.name || null,
+            category: 'Sales',
+            description: `Approved Sale Promo: ${sale.customerDetails?.name || 'Walk-In'}`,
+            timestamp: Timestamp.now(),
+            createdBy: profile?.id || 'anonymous',
+            createdByName: profile?.name || 'Staff',
+            accountBalance: newBalance
+          });
+        }
+      }
+
+      // Update the sale document status and record approval details
+      batch.update(saleRef, {
+        status: nextStatus,
+        promoApprovedBy: profile?.name || 'Administrator',
+        promoApprovedById: profile?.id || 'admin',
+        promoApprovedAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+
+      await batch.commit();
+
+      await logAction(
+        profile, 
+        'APPROVE_PROMO_SALE', 
+        `Approved promo for sale ${sale.id} with code ${sale.promoCode}`, 
+        sale.id, 
+        'sale'
+      );
+
+      toast.success(`Promo code approved successfully for sale #${sale.id.substring(0, 8)}`);
+    } catch (error) {
+      console.error("Error approving promo sale:", error);
+      toast.error('Failed to approve promo sale. Please inspect your database connection.');
+      handleFirestoreError(error, OperationType.UPDATE, 'sales');
+    } finally {
+      setApprovingPromoId(null);
+    }
+  };
+
   const handleConfirmVoid = async () => {
     if (!saleToVoid || !voidAccountId) return;
     
@@ -1034,19 +1123,32 @@ export const SalesHistory: React.FC = () => {
                       sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
                       sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
                       sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
+                      sale.status === 'pending_promo_approval' ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse" :
                       "bg-emerald-50 text-emerald-600 border-emerald-200"
                     )}>
                       {sale.status === 'voided' ? 'Voided' :
                        sale.status === 'returned' ? 'Returned' :
                        sale.status === 'partially_returned' ? 'Partially Returned' :
-                       sale.status === 'pending' ? 'Pending' : 'Completed'}
+                       sale.status === 'pending' ? 'Pending' :
+                       sale.status === 'pending_promo_approval' ? 'Pending Promo' : 'Completed'}
                     </Badge>
                   </TableCell>
                   <TableCell className="font-bold text-slate-900">{settings.currency}{(sale.total ?? 0).toFixed(2)}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => setSelectedSale(sale)}>
-                      <Eye className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {sale.status === 'pending_promo_approval' && (isAdmin || isManager) && (
+                        <Button 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-7 px-2 font-bold uppercase tracking-wider rounded-lg shadow-sm"
+                          onClick={() => handleApprovePromo(sale)}
+                          disabled={approvingPromoId === sale.id}
+                        >
+                          {approvingPromoId === sale.id ? 'Approving...' : 'Approve'}
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => setSelectedSale(sale)}>
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -1268,23 +1370,37 @@ export const SalesHistory: React.FC = () => {
                     sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
                     sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
                     sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
+                    sale.status === 'pending_promo_approval' ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse" :
                     "bg-emerald-50 text-emerald-600 border-emerald-200"
                   )}>
                     {sale.status === 'voided' ? 'Voided' :
                      sale.status === 'returned' ? 'Returned' :
                      sale.status === 'partially_returned' ? 'Partially Returned' :
-                     sale.status === 'pending' ? 'Pending' : 'Completed'}
+                     sale.status === 'pending' ? 'Pending' :
+                     sale.status === 'pending_promo_approval' ? 'Pending Promo' : 'Completed'}
                   </Badge>
 
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
-                    onClick={() => setSelectedSale(sale)}
-                  >
-                    <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                    Invoice Receipt
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    {sale.status === 'pending_promo_approval' && (isAdmin || isManager) && (
+                      <Button 
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8"
+                        onClick={() => handleApprovePromo(sale)}
+                        disabled={approvingPromoId === sale.id}
+                      >
+                        {approvingPromoId === sale.id ? 'Approving...' : 'Approve'}
+                      </Button>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
+                      onClick={() => setSelectedSale(sale)}
+                    >
+                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                      Invoice Receipt
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             ))
@@ -1657,16 +1773,33 @@ export const SalesHistory: React.FC = () => {
                         ? "text-indigo-600 border-indigo-200 bg-indigo-50"
                         : selectedSale.status === 'pending'
                         ? "text-amber-600 border-amber-200 bg-amber-50"
+                        : selectedSale.status === 'pending_promo_approval'
+                        ? "text-amber-800 border-amber-300 bg-amber-100 animate-pulse"
                         : "text-emerald-600 border-emerald-200 bg-emerald-50"
                     )}
                   >
                     {selectedSale.status === 'voided' ? 'Voided' : 
                      selectedSale.status === 'returned' ? 'Returned' :
                      selectedSale.status === 'partially_returned' ? 'Partially Returned' :
-                     selectedSale.status === 'pending' ? 'Pending' : 'Completed'}
+                     selectedSale.status === 'pending' ? 'Pending' :
+                     selectedSale.status === 'pending_promo_approval' ? 'Pending Promo' : 'Completed'}
                   </Badge>
                 </div>
                 <div className="flex justify-end gap-2">
+                  {selectedSale.status === 'pending_promo_approval' && (isAdmin || isManager) && (
+                    <Button 
+                      variant="default"
+                      size="sm"
+                      className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                      onClick={() => {
+                        handleApprovePromo(selectedSale);
+                        setSelectedSale(null);
+                      }}
+                      disabled={approvingPromoId === selectedSale.id}
+                    >
+                      {approvingPromoId === selectedSale.id ? 'Approving...' : 'Approve Promo Code'}
+                    </Button>
+                  )}
                   {selectedSale.status === 'pending' && (
                     <Button 
                       variant="default"

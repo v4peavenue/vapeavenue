@@ -136,7 +136,7 @@ export const Attendance: React.FC = () => {
   const [selectedPayslipUser, setSelectedPayslipUser] = useState<string>('');
   const [ratesList, setRatesList] = useState<any[]>([]);
   const [payslipHourlyRate, setPayslipHourlyRate] = useState<string>('15');
-  const [payslipOtRate, setPayslipOtRate] = useState<string>('22.5');
+  const [payslipOtRate, setPayslipOtRate] = useState<string>('15');
   const [payslipIncentiveAmount, setPayslipIncentiveAmount] = useState<string>('0');
   const [payslipIncentiveReason, setPayslipIncentiveReason] = useState<string>('');
   const [payslipDeductionAmount, setPayslipDeductionAmount] = useState<string>('0');
@@ -309,7 +309,7 @@ export const Attendance: React.FC = () => {
     const rateDoc = ratesList.find(r => r.id === selectedPayslipUser);
     return {
       hourlyRate: rateDoc?.hourlyRate ?? 15,
-      otRate: rateDoc?.otRate ?? 22.5,
+      otRate: rateDoc?.otRate ?? (rateDoc?.hourlyRate ?? 15),
       incentiveAmount: rateDoc?.incentiveAmount ?? 0,
       incentiveReason: rateDoc?.incentiveReason ?? '',
       manualDeduction: rateDoc?.manualDeduction ?? 0,
@@ -327,6 +327,11 @@ export const Attendance: React.FC = () => {
     setPayslipDeductionReason(currentStaffRates.deductionReason);
   }, [currentStaffRates]);
 
+  // Keep OT Rate perfectly synced with the Regular Hourly Rate
+  useEffect(() => {
+    setPayslipOtRate(payslipHourlyRate);
+  }, [payslipHourlyRate]);
+
   // Save rates to Firestore
   const handleSaveRates = async () => {
     if (!selectedPayslipUser) return;
@@ -334,7 +339,7 @@ export const Attendance: React.FC = () => {
     try {
       await setDoc(doc(db, 'staffRates', selectedPayslipUser), {
         hourlyRate: parseFloat(payslipHourlyRate) || 0,
-        otRate: parseFloat(payslipOtRate) || 0,
+        otRate: parseFloat(payslipHourlyRate) || 0, // Matches regular rate
         incentiveAmount: parseFloat(payslipIncentiveAmount) || 0,
         incentiveReason: payslipIncentiveReason,
         manualDeduction: parseFloat(payslipDeductionAmount) || 0,
@@ -942,16 +947,18 @@ export const Attendance: React.FC = () => {
         <div className="lg:col-span-4 space-y-6">
           <Card className={cn(
             "relative overflow-hidden border-none shadow-2xl transition-all duration-500",
-            currentUserAttendance && !currentUserAttendance.timeOut ? "bg-gradient-to-br from-indigo-600 to-indigo-700" : "bg-white"
+            currentUserAttendance && !currentUserAttendance.timeOut 
+              ? "bg-gradient-to-br from-[#1A2B4B] to-[#2C3E50] text-white border-b-2 border-[#D4AF37]/30" 
+              : "bg-[#FDFCF8] border border-[#D4AF37]/10"
           )}>
             <CardHeader className="relative z-10">
               <CardTitle className={cn(
-                "text-lg font-bold",
-                currentUserAttendance && !currentUserAttendance.timeOut ? "text-white" : "text-primary"
+                "text-lg font-bold tracking-tight font-heading",
+                currentUserAttendance && !currentUserAttendance.timeOut ? "text-white" : "text-[#1A2B4B]"
               )}>
                 Timesheet Control
               </CardTitle>
-              <CardDescription className={currentUserAttendance && !currentUserAttendance.timeOut ? "text-white/60" : ""}>
+              <CardDescription className={currentUserAttendance && !currentUserAttendance.timeOut ? "text-white/70" : "text-slate-500"}>
                 Clock in when starting shift, clock out when finished.
               </CardDescription>
             </CardHeader>
@@ -979,7 +986,7 @@ export const Attendance: React.FC = () => {
                     </div>
                   </div>
                   <Button 
-                    className="w-full h-16 text-lg font-black bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg shadow-indigo-200 transition-all active:scale-95 group"
+                    className="w-full h-16 text-lg font-black bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-2xl shadow-lg shadow-[#1A2B4B]/10 transition-all active:scale-95 group"
                     onClick={handleTimeIn}
                     disabled={selectedLocationId === 'all'}
                   >
@@ -1062,12 +1069,12 @@ export const Attendance: React.FC = () => {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                        <div className="w-8 h-8 bg-[#1A2B4B]/5 rounded-lg flex items-center justify-center text-[#1A2B4B]">
                           <LogIn className="w-4 h-4" />
                         </div>
                         <span className="text-xs font-bold text-slate-500">Scheduled In</span>
                       </div>
-                      <span className="text-sm font-black text-primary">{schedule.startTime}</span>
+                      <span className="text-sm font-black text-[#1A2B4B]">{schedule.startTime}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
                       <div className="flex items-center gap-3">
@@ -1201,7 +1208,7 @@ export const Attendance: React.FC = () => {
                       });
                       setIsRequestDialogOpen(true);
                     }}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 font-bold text-xs"
+                    className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl gap-2 font-bold text-xs"
                   >
                     <Plus className="w-4 h-4" />
                     New Request
@@ -1216,7 +1223,7 @@ export const Attendance: React.FC = () => {
                           <div className="flex items-center gap-4">
                             <div className={cn(
                               "w-12 h-12 rounded-2xl flex items-center justify-center",
-                              req.type === 'leave' ? "bg-rose-50 text-rose-500" : req.type === 'time_correction' ? "bg-amber-50 text-amber-600" : "bg-indigo-50 text-indigo-500"
+                              req.type === 'leave' ? "bg-rose-50 text-rose-500" : req.type === 'time_correction' ? "bg-amber-50 text-amber-600" : "bg-[#1A2B4B]/5 text-[#1A2B4B]"
                             )}>
                               {req.type === 'leave' ? <CalendarOff className="w-6 h-6" /> : req.type === 'time_correction' ? <Clock className="w-6 h-6" /> : <ArrowRightLeft className="w-6 h-6" />}
                             </div>
@@ -1309,12 +1316,12 @@ export const Attendance: React.FC = () => {
 
             <TabsContent value="report">
               <div className="space-y-6">
-                <Card className="border-none shadow-sm bg-indigo-600 text-white">
+                <Card className="border-none shadow-sm bg-gradient-to-r from-[#1A2B4B] to-[#2C3E50] text-white border-b-2 border-[#D4AF37]/30">
                   <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                       <div>
-                        <h3 className="text-lg font-black italic">Attendance Reports</h3>
-                        <p className="text-white/60 text-sm font-medium">Summary of staff hours, tardiness, and absences.</p>
+                        <h3 className="text-lg font-black italic tracking-wide">Attendance Reports</h3>
+                        <p className="text-white/80 text-sm font-medium">Summary of staff hours, tardiness, and absences.</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="space-y-1">
@@ -1358,7 +1365,7 @@ export const Attendance: React.FC = () => {
                           <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-6 py-4 font-black text-sm text-primary">{user.name || user.email || user.id}</td>
                             <td className="px-6 py-4 text-xs font-bold text-slate-500 tabular-nums">
-                              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-100 font-black">
+                              <Badge className="bg-[#1A2B4B]/5 text-[#1A2B4B] border-[#1A2B4B]/10 font-black">
                                 {stats.totalHours} hrs
                               </Badge>
                             </td>
@@ -1420,7 +1427,7 @@ export const Attendance: React.FC = () => {
                     <div className="flex items-center gap-8 pr-4">
                       <div className="text-center">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Time In</p>
-                        <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 font-black tabular-nums">
+                        <Badge variant="outline" className="bg-[#1A2B4B]/5 text-[#1A2B4B] border-[#1A2B4B]/10 font-black tabular-nums">
                           {formatSafeTime(log.timeIn, log.timeInBackup)}
                         </Badge>
                       </div>
@@ -1500,11 +1507,11 @@ export const Attendance: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sort Priority:</span>
                         {sortRules.map((rule, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl border border-indigo-100/50 text-[11px] font-bold">
+                          <div key={idx} className="flex items-center gap-1.5 bg-[#1A2B4B]/5 text-[#1A2B4B] px-3 py-1.5 rounded-xl border border-[#1A2B4B]/10 text-[11px] font-bold">
                             <span className="capitalize">{rule.field === 'startTime' ? 'Shift Start' : rule.field === 'name' ? 'Staff Name' : rule.field}</span>
                             <button
                               type="button"
-                              className="text-indigo-500 hover:text-indigo-800 transition-colors px-1 text-xs font-black"
+                              className="text-[#D4AF37] hover:text-[#1A2B4B] transition-colors px-1 text-xs font-black"
                               onClick={() => {
                                 const updated = [...sortRules];
                                 updated[idx].direction = updated[idx].direction === 'asc' ? 'desc' : 'asc';
@@ -1517,7 +1524,7 @@ export const Attendance: React.FC = () => {
                             {sortRules.length > 1 && (
                               <button
                                 type="button"
-                                className="text-indigo-400 hover:text-rose-600 transition-colors font-normal pl-1 ml-1 border-l border-indigo-200"
+                                className="text-[#1A2B4B]/60 hover:text-rose-600 transition-colors font-normal pl-1 ml-1 border-l border-[#1A2B4B]/20"
                                 onClick={() => {
                                   setSortRules(sortRules.filter((_, i) => i !== idx));
                                 }}
@@ -1558,14 +1565,14 @@ export const Attendance: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <Button 
                           variant="outline"
-                          className="border-indigo-100 text-indigo-600 hover:bg-indigo-50 rounded-xl gap-2 font-bold text-xs h-10"
+                          className="border-[#1A2B4B]/20 text-[#1A2B4B] hover:bg-[#1A2B4B]/5 rounded-xl gap-2 font-bold text-xs h-10"
                           onClick={() => setIsBulkDialogOpen(true)}
                         >
                           <ArrowRightLeft className="w-4 h-4" />
                           Bulk Populate
                         </Button>
                         <Button 
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 font-bold text-xs h-10"
+                          className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl gap-2 font-bold text-xs h-10 shadow-sm"
                           onClick={() => {
                             setEditingSchedule({ date: format(new Date(), 'yyyy-MM-dd') });
                             setIsScheduleDialogOpen(true);
@@ -1674,7 +1681,7 @@ export const Attendance: React.FC = () => {
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                         <div className="w-56 sm:w-64">
                           <Select value={compareUserFilter} onValueChange={setCompareUserFilter}>
-                            <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200/80 rounded-xl focus:ring-1 focus:ring-indigo-500">
+                            <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200/80 rounded-xl focus:ring-1 focus:ring-[#1A2B4B]">
                               <SelectValue placeholder="All Staff & Managers" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1688,7 +1695,7 @@ export const Attendance: React.FC = () => {
                           </Select>
                         </div>
                         <div className="flex items-center gap-3 justify-end">
-                          <Badge className="bg-indigo-50 text-indigo-700 border-indigo-100">Today</Badge>
+                          <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20">Today</Badge>
                           <div className="h-4 w-px bg-slate-200" />
                           <p className="text-xs font-bold text-slate-400">{format(new Date(), 'MMM dd, yyyy')}</p>
                         </div>
@@ -1905,19 +1912,26 @@ export const Attendance: React.FC = () => {
 
                         {/* Overtime rate */}
                         <div className="space-y-1">
-                          <Label className="text-xs font-semibold text-slate-600">Overtime Hourly Rate ({settings.currency})</Label>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-semibold text-slate-600">Overtime Hourly Rate ({settings.currency})</Label>
+                            <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-amber-200/50">
+                              <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                              Locked to Regular Rate
+                            </span>
+                          </div>
                           <div className="relative">
                             <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
                             <Input 
                               type="number" 
                               min="0"
                               step="0.01"
-                              className="pl-7 h-9 text-xs"
+                              className="pl-7 h-9 text-xs bg-slate-50 cursor-not-allowed font-medium text-slate-500 border-dashed"
                               value={payslipOtRate}
-                              onChange={(e) => setPayslipOtRate(e.target.value)}
+                              readOnly
+                              disabled
                             />
                           </div>
-                          <span className="text-[10px] text-slate-400 font-medium">Applied to clocked hours exceeding scheduled shift length.</span>
+                          <span className="text-[10px] text-slate-400 font-medium">Applied to clocked hours exceeding scheduled shift length (automatically matches regular rate).</span>
                         </div>
 
                         {/* Incentives */}
@@ -1976,7 +1990,7 @@ export const Attendance: React.FC = () => {
 
                         {/* Save adjustments */}
                         <Button 
-                          className="w-full mt-2 h-10 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wide gap-2 rounded-xl"
+                          className="w-full mt-2 h-10 bg-[#1A2B4B] hover:bg-[#2C3E50] text-white font-bold text-xs uppercase tracking-wide gap-2 rounded-xl"
                           disabled={isSavingRates || !selectedPayslipUser}
                           onClick={handleSaveRates}
                         >
@@ -2009,13 +2023,13 @@ export const Attendance: React.FC = () => {
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-6 gap-4">
                           <div>
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-black italic">S</div>
+                              <div className="w-8 h-8 rounded-lg bg-[#1A2B4B] flex items-center justify-center text-white font-black italic">S</div>
                               <span className="font-black tracking-wider text-slate-800 uppercase">SALARY PAYMENT SLIP</span>
                             </div>
                             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mt-1">Official Statement of Earnings</p>
                           </div>
                           <div className="text-left md:text-right">
-                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wider text-[10px]">
+                            <span className="text-xs font-bold text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-1 rounded-full uppercase tracking-wider text-[10px] border border-[#D4AF37]/20">
                               CONFIDENTIAL
                             </span>
                             <p className="text-xs text-slate-400 font-semibold mt-1">
@@ -2212,9 +2226,9 @@ export const Attendance: React.FC = () => {
                               </p>
                             </div>
 
-                            <div className="text-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
-                              <span className="text-[10px] text-indigo-500 font-black uppercase tracking-wider">Net Payable Pay</span>
-                              <p className="text-lg font-black text-indigo-700 mt-0.5">
+                            <div className="text-center bg-[#1A2B4B]/5 border border-[#1A2B4B]/10 p-4 rounded-xl">
+                              <span className="text-[10px] text-[#1A2B4B] font-black uppercase tracking-wider">Net Payable Pay</span>
+                              <p className="text-lg font-black text-[#1A2B4B] mt-0.5">
                                 {settings.currency}{(
                                   (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
                                   (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
@@ -2249,7 +2263,7 @@ export const Attendance: React.FC = () => {
                       </p>
                       <Button 
                         variant="default" 
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-wide gap-2 h-10 px-5 shrink-0"
+                        className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl font-bold text-xs uppercase tracking-wide gap-2 h-10 px-5 shrink-0"
                         onClick={() => {
                           window.focus();
                           window.print();
@@ -2352,7 +2366,7 @@ export const Attendance: React.FC = () => {
       {/* Request Dialog */}
       <Dialog open={isRequestDialogOpen} onOpenChange={setIsRequestDialogOpen}>
         <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
-          <div className="bg-indigo-600 p-8 text-white">
+          <div className="bg-gradient-to-r from-[#1A2B4B] to-[#2C3E50] p-8 text-white border-b-2 border-[#D4AF37]/30">
             <DialogHeader>
               <DialogTitle className="text-2xl font-black italic">Submit Request</DialogTitle>
               <DialogDescription className="text-white/60 font-medium pt-2">
@@ -2478,7 +2492,7 @@ export const Attendance: React.FC = () => {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase text-slate-400">Reason / Details</Label>
               <textarea 
-                className="w-full bg-slate-50 border-none rounded-xl p-4 text-xs font-medium min-h-[100px] focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="w-full bg-slate-50 border-none rounded-xl p-4 text-xs font-medium min-h-[100px] focus:ring-2 focus:ring-[#1A2B4B] outline-none"
                 placeholder="Explain the reason for your request..."
                 value={newRequest.reason || ''}
                 onChange={(e) => setNewRequest(prev => ({ ...prev, reason: e.target.value }))}
@@ -2495,7 +2509,7 @@ export const Attendance: React.FC = () => {
               </Button>
               <Button 
                 onClick={handleSubmitRequest}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-100 font-bold px-8 h-12"
+                className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl shadow-lg shadow-[#1A2B4B]/10 font-bold px-8 h-12"
               >
                 Submit Request
               </Button>
@@ -2507,7 +2521,7 @@ export const Attendance: React.FC = () => {
       {/* Bulk Generator Dialog */}
       <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
         <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-3xl text-primary">
-          <div className="bg-indigo-600 p-8 text-white">
+          <div className="bg-gradient-to-r from-[#1A2B4B] to-[#2C3E50] p-8 text-white border-b-2 border-[#D4AF37]/30">
             <DialogHeader>
               <DialogTitle className="text-2xl font-black italic">Bulk Schedule Generator</DialogTitle>
               <DialogDescription className="text-white/60 font-medium pt-2">
@@ -2618,7 +2632,7 @@ export const Attendance: React.FC = () => {
               </Button>
               <Button 
                 onClick={handleGenerateBulkSchedule}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-100 font-bold px-8 h-12"
+                className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl shadow-lg shadow-[#1A2B4B]/10 font-bold px-8 h-12"
                 disabled={loading}
               >
                 {loading ? 'Generating...' : 'Generate Schedules'}
@@ -2630,7 +2644,7 @@ export const Attendance: React.FC = () => {
 
       <Dialog open={isScheduleDialogOpen} onOpenChange={setIsScheduleDialogOpen}>
         <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-3xl text-primary">
-          <div className="bg-indigo-600 p-8 text-white">
+          <div className="bg-gradient-to-r from-[#1A2B4B] to-[#2C3E50] p-8 text-white border-b-2 border-[#D4AF37]/30">
             <DialogHeader>
               <DialogTitle className="text-2xl font-black italic">Single Date Schedule</DialogTitle>
               <DialogDescription className="text-white/60 font-medium pt-2">
@@ -2714,7 +2728,7 @@ export const Attendance: React.FC = () => {
 
             <DialogFooter>
               <Button variant="ghost" onClick={() => setIsScheduleDialogOpen(false)} className="rounded-xl font-bold">Cancel</Button>
-              <Button onClick={handleSaveSchedule} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-lg shadow-indigo-100 font-bold px-8 h-12">
+              <Button onClick={handleSaveSchedule} className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl shadow-lg shadow-[#1A2B4B]/10 font-bold px-8 h-12">
                 Save Changes
               </Button>
             </DialogFooter>
