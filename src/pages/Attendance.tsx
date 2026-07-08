@@ -1779,6 +1779,11 @@ export const Attendance: React.FC = () => {
                   {/* Print styles injected locally */}
                   <style>{`
                     @media print {
+                      /* Force background colors and graphical colors to render exactly */
+                      * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                      }
                       /* Hide any non-print elements */
                       .no-print, header, footer, nav, aside {
                         display: none !important;
@@ -1792,8 +1797,8 @@ export const Attendance: React.FC = () => {
                         position: static !important;
                       }
                       body {
-                        background: white !important;
-                        color: black !important;
+                        background: #f8fafc !important;
+                        color: #0f172a !important;
                       }
                       body * {
                         visibility: hidden !important;
@@ -1804,14 +1809,16 @@ export const Attendance: React.FC = () => {
                       #printable-payslip-area {
                         position: absolute !important;
                         left: 0 !important;
+                        right: 0 !important;
                         top: 0 !important;
                         width: 100% !important;
-                        margin: 0 !important;
-                        padding: 24px !important;
+                        max-width: 800px !important;
+                        margin: 0 auto !important;
                         background: white !important;
-                        color: black !important;
-                        box-shadow: none !important;
-                        border: none !important;
+                        border: 1px solid rgba(226, 232, 240, 0.8) !important;
+                        border-radius: 24px !important;
+                        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1) !important;
+                        overflow: hidden !important;
                       }
                     }
                   `}</style>
