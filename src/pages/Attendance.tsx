@@ -1177,10 +1177,12 @@ export const Attendance: React.FC = () => {
                     <TabsTrigger value="compare" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
                       Comparison
                     </TabsTrigger>
-                    <TabsTrigger value="payslips" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                      Payslips
-                    </TabsTrigger>
                   </>
+                )}
+                {isAdmin && (
+                  <TabsTrigger value="payslips" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
+                    Payslips
+                  </TabsTrigger>
                 )}
               </TabsList>
             </div>
@@ -1762,33 +1764,57 @@ export const Attendance: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="payslips">
-              <div className="space-y-6">
-                {/* Print styles injected locally */}
-                <style>{`
-                  @media print {
-                    body * {
-                      visibility: hidden !important;
+              {!isAdmin ? (
+                <div className="bg-white border border-slate-100 shadow-xl rounded-3xl p-8 text-center space-y-4">
+                  <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Access Denied</h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                    Only administrators are authorized to access, configure, and generate staff payslips. Please contact your administrator if you believe this is an error.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Print styles injected locally */}
+                  <style>{`
+                    @media print {
+                      /* Hide any non-print elements */
+                      .no-print, header, footer, nav, aside {
+                        display: none !important;
+                      }
+                      /* Ensure all parent containers have visible overflow & height auto */
+                      html, body, #root, main, [role="main"], .min-h-screen, div {
+                        overflow: visible !important;
+                        height: auto !important;
+                        min-height: auto !important;
+                        max-height: none !important;
+                        position: static !important;
+                      }
+                      body {
+                        background: white !important;
+                        color: black !important;
+                      }
+                      body * {
+                        visibility: hidden !important;
+                      }
+                      #printable-payslip-area, #printable-payslip-area * {
+                        visibility: visible !important;
+                      }
+                      #printable-payslip-area {
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100% !important;
+                        margin: 0 !important;
+                        padding: 24px !important;
+                        background: white !important;
+                        color: black !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                      }
                     }
-                    #printable-payslip-area, #printable-payslip-area * {
-                      visibility: visible !important;
-                    }
-                    #printable-payslip-area {
-                      position: absolute !important;
-                      left: 0 !important;
-                      top: 0 !important;
-                      width: 100% !important;
-                      margin: 0 !important;
-                      padding: 24px !important;
-                      background: white !important;
-                      color: black !important;
-                      box-shadow: none !important;
-                      border: none !important;
-                    }
-                    .no-print {
-                      display: none !important;
-                    }
-                  }
-                `}</style>
+                  `}</style>
 
                 {/* Configuration controls card */}
                 <Card className="border-none shadow-xl overflow-hidden rounded-3xl no-print">
@@ -1969,7 +1995,7 @@ export const Attendance: React.FC = () => {
 
                   {/* Right Side: Payslip Printable Statement */}
                   <div className="lg:col-span-8 space-y-6">
-                    {/* Payslip view */}
+                     {/* Payslip view */}
                     <Card id="printable-payslip-area" className="border border-slate-200/80 shadow-xl overflow-hidden rounded-3xl bg-white">
                       <CardContent className="p-8 space-y-8">
                         {/* Header of Payslip */}
@@ -2011,126 +2037,9 @@ export const Attendance: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Breakdown grids: Earnings vs Deductions */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                          {/* Earnings side */}
-                          <div className="space-y-4">
-                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">1. Earnings & Income</h4>
-                            <div className="space-y-2.5">
-                              {/* Regular hours */}
-                              <div className="flex justify-between items-center text-xs text-slate-600">
-                                <div className="space-y-0.5">
-                                  <p className="font-semibold">Regular Hours Worked</p>
-                                  <p className="text-[10px] text-slate-400">({payslipData.totalRegularHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipHourlyRate).toFixed(2)}/hr)</p>
-                                </div>
-                                <span className="font-bold text-slate-800">
-                                  {settings.currency}{(payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                              </div>
-
-                              {/* Overtime hours */}
-                              <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
-                                <div className="space-y-0.5">
-                                  <p className="font-semibold">Overtime Hours</p>
-                                  <p className="text-[10px] text-slate-400">({payslipData.totalOtHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipOtRate).toFixed(2)}/hr)</p>
-                                </div>
-                                <span className="font-bold text-slate-800">
-                                  {settings.currency}{(payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                              </div>
-
-                              {/* Incentives */}
-                              {(parseFloat(payslipIncentiveAmount) || 0) > 0 && (
-                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
-                                  <div className="space-y-0.5">
-                                    <p className="font-semibold">Incentives / Allowance</p>
-                                    {payslipIncentiveReason && <p className="text-[10px] text-slate-400">({payslipIncentiveReason})</p>}
-                                  </div>
-                                  <span className="font-bold text-emerald-600">
-                                    +{settings.currency}{parseFloat(payslipIncentiveAmount).toFixed(2)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Deductions side */}
-                          <div className="space-y-4">
-                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2. Deductions</h4>
-                            <div className="space-y-2.5">
-                              {/* Late deductions */}
-                              <div className="flex justify-between items-center text-xs text-slate-600">
-                                <div className="space-y-0.5">
-                                  <p className="font-semibold">Late Penalties (Late &gt;= 5m)</p>
-                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} = {payslipData.lateDeductionsCount} hr{payslipData.lateDeductionsCount !== 1 ? 's' : ''} deducted)</p>
-                                </div>
-                                <span className="font-bold text-rose-600">
-                                  -{settings.currency}{(payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                              </div>
-
-                              {/* Manual deduction */}
-                              {(parseFloat(payslipDeductionAmount) || 0) > 0 && (
-                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
-                                  <div className="space-y-0.5">
-                                    <p className="font-semibold">Other Adjustments</p>
-                                    {payslipDeductionReason && <p className="text-[10px] text-slate-400">({payslipDeductionReason})</p>}
-                                  </div>
-                                  <span className="font-bold text-rose-600">
-                                    -{settings.currency}{parseFloat(payslipDeductionAmount).toFixed(2)}
-                                  </span>
-                                </div>
-                              )}
-
-                              {(!payslipData.lateDeductionsCount && !(parseFloat(payslipDeductionAmount) || 0)) && (
-                                <div className="text-xs text-slate-400 italic py-2">
-                                  No deductions applied to this pay period.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Pay summary totals */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-b border-slate-100 py-6 mt-4">
-                          <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
-                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Gross Earnings</span>
-                            <p className="text-lg font-extrabold text-slate-800 mt-0.5">
-                              {settings.currency}{(
-                                (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
-                                (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
-                                (parseFloat(payslipIncentiveAmount) || 0) +
-                                (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0))
-                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                          </div>
-
-                          <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
-                            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Total Deductions</span>
-                            <p className="text-lg font-extrabold text-rose-600 mt-0.5">
-                              {settings.currency}{(
-                                (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)) +
-                                (parseFloat(payslipDeductionAmount) || 0)
-                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                          </div>
-
-                          <div className="text-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
-                            <span className="text-[10px] text-indigo-500 font-black uppercase tracking-wider">Net Payable Pay</span>
-                            <p className="text-lg font-black text-indigo-700 mt-0.5">
-                              {settings.currency}{(
-                                (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
-                                (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
-                                (parseFloat(payslipIncentiveAmount) || 0) -
-                                (parseFloat(payslipDeductionAmount) || 0)
-                              ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Daily Work & Earnings Breakdown inside the printable payslip */}
-                        <div className="space-y-3 mt-6 border-t border-slate-100 pt-6">
-                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest pb-1">3. Daily Work & Earnings Breakdown</h4>
+                        {/* 1. Daily Work & Earnings Breakdown inside the printable payslip (MOVED TO TOP) */}
+                        <div className="space-y-3">
+                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest pb-1">1. Daily Work & Earnings Breakdown</h4>
                           <div className="overflow-hidden border border-slate-100 rounded-2xl">
                             <table className="w-full text-left border-collapse">
                               <thead>
@@ -2190,8 +2099,128 @@ export const Attendance: React.FC = () => {
                           </div>
                         </div>
 
+                        {/* 2. Breakdown grids: Earnings vs Deductions */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+                          {/* Earnings side */}
+                          <div className="space-y-4">
+                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2.1 Earnings & Income</h4>
+                            <div className="space-y-2.5">
+                              {/* Regular hours */}
+                              <div className="flex justify-between items-center text-xs text-slate-600">
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold">Regular Hours Worked</p>
+                                  <p className="text-[10px] text-slate-400">({payslipData.totalRegularHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipHourlyRate).toFixed(2)}/hr)</p>
+                                </div>
+                                <span className="font-bold text-slate-800">
+                                  {settings.currency}{(payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+
+                              {/* Overtime hours */}
+                              <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold">Overtime Hours</p>
+                                  <p className="text-[10px] text-slate-400">({payslipData.totalOtHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipOtRate).toFixed(2)}/hr)</p>
+                                </div>
+                                <span className="font-bold text-slate-800">
+                                  {settings.currency}{(payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+
+                              {/* Incentives */}
+                              {(parseFloat(payslipIncentiveAmount) || 0) > 0 && (
+                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                  <div className="space-y-0.5">
+                                    <p className="font-semibold">Incentives / Allowance</p>
+                                    {payslipIncentiveReason && <p className="text-[10px] text-slate-400">({payslipIncentiveReason})</p>}
+                                  </div>
+                                  <span className="font-bold text-emerald-600">
+                                    +{settings.currency}{parseFloat(payslipIncentiveAmount).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Deductions side */}
+                          <div className="space-y-4">
+                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2.2 Deductions</h4>
+                            <div className="space-y-2.5">
+                              {/* Late deductions */}
+                              <div className="flex justify-between items-center text-xs text-slate-600">
+                                <div className="space-y-0.5">
+                                  <p className="font-semibold">Late Penalties (Late &gt;= 5m)</p>
+                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} = {payslipData.lateDeductionsCount} hr{payslipData.lateDeductionsCount !== 1 ? 's' : ''} deducted)</p>
+                                </div>
+                                <span className="font-bold text-rose-600">
+                                  -{settings.currency}{(payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+
+                              {/* Manual deduction */}
+                              {(parseFloat(payslipDeductionAmount) || 0) > 0 && (
+                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                  <div className="space-y-0.5">
+                                    <p className="font-semibold">Other Adjustments</p>
+                                    {payslipDeductionReason && <p className="text-[10px] text-slate-400">({payslipDeductionReason})</p>}
+                                  </div>
+                                  <span className="font-bold text-rose-600">
+                                    -{settings.currency}{parseFloat(payslipDeductionAmount).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {(!payslipData.lateDeductionsCount && !(parseFloat(payslipDeductionAmount) || 0)) && (
+                                <div className="text-xs text-slate-400 italic py-2">
+                                  No deductions applied to this pay period.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3. Pay summary totals */}
+                        <div className="space-y-3 pt-2">
+                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. Payment Totals Summary</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border border-slate-100 p-5 rounded-2xl bg-slate-50/30">
+                            <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
+                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Gross Earnings</span>
+                              <p className="text-lg font-extrabold text-slate-800 mt-0.5">
+                                {settings.currency}{(
+                                  (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
+                                  (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
+                                  (parseFloat(payslipIncentiveAmount) || 0) +
+                                  (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0))
+                                ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            </div>
+
+                            <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
+                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Total Deductions</span>
+                              <p className="text-lg font-extrabold text-rose-600 mt-0.5">
+                                {settings.currency}{(
+                                  (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)) +
+                                  (parseFloat(payslipDeductionAmount) || 0)
+                                ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            </div>
+
+                            <div className="text-center bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                              <span className="text-[10px] text-indigo-500 font-black uppercase tracking-wider">Net Payable Pay</span>
+                              <p className="text-lg font-black text-indigo-700 mt-0.5">
+                                {settings.currency}{(
+                                  (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
+                                  (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
+                                  (parseFloat(payslipIncentiveAmount) || 0) -
+                                  (parseFloat(payslipDeductionAmount) || 0)
+                                ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Bottom notes and signatures */}
-                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 pt-4 text-xs">
+                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 pt-4 text-xs border-t border-slate-100">
                           <div className="space-y-1">
                             <p className="font-bold text-slate-700">Remarks & Note:</p>
                             <p className="text-slate-400 text-[11px] leading-relaxed max-w-sm">
@@ -2207,13 +2236,19 @@ export const Attendance: React.FC = () => {
                     </Card>
 
                     {/* Print controls */}
-                    <div className="flex justify-end gap-3 no-print">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <p className="text-[11px] text-slate-400 leading-relaxed max-w-md">
+                        <strong>Printing Tip:</strong> For the absolute highest precision and best formatting on paper or PDF, click the print button below to print. Be sure to enable <strong>"Background graphics"</strong> in your browser print settings.
+                      </p>
                       <Button 
-                        variant="outline" 
-                        className="rounded-xl border-slate-200 hover:bg-slate-50 font-bold text-xs uppercase tracking-wide gap-2 h-10 px-5"
-                        onClick={() => window.print()}
+                        variant="default" 
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs uppercase tracking-wide gap-2 h-10 px-5 shrink-0"
+                        onClick={() => {
+                          window.focus();
+                          window.print();
+                        }}
                       >
-                        <Printer className="w-4 h-4 text-indigo-500" />
+                        <Printer className="w-4 h-4 text-white" />
                         Print / Save as PDF
                       </Button>
                     </div>
@@ -2301,7 +2336,8 @@ export const Attendance: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </TabsContent>
+            )}
+          </TabsContent>
           </Tabs>
         </div>
       </div>
