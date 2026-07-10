@@ -142,6 +142,25 @@ export const Attendance: React.FC = () => {
   const [payslipDeductionAmount, setPayslipDeductionAmount] = useState<string>('0');
   const [payslipDeductionReason, setPayslipDeductionReason] = useState<string>('');
   const [isSavingRates, setIsSavingRates] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>('history');
+
+  const availableTabs = useMemo(() => {
+    const list = [
+      { id: 'history', label: 'My History', icon: History },
+      { id: 'schedules', label: 'Team Schedules', icon: Calendar },
+      { id: 'requests', label: 'Requests', icon: MessageSquare },
+    ];
+    if (isAdmin || isManager) {
+      list.push(
+        { id: 'report', label: 'Report', icon: BarChart3 },
+        { id: 'compare', label: 'Comparison', icon: ArrowRightLeft }
+      );
+    }
+    if (isAdmin) {
+      list.push({ id: 'payslips', label: 'Payslips', icon: Coins });
+    }
+    return list;
+  }, [isAdmin, isManager]);
 
   const [scheduleDateRange, setScheduleDateRange] = useState({ start: '', end: '' });
   const [scheduleSortBy, setScheduleSortBy] = useState('date_desc');
@@ -1164,34 +1183,79 @@ export const Attendance: React.FC = () => {
 
         {/* View Selection Section */}
         <div className="lg:col-span-8">
-          <Tabs defaultValue="history" className="w-full">
-            <div className="flex items-center justify-between mb-6">
-              <TabsList className="bg-slate-100/50 p-1 rounded-2xl min-h-12 border border-slate-200/60 overflow-x-auto max-w-full flex">
-                <TabsTrigger value="history" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                  My History
-                </TabsTrigger>
-                <TabsTrigger value="schedules" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                  Team Schedules
-                </TabsTrigger>
-                <TabsTrigger value="requests" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                  Requests
-                </TabsTrigger>
-                {(isAdmin || isManager) && (
-                  <>
-                    <TabsTrigger value="report" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                      Report
-                    </TabsTrigger>
-                    <TabsTrigger value="compare" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                      Comparison
-                    </TabsTrigger>
-                  </>
-                )}
-                {isAdmin && (
-                  <TabsTrigger value="payslips" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm font-bold text-xs uppercase tracking-wide">
-                    Payslips
-                  </TabsTrigger>
-                )}
-              </TabsList>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <div className="mb-6">
+              {/* Mobile Tab Selector (Select Dropdown) */}
+              <div className="block md:hidden">
+                <div className="relative">
+                  <Label className="text-[10px] font-black uppercase tracking-wider text-[#1A2B4B]/60 mb-1.5 block">
+                    Navigate Modules
+                  </Label>
+                  <Select value={activeTab} onValueChange={setActiveTab}>
+                    <SelectTrigger className="w-full h-12 bg-[#FDFCF8] border border-[#D4AF37]/30 text-[#1A2B4B] rounded-xl shadow-sm font-bold text-sm px-4 focus:ring-2 focus:ring-[#1A2B4B] flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        {(() => {
+                          const currentTab = availableTabs.find(t => t.id === activeTab);
+                          if (currentTab) {
+                            const Icon = currentTab.icon;
+                            return (
+                              <>
+                                <div className="w-6 h-6 rounded-lg bg-[#1A2B4B]/5 flex items-center justify-center text-[#1A2B4B]">
+                                  <Icon className="w-4 h-4" />
+                                </div>
+                                <span className="font-bold">{currentTab.label}</span>
+                              </>
+                            );
+                          }
+                          return <span>Select view</span>;
+                        })()}
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#FDFCF8] border border-[#D4AF37]/20 rounded-xl shadow-lg">
+                      {availableTabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                          <SelectItem 
+                            key={tab.id} 
+                            value={tab.id}
+                            className="font-bold text-xs text-[#1A2B4B] hover:bg-[#1A2B4B]/5 focus:bg-[#1A2B4B]/5 cursor-pointer py-3 rounded-lg"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Icon className="w-4 h-4 text-[#1A2B4B]/60" />
+                              <span>{tab.label}</span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Desktop Segmented Control Tab List */}
+              <div className="hidden md:block">
+                <TabsList className="bg-slate-100/50 p-1.5 rounded-2xl min-h-12 border border-slate-200/60 max-w-full flex w-fit">
+                  {availableTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <TabsTrigger 
+                        key={tab.id}
+                        value={tab.id} 
+                        className={cn(
+                          "rounded-xl px-5 h-10 font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all duration-200",
+                          isActive 
+                            ? "bg-[#1A2B4B] text-white shadow-md border-b-2 border-[#D4AF37]/40" 
+                            : "text-[#1A2B4B]/70 hover:bg-[#1A2B4B]/5 hover:text-[#1A2B4B]"
+                        )}
+                      >
+                        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#D4AF37]" : "text-[#1A2B4B]/50")} />
+                        {tab.label}
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </div>
             </div>
 
             <TabsContent value="requests">

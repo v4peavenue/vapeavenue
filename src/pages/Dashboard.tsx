@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   collection, 
   query, 
@@ -24,13 +24,22 @@ import {
   BarChart3,
   CheckCircle2,
   Terminal,
-  ShieldCheck
+  ShieldCheck,
+  Search,
+  Filter,
+  Award,
+  TrendingDown,
+  Users,
+  User,
+  Clock,
+  Timer
 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocations } from '../contexts/LocationContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Product, Sale, AuditLog } from '../types';
+import { Product, Sale, AuditLog, UserProfile, Attendance as AttendanceType } from '../types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -114,6 +123,51 @@ export const Dashboard: React.FC = () => {
   const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [groupBy, setGroupBy] = useState<'day' | 'month' | 'year'>('day');
+  
+  // States for quantities sold analysis
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'overview' | 'analysis' | 'performance'>('overview');
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
+  const [analysisSearch, setAnalysisSearch] = useState('');
+  const [analysisCategory, setAnalysisCategory] = useState('all');
+  const [analysisBrand, setAnalysisBrand] = useState('all');
+
+  // Employee Performance Tab States
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [allAttendance, setAllAttendance] = useState<AttendanceType[]>([]);
+  const [performanceSearch, setPerformanceSearch] = useState('');
+  const [performanceRole, setPerformanceRole] = useState('all');
+  const [performanceChartMetric, setPerformanceChartMetric] = useState<'units' | 'hours' | 'revenue' | 'efficiency'>('units');
+
+  const activeDateRange = useMemo(() => {
+    const now = new Date();
+    let start = subDays(now, 7);
+    let end = now;
+
+    if (timeRange === 'today') start = startOfDay(now);
+    else if (timeRange === '30days') start = subDays(now, 30);
+    else if (timeRange === 'month') {
+      start = startOfMonth(now);
+      end = endOfMonth(now);
+    }
+    else if (timeRange === 'lastMonth') {
+      start = startOfMonth(subMonths(now, 1));
+      end = endOfMonth(subMonths(now, 1));
+    }
+    else if (timeRange === 'year') {
+      start = startOfYear(now);
+      end = endOfYear(now);
+    }
+    else if (timeRange === 'lastYear') {
+      start = startOfYear(subYears(now, 1));
+      end = endOfYear(subYears(now, 1));
+    }
+    else if (timeRange === 'custom') {
+      start = startOfDay(new Date(customStartDate));
+      end = startOfDay(addDays(new Date(customEndDate), 1)); // inclusive end of day
+    }
+    return { start, end };
+  }, [timeRange, customStartDate, customEndDate]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -121,6 +175,7 @@ export const Dashboard: React.FC = () => {
     // Listen to products for low stock alerts and top products
     const unsubscribeProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
       const allProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      setAllProducts(allProducts);
       
       const filteredProducts = selectedLocationId === 'all' 
         ? allProducts 
@@ -189,32 +244,8 @@ export const Dashboard: React.FC = () => {
     });
 
     // Calculate dates based on range
-    const now = new Date();
-    let startDate = subDays(now, 7);
-    let endDate = now;
-
-    if (timeRange === 'today') startDate = startOfDay(now);
-    else if (timeRange === '30days') startDate = subDays(now, 30);
-    else if (timeRange === 'month') {
-      startDate = startOfMonth(now);
-      endDate = endOfMonth(now);
-    }
-    else if (timeRange === 'lastMonth') {
-      startDate = startOfMonth(subMonths(now, 1));
-      endDate = endOfMonth(subMonths(now, 1));
-    }
-    else if (timeRange === 'year') {
-      startDate = startOfYear(now);
-      endDate = endOfYear(now);
-    }
-    else if (timeRange === 'lastYear') {
-      startDate = startOfYear(subYears(now, 1));
-      endDate = endOfYear(subYears(now, 1));
-    }
-    else if (timeRange === 'custom') {
-      startDate = startOfDay(new Date(customStartDate));
-      endDate = startOfDay(addDays(new Date(customEndDate), 1)); // inclusive end of day
-    }
+    const startDate = activeDateRange.start;
+    const endDate = activeDateRange.end;
 
     const salesQuery = query(
       collection(db, 'sales'),
@@ -230,6 +261,8 @@ export const Dashboard: React.FC = () => {
       if (selectedLocationId !== 'all') {
         sales = sales.filter(s => s.locationId === selectedLocationId);
       }
+      
+      setFilteredSales(sales);
       
       const totalSales = sales.reduce((sum, s) => {
         const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
@@ -338,14 +371,266 @@ export const Dashboard: React.FC = () => {
       setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
+    }, (error) => {
+      console.warn("Dashboard: Error listening to users:", error);
+    });
+
+    const unsubscribeAttendance = onSnapshot(collection(db, 'attendance'), (snapshot) => {
+      setAllAttendance(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
+    }, (error) => {
+      console.warn("Dashboard: Error listening to attendance:", error);
+    });
+
     return () => {
       unsubscribeProducts();
       unsubscribeSales();
       unsubscribeAudit();
       unsubscribePayments();
       unsubscribeAccounts();
+      unsubscribeUsers();
+      unsubscribeAttendance();
     };
-  }, [isAdmin, selectedLocationId, timeRange, groupBy, locations, customStartDate, customEndDate]);
+  }, [isAdmin, selectedLocationId, timeRange, groupBy, locations, customStartDate, customEndDate, activeDateRange]);
+
+  // Dynamically extract unique categories and brands for the analysis filters
+  const categories = useMemo(() => {
+    const list = new Set<string>();
+    allProducts.forEach(p => {
+      if (p.category) list.add(p.category);
+    });
+    return ['all', ...Array.from(list).sort()];
+  }, [allProducts]);
+
+  const brands = useMemo(() => {
+    const list = new Set<string>();
+    allProducts.forEach(p => {
+      if (p.brand) list.add(p.brand);
+    });
+    return ['all', ...Array.from(list).sort()];
+  }, [allProducts]);
+
+  // Main compilation for quantities sold analysis
+  const quantityAnalysisData = useMemo(() => {
+    let totalUnitsSold = 0;
+    let totalReturnedUnits = 0;
+    const productQuantityMap: { 
+      [id: string]: { 
+        id: string;
+        name: string; 
+        sku: string; 
+        quantity: number; 
+        returned: number; 
+        totalRevenue: number; 
+        category: string; 
+        brand: string; 
+      } 
+    } = {};
+    const categoryQuantityMap: { [cat: string]: number } = {};
+    const brandQuantityMap: { [brand: string]: number } = {};
+
+    filteredSales.forEach(sale => {
+      sale.items.forEach(item => {
+        const netQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
+        const returnedQty = item.returnedQuantity || 0;
+        
+        totalUnitsSold += netQty;
+        totalReturnedUnits += returnedQty;
+
+        // Find product details
+        const prod = allProducts.find(p => p.id === item.productId);
+        const category = prod?.category || 'Uncategorized';
+        const brand = prod?.brand || 'Generic';
+        const sku = prod?.sku || 'N/A';
+
+        if (!productQuantityMap[item.productId]) {
+          productQuantityMap[item.productId] = {
+            id: item.productId,
+            name: item.name,
+            sku,
+            quantity: 0,
+            returned: 0,
+            totalRevenue: 0,
+            category,
+            brand
+          };
+        }
+        productQuantityMap[item.productId].quantity += netQty;
+        productQuantityMap[item.productId].returned += returnedQty;
+        productQuantityMap[item.productId].totalRevenue += (item.subtotal || 0);
+
+        // Category map
+        categoryQuantityMap[category] = (categoryQuantityMap[category] || 0) + netQty;
+
+        // Brand map
+        brandQuantityMap[brand] = (brandQuantityMap[brand] || 0) + netQty;
+      });
+    });
+
+    // Convert map to sorted list
+    const rawProductsList = Object.values(productQuantityMap);
+
+    // Apply search and dropdown filters
+    const filteredProductsList = rawProductsList.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(analysisSearch.toLowerCase()) || 
+                            p.sku.toLowerCase().includes(analysisSearch.toLowerCase());
+      const matchesCategory = analysisCategory === 'all' || p.category === analysisCategory;
+      const matchesBrand = analysisBrand === 'all' || p.brand === analysisBrand;
+      return matchesSearch && matchesCategory && matchesBrand;
+    }).sort((a, b) => b.quantity - a.quantity);
+
+    // Also get the full non-filtered top products for most sold item calculation
+    const sortedAllProductsByQty = [...rawProductsList].sort((a, b) => b.quantity - a.quantity);
+    const mostPopular = sortedAllProductsByQty[0] || null;
+
+    const categoriesList = Object.entries(categoryQuantityMap)
+      .map(([name, qty]) => ({ name, quantity: qty }))
+      .sort((a, b) => b.quantity - a.quantity);
+
+    const brandsList = Object.entries(brandQuantityMap)
+      .map(([name, qty]) => ({ name, quantity: qty }))
+      .sort((a, b) => b.quantity - a.quantity);
+
+    // Quantities sold trend data matches chartData dates exactly
+    const quantityTrendData = chartData.map(d => {
+      let bucketSales = [];
+      if (groupBy === 'day') {
+        bucketSales = filteredSales.filter(s => isSameDay(s.timestamp.toDate(), d.fullDate));
+      } else if (groupBy === 'month') {
+        bucketSales = filteredSales.filter(s => isSameMonth(s.timestamp.toDate(), d.fullDate));
+      } else {
+        bucketSales = filteredSales.filter(s => isSameYear(s.timestamp.toDate(), d.fullDate));
+      }
+
+      const units = bucketSales.reduce((sum, s) => {
+        return sum + s.items.reduce((itemSum, item) => itemSum + Math.max(0, item.quantity - (item.returnedQuantity || 0)), 0);
+      }, 0);
+
+      const returns = bucketSales.reduce((sum, s) => {
+        return sum + s.items.reduce((itemSum, item) => itemSum + (item.returnedQuantity || 0), 0);
+      }, 0);
+
+      return {
+        name: d.name,
+        subLabel: d.subLabel,
+        unitsSold: units,
+        returns,
+      };
+    });
+
+    return {
+      totalUnitsSold,
+      totalReturnedUnits,
+      productsList: filteredProductsList,
+      categoriesList,
+      brandsList,
+      mostPopular,
+      quantityTrendData
+    };
+  }, [filteredSales, allProducts, chartData, groupBy, analysisSearch, analysisCategory, analysisBrand]);
+
+  // Employee Performance data calculation
+  const employeePerformanceData = useMemo(() => {
+    // 1. Filter attendance logs by active range & location
+    const filteredAttendance = allAttendance.filter(log => {
+      const logDate = log.timeIn?.toDate?.() || new Date(log.date);
+      const inRange = logDate >= activeDateRange.start && logDate <= activeDateRange.end;
+      const matchesLocation = selectedLocationId === 'all' || log.locationId === selectedLocationId;
+      return inRange && matchesLocation;
+    });
+
+    // We only care about employees who are 'staff' or 'manager' or have any sales/attendance records
+    const relevantUsers = allUsers.filter(u => u.role === 'staff' || u.role === 'manager' || u.role === 'admin');
+
+    const performanceList = relevantUsers.map(user => {
+      // Sales for this user (filteredSales is already filtered by location and active range!)
+      const userSales = filteredSales.filter(s => s.staffId === user.id);
+      
+      const totalOrders = userSales.length;
+      
+      const totalRevenue = userSales.reduce((sum, s) => {
+        const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
+        return sum + Math.max(0, (s.total ?? 0) - returnedAmount);
+      }, 0);
+
+      const totalQuantitiesSold = userSales.reduce((sum, s) => {
+        return sum + (s.items || []).reduce((itemSum, item) => itemSum + Math.max(0, item.quantity - (item.returnedQuantity || 0)), 0);
+      }, 0);
+
+      const totalReturnedQuantities = userSales.reduce((sum, s) => {
+        return sum + (s.items || []).reduce((itemSum, item) => itemSum + (item.returnedQuantity || 0), 0);
+      }, 0);
+
+      // Attendance for this user
+      const userAttendance = filteredAttendance.filter(log => log.userId === user.id);
+      const shiftsWorked = userAttendance.length;
+      
+      const totalMinutesWorked = userAttendance.reduce((sum, log) => {
+        if (!log.timeIn || !log.timeOut) return sum;
+        const inTime = log.timeIn.toDate();
+        const outTime = log.timeOut.toDate();
+        return sum + Math.max(0, Math.floor((outTime.getTime() - inTime.getTime()) / 60000));
+      }, 0);
+
+      const totalHoursWorked = Number((totalMinutesWorked / 60).toFixed(1));
+
+      // KPIs
+      const revenuePerShift = shiftsWorked > 0 ? Number((totalRevenue / shiftsWorked).toFixed(2)) : 0;
+      const revenuePerHour = totalHoursWorked > 0 ? Number((totalRevenue / totalHoursWorked).toFixed(2)) : 0;
+      const quantitiesSoldPerShift = shiftsWorked > 0 ? Number((totalQuantitiesSold / shiftsWorked).toFixed(1)) : 0;
+      const quantitiesSoldPerHour = totalHoursWorked > 0 ? Number((totalQuantitiesSold / totalHoursWorked).toFixed(1)) : 0;
+      const salesAccuracyRate = (totalQuantitiesSold + totalReturnedQuantities) > 0 
+        ? Number(((totalQuantitiesSold / (totalQuantitiesSold + totalReturnedQuantities)) * 100).toFixed(1)) 
+        : 100;
+
+      return {
+        id: user.id,
+        name: user.name || user.email.split('@')[0],
+        email: user.email,
+        role: user.role,
+        locationId: user.locationId,
+        totalOrders,
+        totalRevenue,
+        totalQuantitiesSold,
+        totalReturnedQuantities,
+        shiftsWorked,
+        totalHoursWorked,
+        revenuePerShift,
+        revenuePerHour,
+        quantitiesSoldPerShift,
+        quantitiesSoldPerHour,
+        salesAccuracyRate
+      };
+    });
+
+    // Filter by name and role
+    const filteredList = performanceList.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(performanceSearch.toLowerCase()) ||
+                            p.email.toLowerCase().includes(performanceSearch.toLowerCase());
+      const matchesRole = performanceRole === 'all' || p.role === performanceRole;
+      return matchesSearch && matchesRole;
+    });
+
+    // Find Leaders
+    const salesVolumeLeader = [...performanceList].sort((a, b) => b.totalQuantitiesSold - a.totalQuantitiesSold)[0] || null;
+    const revenueLeader = [...performanceList].sort((a, b) => b.totalRevenue - a.totalRevenue)[0] || null;
+    const hoursLeader = [...performanceList].sort((a, b) => b.totalHoursWorked - a.totalHoursWorked)[0] || null;
+    const efficiencyLeader = [...performanceList]
+      .filter(p => p.totalHoursWorked > 0)
+      .sort((a, b) => b.quantitiesSoldPerHour - a.quantitiesSoldPerHour)[0] || null;
+
+    return {
+      employees: filteredList,
+      allEmployeesRaw: performanceList,
+      leaders: {
+        salesVolume: salesVolumeLeader && salesVolumeLeader.totalQuantitiesSold > 0 ? salesVolumeLeader : null,
+        revenue: revenueLeader && revenueLeader.totalRevenue > 0 ? revenueLeader : null,
+        hours: hoursLeader && hoursLeader.totalHoursWorked > 0 ? hoursLeader : null,
+        efficiency: efficiencyLeader && efficiencyLeader.quantitiesSoldPerHour > 0 ? efficiencyLeader : null
+      }
+    };
+  }, [allUsers, allAttendance, filteredSales, activeDateRange, selectedLocationId, performanceSearch, performanceRole]);
 
   const getPaymentMethodName = (methodId: string) => {
     if (!methodId) return 'N/A';
@@ -471,38 +756,48 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard 
-          title="Total Revenue" 
-          value={`${settings.currency}${stats.totalSales.toLocaleString()}`} 
-          icon={DollarSign}
-          description={`Filtered period`}
-          trend="up"
-          trendValue="12.5"
-        />
-        <StatCard 
-          title="Sales Orders" 
-          value={stats.totalOrders} 
-          icon={ShoppingBag}
-          description={`Filtered period`}
-          trend="up"
-          trendValue="8.2"
-        />
-        <StatCard 
-          title="Inventory Items" 
-          value={stats.totalProducts} 
-          icon={Package}
-          description="Total products"
-        />
-        <StatCard 
-          title="Low Stock Alerts" 
-          value={stats.lowStockCount} 
-          icon={AlertTriangle}
-          description="Items needing restock"
-          className={stats.lowStockCount > 0 ? "border-amber-200 bg-amber-50/50" : ""}
-        />
+      {/* Tab Switcher */}
+      <div className="border-b border-slate-200/60 pb-1.5 flex items-center">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+          <button
+            onClick={() => setActiveDashboardTab('overview')}
+            className={cn(
+              "px-4 py-1.5 text-xs font-bold rounded-lg transition-all",
+              activeDashboardTab === 'overview'
+                ? "bg-white text-[#1A2B4B] shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveDashboardTab('analysis')}
+            className={cn(
+              "px-4 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5",
+              activeDashboardTab === 'analysis'
+                ? "bg-white text-[#1A2B4B] shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            Quantities Sold Analysis
+          </button>
+          <button
+            onClick={() => setActiveDashboardTab('performance')}
+            className={cn(
+              "px-4 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5",
+              activeDashboardTab === 'performance'
+                ? "bg-white text-[#1A2B4B] shadow-sm"
+                : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            <Users className="w-3.5 h-3.5" />
+            Employee Performance
+          </button>
+        </div>
       </div>
 
+      {/* Shared Range Filters */}
       <div className="flex flex-wrap items-center gap-3 bg-white/75 backdrop-blur-sm p-3 rounded-xl border border-slate-200/50 shadow-sm">
         <div className="flex items-center gap-2">
           <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Range:</Label>
@@ -570,7 +865,41 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {activeDashboardTab === 'overview' ? (
+        <div className="space-y-5 animate-in fade-in duration-300">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard 
+              title="Total Revenue" 
+              value={`${settings.currency}${stats.totalSales.toLocaleString()}`} 
+              icon={DollarSign}
+              description={`Filtered period`}
+              trend="up"
+              trendValue="12.5"
+            />
+            <StatCard 
+              title="Sales Orders" 
+              value={stats.totalOrders} 
+              icon={ShoppingBag}
+              description={`Filtered period`}
+              trend="up"
+              trendValue="8.2"
+            />
+            <StatCard 
+              title="Inventory Items" 
+              value={stats.totalProducts} 
+              icon={Package}
+              description="Total products"
+            />
+            <StatCard 
+              title="Low Stock Alerts" 
+              value={stats.lowStockCount} 
+              icon={AlertTriangle}
+              description="Items needing restock"
+              className={stats.lowStockCount > 0 ? "border-amber-200 bg-amber-50/50" : ""}
+            />
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card className="lg:col-span-2 shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -909,6 +1238,808 @@ export const Dashboard: React.FC = () => {
           </Card>
         )}
       </div>
-    </motion.div>
+    </div>
+  ) : activeDashboardTab === 'analysis' ? (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Analysis Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="overflow-hidden bg-gradient-to-br from-[#1C2D4E] to-[#0D1627] text-white border-none shadow-md shadow-indigo-950/10 relative group hover:scale-[1.02] transition-all duration-300">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full -mr-6 -mt-6 group-hover:scale-125 transition-transform duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Net Units Sold</CardTitle>
+            <div className="p-1.5 bg-white/10 rounded-lg">
+              <ShoppingBag className="h-3.5 w-3.5 text-[#D4AF37]" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className="text-xl font-black tracking-tight font-heading text-white">
+              {quantityAnalysisData.totalUnitsSold.toLocaleString()}
+            </div>
+            <p className="text-[10px] text-white/60 mt-0.5">
+              Net items purchased across period
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden bg-white border-slate-200/60 shadow-sm relative group hover:scale-[1.02] transition-all duration-300">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Returned Units</CardTitle>
+            <div className="p-1.5 bg-rose-50 rounded-lg">
+              <TrendingDown className="h-3.5 w-3.5 text-rose-600" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className={cn("text-xl font-black tracking-tight font-heading", quantityAnalysisData.totalReturnedUnits > 0 ? "text-rose-600" : "text-[#1A2B4B]")}>
+              {quantityAnalysisData.totalReturnedUnits.toLocaleString()}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Units returned by customers
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden bg-white border-slate-200/60 shadow-sm relative group hover:scale-[1.02] transition-all duration-300">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Most Popular Item</CardTitle>
+            <div className="p-1.5 bg-amber-50 rounded-lg">
+              <Award className="h-3.5 w-3.5 text-[#D4AF37]" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className="text-sm font-bold text-[#1A2B4B] truncate max-w-full">
+              {quantityAnalysisData.mostPopular ? quantityAnalysisData.mostPopular.name : 'N/A'}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">
+              {quantityAnalysisData.mostPopular 
+                ? `${quantityAnalysisData.mostPopular.quantity} units sold`
+                : 'No units sold'
+              }
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden bg-white border-slate-200/60 shadow-sm relative group hover:scale-[1.02] transition-all duration-300">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unit Return Rate</CardTitle>
+            <div className="p-1.5 bg-slate-100 rounded-lg">
+              <AlertTriangle className="h-3.5 w-3.5 text-slate-500" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className="text-xl font-black tracking-tight font-heading text-[#1A2B4B]">
+              {(() => {
+                const total = quantityAnalysisData.totalUnitsSold + quantityAnalysisData.totalReturnedUnits;
+                if (total === 0) return '0.0%';
+                return `${((quantityAnalysisData.totalReturnedUnits / total) * 100).toFixed(1)}%`;
+              })()}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5">
+              Percentage of sold items returned
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Units Sold Trend Chart */}
+      <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2">
+          <div>
+            <CardTitle className="text-lg font-heading text-[#1A2B4B]">Units Sold & Returns Trend</CardTitle>
+            <CardDescription>Product volumes and returns over the selected time range</CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent className="h-[300px] pt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={quantityAnalysisData.quantityTrendData}>
+              <defs>
+                <linearGradient id="colorUnits" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#1A2B4B" stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor="#1A2B4B" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorReturns" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis 
+                dataKey="name" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fill: '#64748b' }}
+                dy={5}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fill: '#64748b' }}
+                tickFormatter={(value) => `${value}`}
+              />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+              />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+              <Area 
+                type="monotone" 
+                name="Units Sold"
+                dataKey="unitsSold" 
+                stroke="#1A2B4B" 
+                strokeWidth={2.5}
+                fillOpacity={1} 
+                fill="url(#colorUnits)" 
+              />
+              <Area 
+                type="monotone" 
+                name="Units Returned"
+                dataKey="returns" 
+                stroke="#f43f5e" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorReturns)" 
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Category & Brand Leaders */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-md font-heading text-[#1A2B4B] flex items-center gap-1.5">
+              Category Breakdown
+            </CardTitle>
+            <CardDescription>Total quantities sold by category</CardDescription>
+          </CardHeader>
+          <CardContent className="max-h-[300px] overflow-y-auto">
+            {quantityAnalysisData.categoriesList.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-6">No category sales found</p>
+            ) : (
+              <div className="space-y-3">
+                {quantityAnalysisData.categoriesList.map((cat, idx) => {
+                  const maxQty = Math.max(...quantityAnalysisData.categoriesList.map(c => c.quantity), 1);
+                  const pct = (cat.quantity / maxQty) * 100;
+                  return (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-700">{cat.name}</span>
+                        <span className="font-bold text-[#1A2B4B]">{cat.quantity} units</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="bg-[#1A2B4B] h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-md font-heading text-[#1A2B4B] flex items-center gap-1.5">
+              Brand Breakdown
+            </CardTitle>
+            <CardDescription>Total quantities sold by brand</CardDescription>
+          </CardHeader>
+          <CardContent className="max-h-[300px] overflow-y-auto">
+            {quantityAnalysisData.brandsList.length === 0 ? (
+              <p className="text-xs text-slate-400 italic text-center py-6">No brand sales found</p>
+            ) : (
+              <div className="space-y-3">
+                {quantityAnalysisData.brandsList.map((br, idx) => {
+                  const maxQty = Math.max(...quantityAnalysisData.brandsList.map(b => b.quantity), 1);
+                  const pct = (br.quantity / maxQty) * 100;
+                  return (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-700">{br.name}</span>
+                        <span className="font-bold text-[#1A2B4B]">{br.quantity} units</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                        <div className="bg-[#D4AF37] h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Detailed Product Quantities Grid / Table */}
+      <Card className="shadow-sm border-slate-200/60 bg-white">
+        <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <CardTitle className="text-lg font-heading text-[#1A2B4B]">Detailed Quantities Sold</CardTitle>
+            <CardDescription>Product volume sold breakdown with filters</CardDescription>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search Input */}
+            <div className="relative w-full sm:w-[220px]">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search product/SKU..."
+                value={analysisSearch}
+                onChange={(e) => setAnalysisSearch(e.target.value)}
+                className="pl-9 h-9 text-xs w-full bg-slate-50 border-slate-200 focus:ring-[#1A2B4B] rounded-lg"
+              />
+            </div>
+
+            {/* Category select */}
+            <div className="w-[130px] sm:w-[150px]">
+              <Select value={analysisCategory} onValueChange={setAnalysisCategory}>
+                <SelectTrigger className="h-9 text-xs bg-slate-50 border-slate-200 rounded-lg">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat === 'all' ? 'All Categories' : cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Brand select */}
+            <div className="w-[120px] sm:w-[140px]">
+              <Select value={analysisBrand} onValueChange={setAnalysisBrand}>
+                <SelectTrigger className="h-9 text-xs bg-slate-50 border-slate-200 rounded-lg">
+                  <SelectValue placeholder="Brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  {brands.map(brand => (
+                    <SelectItem key={brand} value={brand}>
+                      {brand === 'all' ? 'All Brands' : brand}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0">
+          {/* Desktop and Tablet Table */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/75 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <th className="py-3 px-4">Product details</th>
+                  <th className="py-3 px-4">SKU</th>
+                  <th className="py-3 px-4">Category / Brand</th>
+                  <th className="py-3 px-4 text-right">Sold (Net)</th>
+                  <th className="py-3 px-4 text-right">Returned</th>
+                  <th className="py-3 px-4 text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-xs">
+                {quantityAnalysisData.productsList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400 italic">
+                      No matching products found
+                    </td>
+                  </tr>
+                ) : (
+                  quantityAnalysisData.productsList.map((product) => (
+                    <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <p className="font-bold text-[#1A2B4B]">{product.name}</p>
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-[10px] text-slate-500">
+                        {product.sku}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant="secondary" className="bg-slate-100 text-[9px] hover:bg-slate-100 text-slate-600 font-semibold px-2">
+                            {product.category}
+                          </Badge>
+                          <Badge variant="secondary" className="bg-amber-50 text-[9px] hover:bg-amber-50 text-amber-700 font-semibold px-2">
+                            {product.brand}
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-black text-[#1A2B4B]">
+                        {product.quantity}
+                      </td>
+                      <td className="py-3.5 px-4 text-right">
+                        {product.returned > 0 ? (
+                          <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-[10px]">
+                            {product.returned}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">-</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-bold text-slate-700">
+                        {settings.currency}{product.totalRevenue.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile list view layout to ensure pristine responsiveness */}
+          <div className="block sm:hidden divide-y divide-slate-100">
+            {quantityAnalysisData.productsList.length === 0 ? (
+              <p className="py-8 text-center text-slate-400 italic text-xs">No matching products found</p>
+            ) : (
+              quantityAnalysisData.productsList.map((product) => (
+                <div key={product.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-sm text-[#1A2B4B]">{product.name}</h4>
+                      <p className="text-[10px] font-mono text-slate-400 mt-0.5">SKU: {product.sku}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs text-slate-400">Net Sold</span>
+                      <p className="font-black text-sm text-[#1A2B4B]">{product.quantity} units</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <Badge variant="secondary" className="bg-slate-100 text-[8px] text-slate-500 hover:bg-slate-100">
+                        {product.category}
+                      </Badge>
+                      <Badge variant="secondary" className="bg-amber-50 text-[8px] text-amber-600 hover:bg-amber-50">
+                        {product.brand}
+                      </Badge>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 mr-2">Rev:</span>
+                      <span className="font-bold text-slate-700 text-xs">{settings.currency}{product.totalRevenue.toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {product.returned > 0 && (
+                    <div className="bg-rose-50/50 border border-rose-100 rounded-lg p-2 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-500 font-medium">Customer Returns</span>
+                      <span className="text-rose-600 font-bold">{product.returned} returned</span>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  ) : (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Performance Leaders Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Sales Volume Leader */}
+        <Card className="overflow-hidden bg-gradient-to-br from-[#1C2D4E] to-[#0D1627] text-white border-none shadow-md relative group hover:scale-[1.02] transition-all duration-300">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full -mr-6 -mt-6 group-hover:scale-125 transition-transform duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Top Sales Volume</CardTitle>
+            <div className="p-1.5 bg-white/10 rounded-lg">
+              <Award className="h-3.5 w-3.5 text-[#D4AF37]" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className="text-lg font-bold tracking-tight text-white truncate">
+              {employeePerformanceData.leaders.salesVolume?.name || 'No sales'}
+            </div>
+            <p className="text-[10px] text-[#D4AF37] mt-0.5 font-semibold">
+              {employeePerformanceData.leaders.salesVolume 
+                ? `${employeePerformanceData.leaders.salesVolume.totalQuantitiesSold.toLocaleString()} units sold` 
+                : 'No sales recorded yet'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Revenue Leader */}
+        <Card className="overflow-hidden bg-gradient-to-br from-[#2D1C4E] to-[#160D27] text-white border-none shadow-md relative group hover:scale-[1.02] transition-all duration-300">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full -mr-6 -mt-6 group-hover:scale-125 transition-transform duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Top Revenue Generator</CardTitle>
+            <div className="p-1.5 bg-white/10 rounded-lg">
+              <DollarSign className="h-3.5 w-3.5 text-emerald-400" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className="text-lg font-bold tracking-tight text-white truncate">
+              {employeePerformanceData.leaders.revenue?.name || 'No sales'}
+            </div>
+            <p className="text-[10px] text-emerald-400 mt-0.5 font-semibold">
+              {employeePerformanceData.leaders.revenue 
+                ? `${settings.currency}${employeePerformanceData.leaders.revenue.totalRevenue.toLocaleString()}` 
+                : 'No sales recorded yet'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Hours / Attendance Leader */}
+        <Card className="overflow-hidden bg-gradient-to-br from-[#1C4E3D] to-[#0D271E] text-white border-none shadow-md relative group hover:scale-[1.02] transition-all duration-300">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full -mr-6 -mt-6 group-hover:scale-125 transition-transform duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Most Hours Worked</CardTitle>
+            <div className="p-1.5 bg-white/10 rounded-lg">
+              <Clock className="h-3.5 w-3.5 text-sky-400" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className="text-lg font-bold tracking-tight text-white truncate">
+              {employeePerformanceData.leaders.hours?.name || 'No hours'}
+            </div>
+            <p className="text-[10px] text-sky-400 mt-0.5 font-semibold">
+              {employeePerformanceData.leaders.hours 
+                ? `${employeePerformanceData.leaders.hours.totalHoursWorked} hrs (${employeePerformanceData.leaders.hours.shiftsWorked} shifts)` 
+                : 'No hours recorded yet'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Efficiency Leader */}
+        <Card className="overflow-hidden bg-gradient-to-br from-[#A0522D] to-[#804224] text-white border-none shadow-md relative group hover:scale-[1.02] transition-all duration-300">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full -mr-6 -mt-6 group-hover:scale-125 transition-transform duration-500" />
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3.5 px-3.5">
+            <CardTitle className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Sales Efficiency</CardTitle>
+            <div className="p-1.5 bg-white/10 rounded-lg">
+              <Timer className="h-3.5 w-3.5 text-amber-300" />
+            </div>
+          </CardHeader>
+          <CardContent className="pb-3 px-3.5">
+            <div className="text-lg font-bold tracking-tight text-white truncate">
+              {employeePerformanceData.leaders.efficiency?.name || 'No hours'}
+            </div>
+            <p className="text-[10px] text-amber-300 mt-0.5 font-semibold">
+              {employeePerformanceData.leaders.efficiency 
+                ? `${employeePerformanceData.leaders.efficiency.quantitiesSoldPerHour} units/hour` 
+                : 'No hours recorded yet'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filter toolbar and performance metrics visualization chart */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Performance Chart Card */}
+        <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-lg font-heading text-[#1A2B4B]">KPI Comparison Chart</CardTitle>
+              <CardDescription>Visual comparisons between team members</CardDescription>
+            </div>
+            <Select 
+              value={performanceChartMetric} 
+              onValueChange={(val: any) => setPerformanceChartMetric(val)}
+            >
+              <SelectTrigger className="w-[160px] h-8 bg-white text-xs">
+                <SelectValue placeholder="Select Metric" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="units" className="text-xs">Net Units Sold</SelectItem>
+                <SelectItem value="hours" className="text-xs">Hours Worked</SelectItem>
+                <SelectItem value="revenue" className="text-xs">Revenue Generated</SelectItem>
+                <SelectItem value="efficiency" className="text-xs">Units Sold / Hour</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] w-full">
+              {employeePerformanceData.employees.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-slate-400 italic text-xs">
+                  No matching employees to compare
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={employeePerformanceData.employees.map(emp => ({
+                      name: emp.name,
+                      value: performanceChartMetric === 'units' ? emp.totalQuantitiesSold :
+                             performanceChartMetric === 'hours' ? emp.totalHoursWorked :
+                             performanceChartMetric === 'revenue' ? emp.totalRevenue :
+                             emp.quantitiesSoldPerHour
+                    }))}
+                    margin={{ top: 20, right: 10, left: -10, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false}
+                    />
+                    <YAxis 
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false}
+                      tickFormatter={(value) => 
+                        performanceChartMetric === 'revenue' 
+                          ? `${settings.currency}${value.toLocaleString()}` 
+                          : value
+                      }
+                    />
+                    <Tooltip
+                      contentStyle={{ background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      labelClassName="text-xs font-bold text-slate-700 font-heading"
+                      formatter={(value: any) => [
+                        performanceChartMetric === 'revenue' 
+                          ? `${settings.currency}${value.toLocaleString()}` 
+                          : performanceChartMetric === 'units' 
+                          ? `${value} units` 
+                          : performanceChartMetric === 'hours' 
+                          ? `${value} hours` 
+                          : `${value} units/hour`,
+                        performanceChartMetric === 'revenue' ? 'Net Revenue' :
+                        performanceChartMetric === 'units' ? 'Net Units Sold' :
+                        performanceChartMetric === 'hours' ? 'Hours Worked' :
+                        'Units Sold / Hour'
+                      ]}
+                      cursor={{ fill: '#f1f5f9' }}
+                    />
+                    <Bar 
+                      dataKey="value" 
+                      fill={
+                        performanceChartMetric === 'units' ? '#1A2B4B' :
+                        performanceChartMetric === 'hours' ? '#10b981' :
+                        performanceChartMetric === 'revenue' ? '#8b5cf6' :
+                        '#f59e0b'
+                      } 
+                      radius={[4, 4, 0, 0]} 
+                      animationDuration={1000}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Overview & Tips Card */}
+        <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
+          <CardHeader>
+            <CardTitle className="text-lg font-heading text-[#1A2B4B]">KPI Insights & Tips</CardTitle>
+            <CardDescription>Understanding performance calculations</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-3.5 bg-indigo-50/50 border border-indigo-100 rounded-xl space-y-1 text-xs font-sans">
+              <h4 className="font-bold text-indigo-950 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
+                <Award className="w-3.5 h-3.5 text-[#D4AF37]" />
+                Efficiency Index Formula
+              </h4>
+              <p className="text-slate-600 text-[10.5px] leading-relaxed font-sans">
+                Calculated by dividing net units sold by total logged attendance hours. This metric allows you to compare sales volumes equitably across part-time and full-time shifts.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-amber-50/50 border border-amber-100 rounded-xl space-y-1 text-xs font-sans">
+              <h4 className="font-bold text-amber-950 flex items-center gap-1.5 uppercase tracking-wide text-[10px]">
+                ⚠️ Returns Deterrence
+              </h4>
+              <p className="text-slate-600 text-[10.5px] leading-relaxed font-sans">
+                High return rates can signal over-selling or product mismatches. Monitor Return Accuracies on the performance board to keep customer satisfaction metrics high.
+              </p>
+            </div>
+
+            <div className="space-y-2.5 pt-1">
+              <h4 className="text-xs font-bold text-slate-700">Team Statistics Summary</h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                  <span className="text-slate-400 text-[10px] block">Average Units/Shift</span>
+                  <span className="font-bold text-slate-700">
+                    {(() => {
+                      const withShifts = employeePerformanceData.allEmployeesRaw.filter(e => e.shiftsWorked > 0);
+                      if (withShifts.length === 0) return '0.0';
+                      const avg = withShifts.reduce((sum, e) => sum + e.quantitiesSoldPerShift, 0) / withShifts.length;
+                      return avg.toFixed(1);
+                    })()}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                  <span className="text-slate-400 text-[10px] block">Average Sales Accuracy</span>
+                  <span className="font-bold text-slate-700 font-mono">
+                    {(() => {
+                      const withSales = employeePerformanceData.allEmployeesRaw.filter(e => e.totalQuantitiesSold > 0);
+                      if (withSales.length === 0) return '100%';
+                      const avg = withSales.reduce((sum, e) => sum + e.salesAccuracyRate, 0) / withSales.length;
+                      return `${avg.toFixed(1)}%`;
+                    })()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Table Card */}
+      <Card className="shadow-sm border-slate-200/60 bg-white">
+        <CardHeader className="pb-3 border-b border-slate-100">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg font-heading text-[#1A2B4B]">Staff Performance Ledger</CardTitle>
+              <CardDescription>Individual metrics across sales volume and attendance</CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Search */}
+              <div className="relative w-[180px]">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                <Input
+                  placeholder="Search staff..."
+                  className="pl-8 h-8 text-xs bg-slate-50/50"
+                  value={performanceSearch}
+                  onChange={(e) => setPerformanceSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Role Filter */}
+              <Select value={performanceRole} onValueChange={setPerformanceRole}>
+                <SelectTrigger className="w-[120px] h-8 bg-slate-50/50 text-xs">
+                  <SelectValue placeholder="All Roles" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">All Roles</SelectItem>
+                  <SelectItem value="staff" className="text-xs">Staff</SelectItem>
+                  <SelectItem value="manager" className="text-xs">Manager</SelectItem>
+                  <SelectItem value="admin" className="text-xs">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {/* Desktop Table View */}
+          <div className="hidden sm:block overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                  <th className="py-3.5 px-4 font-bold">Employee</th>
+                  <th className="py-3.5 px-4 font-bold">Role</th>
+                  <th className="py-3.5 px-4 font-bold text-center">Attendance Logs</th>
+                  <th className="py-3.5 px-4 font-bold text-right">Net Units Sold</th>
+                  <th className="py-3.5 px-4 font-bold text-right">Returns Acc.</th>
+                  <th className="py-3.5 px-4 font-bold text-right">Net Revenue</th>
+                  <th className="py-3.5 px-4 font-bold text-right">Sales / Hour</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-sans">
+                {employeePerformanceData.employees.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400 italic text-xs">
+                      No matching employee records found
+                    </td>
+                  </tr>
+                ) : (
+                  employeePerformanceData.employees.map((emp) => (
+                    <tr key={emp.id} className="hover:bg-slate-50/40 transition-colors font-medium text-slate-600">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-extrabold uppercase">
+                            {emp.name[0]}
+                          </div>
+                          <div>
+                            <span className="font-bold text-[#1A2B4B] block">{emp.name}</span>
+                            <span className="text-[10px] text-slate-400 block font-normal">{emp.email}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "text-[9px] px-1.5 py-0 font-bold uppercase tracking-wide",
+                            emp.role === 'admin' ? "bg-rose-50 text-rose-600 border-rose-100" :
+                            emp.role === 'manager' ? "bg-amber-50 text-amber-600 border-amber-100" :
+                            "bg-indigo-50 text-indigo-600 border-indigo-100"
+                          )}
+                        >
+                          {emp.role}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <div>
+                          <span className="font-bold text-slate-700 block">{emp.shiftsWorked} shifts</span>
+                          <span className="text-[10px] text-slate-400 block font-normal">{emp.totalHoursWorked} hrs worked</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-bold text-slate-800">
+                        {emp.totalQuantitiesSold} units
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-sans">
+                        <div>
+                          <span className={cn(
+                            "font-bold block",
+                            emp.salesAccuracyRate >= 95 ? "text-emerald-600" :
+                            emp.salesAccuracyRate >= 85 ? "text-amber-500" :
+                            "text-rose-500"
+                          )}>
+                            {emp.salesAccuracyRate}%
+                          </span>
+                          <span className="text-[10px] text-slate-400 block font-normal">{emp.totalReturnedQuantities} returns</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-bold text-slate-800">
+                        {settings.currency}{emp.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-bold text-[#1A2B4B]">
+                        {emp.quantitiesSoldPerHour} / hr
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card List View for Responsiveness */}
+          <div className="block sm:hidden divide-y divide-slate-100 font-sans">
+            {employeePerformanceData.employees.length === 0 ? (
+              <p className="py-8 text-center text-slate-400 italic text-xs">No matching employee records found</p>
+            ) : (
+              employeePerformanceData.employees.map((emp) => (
+                <div key={emp.id} className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-bold uppercase">
+                        {emp.name[0]}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-[#1A2B4B]">{emp.name}</h4>
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "text-[8px] px-1 font-bold uppercase py-0 mt-0.5",
+                            emp.role === 'admin' ? "bg-rose-50 text-rose-600 border-rose-100" :
+                            emp.role === 'manager' ? "bg-amber-50 text-amber-600 border-amber-100" :
+                            "bg-indigo-50 text-indigo-600 border-indigo-100"
+                          )}
+                        >
+                          {emp.role}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 block font-normal">Sales / Hr</span>
+                      <p className="font-black text-sm text-[#1A2B4B]">{emp.quantitiesSoldPerHour} units</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 py-1.5 border-y border-dashed border-slate-100 text-center text-xs">
+                    <div>
+                      <span className="text-[9px] text-slate-400 block font-normal font-sans">Attendance</span>
+                      <span className="font-bold text-slate-700 font-sans">{emp.shiftsWorked} shifts ({emp.totalHoursWorked}h)</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 block font-normal font-sans">Units Sold</span>
+                      <span className="font-bold text-slate-700 font-sans">{emp.totalQuantitiesSold}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 block font-normal font-sans">Revenue</span>
+                      <span className="font-bold text-slate-700 font-sans">{settings.currency}{Math.round(emp.totalRevenue).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 font-sans">
+                    <span>Returns Accuracy Rate:</span>
+                    <span className={cn(
+                      "font-bold",
+                      emp.salesAccuracyRate >= 95 ? "text-emerald-600" :
+                      emp.salesAccuracyRate >= 85 ? "text-amber-500" :
+                      "text-rose-500"
+                    )}>
+                      {emp.salesAccuracyRate}% ({emp.totalReturnedQuantities} returned)
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )}
+</motion.div>
   );
 };
