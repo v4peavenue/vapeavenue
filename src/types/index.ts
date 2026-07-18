@@ -106,6 +106,8 @@ export interface Sale {
   customerId: string;
   customerDetails: Omit<Customer, 'id' | 'createdAt'>;
   timestamp: Timestamp;
+  saleType?: 'in-store' | 'online';
+  deliveryFee?: number;
 }
 
 export interface Supplier {

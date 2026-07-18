@@ -23,6 +23,7 @@ import {
   Banknote,
   ArrowUpRight,
   ArrowDownLeft,
+  ArrowLeftRight,
   History,
   TrendingUp,
   TrendingDown,
@@ -61,6 +62,8 @@ import { Button } from '@/components/ui/button';
 import { logAction } from '@/lib/audit';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { ExpensesTab } from '@/components/ExpensesTab';
+import { TransfersTab } from '@/components/TransfersTab';
 
 export const Finance: React.FC = () => {
   const { settings } = useSettings();
@@ -89,6 +92,26 @@ export const Finance: React.FC = () => {
     description: ''
   });
 
+  // Tab control state
+  const isManagerOrAdmin = isAdmin || isManager || ['admin', 'manager'].includes(profile?.role || '');
+  const [activeTab, setActiveTab] = useState<'accounts' | 'expenses' | 'transfers' | 'history'>(
+    isManagerOrAdmin ? 'accounts' : 'expenses'
+  );
+
+  // Expense tab form state
+  const [expenseAmount, setExpenseAmount] = useState<number>(0);
+  const [expenseAccountId, setExpenseAccountId] = useState<string>('');
+  const [expenseLocationId, setExpenseLocationId] = useState<string>('');
+  const [expenseCategory, setExpenseCategory] = useState<string>('Supplies');
+  const [expenseDescription, setExpenseDescription] = useState<string>('');
+  const [expenseSearch, setExpenseSearch] = useState<string>('');
+
+  // Fund Transfer state
+  const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [sourceAccountId, setSourceAccountId] = useState<string>('');
+  const [destAccountId, setDestAccountId] = useState<string>('');
+  const [transferDescription, setTransferDescription] = useState<string>('');
+
   useEffect(() => {
     if (selectedLocationId && selectedLocationId !== 'all') {
       setNewTransaction(prev => ({ ...prev, locationId: selectedLocationId }));
@@ -115,25 +138,32 @@ export const Finance: React.FC = () => {
       unsubAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
         const accountsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinancialAccount));
         setAccounts(accountsList);
-        if (accountsList.length > 0 && !newTransaction.accountId) {
-          setNewTransaction(prev => ({ ...prev, accountId: accountsList[0].id }));
+        if (accountsList.length > 0) {
+          setNewTransaction(prev => prev.accountId ? prev : { ...prev, accountId: accountsList[0].id });
+          setExpenseAccountId(prev => prev ? prev : accountsList[0].id);
         }
       }, (error) => {
         console.warn("Finance: Error listening to accounts:", error);
       });
-    }
 
-    if (isManagerUser) {
       const qTrans = query(
         collection(db, 'financialTransactions'),
         orderBy('timestamp', 'desc')
       );
       unsubTrans = onSnapshot(qTrans, (snapshot) => {
-        setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)).slice(0, 50));
+        setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)).slice(0, 100));
+        if (!isManagerUser) {
+          setLoading(false);
+        }
       }, (error) => {
         console.warn("Finance: Error listening to financialTransactions:", error);
+        if (!isManagerUser) {
+          setLoading(false);
+        }
       });
+    }
 
+    if (isManagerUser) {
       const qLogs = query(
         collection(db, 'audit_logs'), 
         orderBy('timestamp', 'desc')
@@ -155,7 +185,7 @@ export const Finance: React.FC = () => {
         console.warn("Finance: Error listening to audit_logs:", error);
         setLoading(false);
       });
-    } else {
+    } else if (!isStaffUser) {
       setLoading(false);
     }
 
@@ -326,6 +356,156 @@ export const Finance: React.FC = () => {
       console.error(error);
     }
   };
+
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (expenseAmount <= 0 || !expenseAccountId) {
+      toast.error('Please enter a valid amount and select an account');
+      return;
+    }
+
+    const account = accounts.find(a => a.id === expenseAccountId);
+    if (!account) {
+      toast.error('Account not found');
+      return;
+    }
+
+    // Check for insufficient funds
+    if ((account.balance || 0) < expenseAmount) {
+      toast.error(`Insufficient funds in ${account.name}. Available: ${settings.currency}${(account.balance || 0).toLocaleString()}`);
+      return;
+    }
+
+    const locationIdResolved = expenseLocationId || profile?.locationId || null;
+    const location = locations.find(l => l.id === locationIdResolved);
+    const newBalance = (account.balance || 0) - expenseAmount;
+
+    try {
+      const transRef = await addDoc(collection(db, 'financialTransactions'), {
+        amount: expenseAmount,
+        type: 'expense',
+        accountId: expenseAccountId,
+        accountName: account.name,
+        locationId: locationIdResolved,
+        locationName: location?.name || 'Central',
+        category: expenseCategory,
+        description: expenseDescription,
+        timestamp: Timestamp.now(),
+        createdBy: profile?.id || 'anonymous',
+        createdByName: profile?.name || user?.email || 'Staff',
+        accountBalance: newBalance
+      });
+
+      await updateDoc(doc(db, 'accounts', expenseAccountId), {
+        balance: increment(-expenseAmount),
+        lastUpdated: Timestamp.now()
+      });
+
+      await logAction(
+        profile, 
+        'MANUAL_TRANSACTION', 
+        `Expense: ${expenseDescription} (${settings.currency}${expenseAmount}) on ${account.name}`, 
+        transRef.id, 
+        'transaction'
+      );
+
+      toast.success('Expense recorded successfully!');
+      
+      // Reset expense form
+      setExpenseAmount(0);
+      setExpenseDescription('');
+      setExpenseCategory('Supplies');
+      setExpenseLocationId('');
+    } catch (error) {
+      toast.error('Failed to record expense');
+      console.error(error);
+    }
+  };
+
+  const handleFundTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (transferAmount <= 0 || !sourceAccountId || !destAccountId) {
+      toast.error('Please enter a valid amount and select both accounts');
+      return;
+    }
+    if (sourceAccountId === destAccountId) {
+      toast.error('Source and destination accounts must be different');
+      return;
+    }
+
+    const sourceAccount = accounts.find(a => a.id === sourceAccountId);
+    const destAccount = accounts.find(a => a.id === destAccountId);
+    if (!sourceAccount || !destAccount) {
+      toast.error('Accounts not found');
+      return;
+    }
+
+    if ((sourceAccount.balance || 0) < transferAmount) {
+      toast.error(`Insufficient funds in ${sourceAccount.name}. Available: ${settings.currency}${(sourceAccount.balance || 0).toLocaleString()}`);
+      return;
+    }
+
+    try {
+      // 1. Deduct from source account
+      await updateDoc(doc(db, 'accounts', sourceAccountId), {
+        balance: increment(-transferAmount),
+        lastUpdated: Timestamp.now()
+      });
+
+      // 2. Add to destination account
+      await updateDoc(doc(db, 'accounts', destAccountId), {
+        balance: increment(transferAmount),
+        lastUpdated: Timestamp.now()
+      });
+
+      // 3. Record transfer transaction in database
+      const transRef = await addDoc(collection(db, 'financialTransactions'), {
+        amount: transferAmount,
+        type: 'transfer',
+        accountId: sourceAccountId,
+        accountName: sourceAccount.name,
+        toAccountId: destAccountId,
+        toAccountName: destAccount.name,
+        category: 'Fund Transfer',
+        description: transferDescription || `Fund transfer from ${sourceAccount.name} to ${destAccount.name}`,
+        timestamp: Timestamp.now(),
+        createdBy: profile?.id || 'anonymous',
+        createdByName: profile?.name || user?.email || 'Staff',
+        accountBalance: (sourceAccount.balance || 0) - transferAmount,
+        destAccountBalance: (destAccount.balance || 0) + transferAmount
+      });
+
+      await logAction(
+        profile,
+        'FUND_TRANSFER',
+        `Transferred ${settings.currency}${transferAmount} from ${sourceAccount.name} to ${destAccount.name}`,
+        transRef.id,
+        'transaction'
+      );
+
+      toast.success('Funds transferred successfully!');
+      
+      // Reset transfer form
+      setTransferAmount(0);
+      setSourceAccountId('');
+      setDestAccountId('');
+      setTransferDescription('');
+    } catch (error) {
+      toast.error('Failed to complete transfer');
+      console.error(error);
+    }
+  };
+
+  const expenseTransactions = transactions.filter(t => t.type === 'expense');
+  const filteredExpenses = expenseTransactions.filter(t => {
+    const searchLower = expenseSearch.toLowerCase();
+    return (t.description || '').toLowerCase().includes(searchLower) ||
+           (t.category || '').toLowerCase().includes(searchLower) ||
+           (t.accountName || '').toLowerCase().includes(searchLower) ||
+           (t.createdByName || '').toLowerCase().includes(searchLower);
+  });
+
+  const transferTransactions = transactions.filter(t => t.type === 'transfer');
 
   return (
     <div className="space-y-5 p-1">
@@ -544,7 +724,64 @@ export const Finance: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      {/* Tab Navigation */}
+      <div className="flex border-b border-slate-200 gap-1 overflow-x-auto pb-px scrollbar-none mb-1">
+        {isManagerOrAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('accounts')}
+            className={cn(
+              "px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
+              activeTab === 'accounts' 
+                ? "border-[#1A2B4B] text-[#1A2B4B] font-extrabold" 
+                : "border-transparent text-slate-400 hover:text-slate-600 font-medium"
+            )}
+          >
+            Accounts Overview
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('expenses')}
+          className={cn(
+            "px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
+            activeTab === 'expenses' 
+              ? "border-[#1A2B4B] text-[#1A2B4B] font-extrabold" 
+              : "border-transparent text-slate-400 hover:text-slate-600 font-medium"
+          )}
+        >
+          Expenses & Claims
+        </button>
+        {isManagerOrAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('transfers')}
+            className={cn(
+              "px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
+              activeTab === 'transfers' 
+                ? "border-[#1A2B4B] text-[#1A2B4B] font-extrabold" 
+                : "border-transparent text-slate-400 hover:text-slate-600 font-medium"
+            )}
+          >
+            Fund Transfers
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('history')}
+          className={cn(
+            "px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
+            activeTab === 'history' 
+              ? "border-[#1A2B4B] text-[#1A2B4B] font-extrabold" 
+              : "border-transparent text-slate-400 hover:text-slate-600 font-medium"
+          )}
+        >
+          Transaction Ledger
+        </button>
+      </div>
+
+      {activeTab === 'accounts' && isManagerOrAdmin && (
+        <div className="grid md:grid-cols-3 gap-4">
         <Card className="md:col-span-1 border-none shadow-md bg-gradient-to-br from-[#1C2D4E] to-[#0D1627] text-white overflow-hidden relative rounded-xl hover:scale-[1.01] transition-all duration-300">
           <div className="absolute top-0 right-0 p-3 opacity-5">
             <TrendingUp className="w-24 h-24" />
@@ -615,8 +852,18 @@ export const Finance: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
-      <div className="grid lg:grid-cols-3 gap-8">
+      {activeTab === 'expenses' && (
+        <ExpensesTab accounts={accounts} transactions={transactions} />
+      )}
+
+      {activeTab === 'transfers' && isManagerOrAdmin && (
+        <TransfersTab accounts={accounts} transactions={transactions} />
+      )}
+
+      {activeTab === 'history' && (
+        <div className="grid lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-2 border-none shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
             <div>
@@ -887,6 +1134,7 @@ export const Finance: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Edit Account Dialog */}
       <Dialog open={!!editingAccount} onOpenChange={(open) => !open && setEditingAccount(null)}>

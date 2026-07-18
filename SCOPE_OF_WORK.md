@@ -97,6 +97,14 @@ To preserve the pristine definitions of the core milestones while accounting for
 *   **Role-Based Security Bounds:** Enforced localized stock visibility for non-administrative profiles. Staff accounts are isolated to seeing inventory levels only at their assigned operating branch.
 *   **Admin Command Deck:** Kept global, multi-branch stock distribution tables restricted exclusively to authorized administrative logins to prevent sensitive asset leakages.
 
+### Patch v1.3: Employee Performance & Shift Analytics
+*   **Interactive Analytics Dashboard:** Deployed a dedicated "Employee Performance" dashboard view inside the manager control deck enabling direct analysis of staff productivity and KPI benchmarks.
+*   **Real-Time Data Integration:** Established active Firestore listener subscriptions over `users` and `attendance` logs to dynamically process staff work histories, clocked hours, and register checkouts in real time.
+*   **Multi-Variable Leaderboard Highlights:** Implemented high-contrast, beautiful visual metric cards recognizing top-performing employees across four pillars: Top Sales Volume (units), Top Revenue Generator (monetary value), Most Hours Worked (attendance), and Sales Efficiency (units sold/hour).
+*   **Interactive Comparison KPI Charts:** Built responsive Recharts-based bar visualization models allowing administrators to seamlessly toggle and compare active metrics (Net Units Sold, Clocked Hours, Revenue Generated, Units/Hour) across the entire team on the fly.
+*   **Staff Performance Ledger:** Structured a detailed, responsive data table complete with instant fuzzy-search filtering and role categorization (Staff, Manager, Admin) showing full ledger rows on desktop and responsive card decks on mobile views.
+*   **Returns Accuracy Audit Pipeline:** Integrated active calculation of a **Returns Accuracy Rate** (Net sales versus total quantities plus returns) per staff profile to audit register accuracies and deter shrinkage.
+
 ---
 
 ## 7. REVISION AND SIGN-OFF

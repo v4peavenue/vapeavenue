@@ -213,6 +213,14 @@ To maintain a clean tracking records index without altering the core operational
 *   **Security Isolation:** Programmed strict location boundaries in the Inventory panel (`/src/pages/Inventory.tsx`). Non-administrative Staff (Cashiers) are strictly isolated to view only the stock counts associated with their assigned branch/location.
 *   **Global Distribution Map:** Secured the multi-branch global stock grid, keeping it visible exclusively to authorized Admin accounts to deter unauthorized distribution leaks.
 
+#### Patch v1.3: Employee Performance & Shift Analytics
+*   **Interactive Analytics Dashboard:** Implemented a new, premium "Employee Performance" dashboard view inside the central reporting module (`/src/pages/Dashboard.tsx`) giving authorized managers comprehensive visual insights into employee sales activity and shift attendance.
+*   **Active Subscriptions Pipeline:** Established real-time onSnapshot data streaming with Firebase Firestore for both the `users` and `attendance` collections, ensuring calculations on regular hours, overtime, and register orders stay actively synchronized.
+*   **Multi-Tier KPI Leaderboards:** Created visual winner cards summarizing four essential retail KPI winners: Top Sales Volume (units), Top Revenue Generator (monetary sales), Most Hours Worked (attendance shifts), and Sales Efficiency (average units sold per logged hour).
+*   **Toggleable Recharts bar charts:** Engineered an interactive Recharts bar comparison chart with customizable data toggle selection allowing operators to visually map and analyze team productivity (Net Units Sold, Hours Worked, Revenue, and Units/Hour) at a glance.
+*   **Staff Ledger Grid with Multi-Device Compatibility:** Built a detailed Staff Performance Ledger table enabling real-time name searches, user-role filter selects, desktop-aligned table rows, and responsive, fluid mobile card stacks.
+*   **Register Shrinkage and Return Audits:** Coded real-time tracking of individual cashier return frequencies and calculated a **Returns Accuracy Rate** to help administrators track customer satisfaction, measure accuracy, and prevent internal shrinkage.
+
 ---
 
 ## 6. SYSTEM SIGN-OFF & APPROVAL

@@ -1210,11 +1210,37 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 1.2 */}
+              {/* Patch 1.4 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.2: Stock Permissions</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.4: Delivery Fees & Tappable Presets</h4>
                   <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Cumulative Presets:</strong> Enabled POS quick bill buttons (e.g., +50, +100) to accumulate on consecutive taps instead of replacing the input.</li>
+                  <li><strong>Standardized Defaults:</strong> Added default delivery fee of 50 for Online orders, while keeping In-Store order delivery fees defaulted to zero.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.3 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.3: Expenses & Transfers</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>POS Calculator:</strong> Added instant change computation at checkout to prevent mental math mistakes.</li>
+                  <li><strong>Expense Tracking:</strong> Added an Expenses tab for all users to record overhead, track date/entered-by, and select source accounts.</li>
+                  <li><strong>Fund Transfers:</strong> Enabled moving money between liquid accounts with source and destination tracking.</li>
+                  <li><strong>Employee KPIs:</strong> Created performance dashboards analyzing individual sold volume, shifts, and productivity.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.2 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.2: Stock Permissions</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Security Bounds:</strong> Staff accounts are strictly restricted to seeing inventory stock quantities associated only with their assigned branch/location.</li>

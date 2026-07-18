@@ -92,6 +92,9 @@ export const POS: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<'cash' | 'ewallet' | 'bank'>('cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [addQtyMulti, setAddQtyMulti] = useState<number>(1);
+  const [amountReceived, setAmountReceived] = useState<string>('');
+  const [saleType, setSaleType] = useState<'in-store' | 'online'>('in-store');
+  const [deliveryFee, setDeliveryFee] = useState<string>('0');
   const [customerDetails, setCustomerDetails] = useState({
     name: '',
     billingAddress: '',
@@ -481,8 +484,12 @@ export const POS: React.FC = () => {
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
   const discount = appliedPromo ? appliedPromo.amount : 0;
-  const total = Math.max(0, subtotal - discount);
+  const deliveryFeeNum = saleType === 'online' ? (parseFloat(deliveryFee) || 0) : 0;
+  const total = Math.max(0, subtotal - discount + deliveryFeeNum);
   const tax = total * (12/112); // 12% VAT portion included in the price
+
+  const parsedReceived = amountReceived === '' ? total : parseFloat(amountReceived);
+  const changeAmount = isNaN(parsedReceived) ? 0 : Math.max(0, parsedReceived - total);
 
   const applyPromo = () => {
     if (!promoCodeInput.trim()) {
@@ -714,6 +721,10 @@ export const POS: React.FC = () => {
           country: customerDetails.country,
           zip: customerDetails.zip
         },
+        amountReceived: isNaN(parsedReceived) ? total : parsedReceived,
+        changeAmount: changeAmount,
+        saleType,
+        deliveryFee: deliveryFeeNum,
         timestamp: Timestamp.now()
       };
 
@@ -792,6 +803,9 @@ export const POS: React.FC = () => {
       setPaymentReference('');
       setActiveCategory('cash');
       setIsSplitPayment(false);
+      setAmountReceived('');
+      setSaleType('in-store');
+      setDeliveryFee('0');
       
       // Reset customer to walk-in
       setSelectedCustomerId('walk-in');
@@ -1369,7 +1383,12 @@ export const POS: React.FC = () => {
           <Button 
             className="w-full h-16 text-lg font-black bg-[#1A2B4B] hover:bg-[#2C3E50] text-white shadow-xl shadow-[#1A2B4B]/10 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98]"
             disabled={cart.length === 0}
-            onClick={() => setIsCheckoutOpen(true)}
+            onClick={() => {
+              setAmountReceived('');
+              setSaleType('in-store');
+              setDeliveryFee('0');
+              setIsCheckoutOpen(true);
+            }}
           >
             Process Checkout
           </Button>
@@ -1435,6 +1454,60 @@ export const POS: React.FC = () => {
                   required
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label>Order Type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={saleType === 'in-store' ? 'default' : 'outline'}
+                    className={cn(
+                      "h-10 text-xs font-bold rounded-xl transition-all",
+                      saleType === 'in-store'
+                        ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm"
+                        : "bg-[#FDFCF8] text-slate-600 hover:bg-slate-50 border-slate-200"
+                    )}
+                    onClick={() => {
+                      setSaleType('in-store');
+                      setDeliveryFee('0');
+                    }}
+                  >
+                    🏪 In-Store
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={saleType === 'online' ? 'default' : 'outline'}
+                    className={cn(
+                      "h-10 text-xs font-bold rounded-xl transition-all",
+                      saleType === 'online'
+                        ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm"
+                        : "bg-[#FDFCF8] text-slate-600 hover:bg-slate-50 border-slate-200"
+                    )}
+                    onClick={() => {
+                      setSaleType('online');
+                      setDeliveryFee('50');
+                    }}
+                  >
+                    🌐 Online
+                  </Button>
+                </div>
+              </div>
+
+              {saleType === 'online' && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <Label htmlFor="delivery-fee">Delivery Fee ({settings.currency})</Label>
+                  <Input 
+                    id="delivery-fee"
+                    type="number"
+                    className="bg-[#FDFCF8]"
+                    value={deliveryFee}
+                    onChange={(e) => setDeliveryFee(e.target.value)}
+                    placeholder="Enter delivery fee"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
@@ -1746,12 +1819,73 @@ export const POS: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-[#FDFCF8] p-4 rounded-xl border border-[#D4AF37]/10 space-y-2">
+          <div className="bg-[#FDFCF8] p-4 rounded-xl border border-[#D4AF37]/10 space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Items:</span>
               <span className="font-medium text-[#1A2B4B]">{cart.reduce((sum, i) => sum + i.quantity, 0)}</span>
             </div>
-            <div className="flex justify-between text-lg font-bold">
+
+            {saleType === 'online' && (
+              <div className="flex justify-between text-sm animate-in fade-in duration-150">
+                <span className="text-slate-500">Delivery Fee:</span>
+                <span className="font-medium text-[#1A2B4B]">{settings.currency}{parseFloat(deliveryFee || '0').toFixed(2)}</span>
+              </div>
+            )}
+            
+            {/* Cash / Change Calculator */}
+            <div className="pt-2.5 border-t border-dashed border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="amount-received" className="text-xs font-bold text-slate-600">Amount Received</Label>
+                <div className="relative w-36">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">{settings.currency}</span>
+                  <Input
+                    id="amount-received"
+                    type="number"
+                    step="any"
+                    className="h-8 pl-7 pr-2 text-right font-black text-xs bg-white border-slate-200 focus-visible:ring-[#1A2B4B] rounded-lg"
+                    placeholder={total.toFixed(2)}
+                    value={amountReceived}
+                    onChange={(e) => setAmountReceived(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Quick cash bill triggers */}
+              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setAmountReceived('')}
+                  className="px-2 py-1 text-[9px] font-bold uppercase rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                >
+                  Exact
+                </button>
+                {[50, 100, 200, 500, 1000].map((bill) => (
+                  <button
+                    key={bill}
+                    type="button"
+                    onClick={() => {
+                      const currentAmount = parseFloat(amountReceived) || 0;
+                      setAmountReceived((currentAmount + bill).toString());
+                    }}
+                    className="px-2 py-1 text-[9px] font-mono font-bold rounded bg-indigo-50 hover:bg-indigo-100 text-[#1A2B4B] border border-indigo-100/30 transition-colors"
+                  >
+                    +{bill}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center text-xs font-bold bg-slate-50 p-2 rounded-lg border border-slate-100">
+                <span className="text-slate-500">Calculated Change:</span>
+                <span className={cn(
+                  "font-black text-sm font-sans",
+                  changeAmount > 0 ? "text-emerald-600" : "text-slate-600"
+                )}>
+                  {settings.currency}{changeAmount.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-200 flex justify-between text-lg font-bold">
               <span className="text-[#1A2B4B]">Total Amount:</span>
               <span className="text-[#D4AF37]">{settings.currency}{(total ?? 0).toFixed(2)}</span>
             </div>

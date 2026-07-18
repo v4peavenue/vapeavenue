@@ -1671,6 +1671,28 @@ export const SalesHistory: React.FC = () => {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Order Type</p>
+                  <Badge variant="outline" className={cn(
+                    "mt-0.5 font-bold uppercase text-[9px] tracking-wide",
+                    selectedSale.saleType === 'online' 
+                      ? "text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-50" 
+                      : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-50"
+                  )}>
+                    {selectedSale.saleType === 'online' ? '🌐 Online' : '🏪 In-Store'}
+                  </Badge>
+                </div>
+                {selectedSale.saleType === 'online' && (
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-bold">Delivery Fee</p>
+                    <p className="text-sm font-bold text-slate-800">
+                      {settings.currency}{(selectedSale.deliveryFee ?? 0).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-lg border">
                 <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Transaction Date</span>
                 <span className="text-xs font-semibold text-slate-800">
@@ -1726,6 +1748,12 @@ export const SalesHistory: React.FC = () => {
                   <div className="flex justify-between text-sm text-rose-500">
                     <span className="text-slate-500 font-medium">Promo Discount {selectedSale.promoCode ? `(${selectedSale.promoCode})` : ''}</span>
                     <span className="font-bold">-{settings.currency}{(selectedSale.discount ?? 0).toFixed(2)}</span>
+                  </div>
+                )}
+                {selectedSale.saleType === 'online' && (
+                  <div className="flex justify-between text-sm text-slate-600">
+                    <span className="text-slate-500 font-medium">Delivery Fee</span>
+                    <span className="font-bold">+{settings.currency}{(selectedSale.deliveryFee ?? 0).toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-[11px] text-slate-400 italic">
