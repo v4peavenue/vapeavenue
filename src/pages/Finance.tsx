@@ -680,6 +680,7 @@ export const Finance: React.FC = () => {
                         <SelectItem value="Maintenance">Maintenance</SelectItem>
                         <SelectItem value="Marketing">Marketing</SelectItem>
                         <SelectItem value="Taxes">Taxes</SelectItem>
+                        <SelectItem value="Delivery/Shipping Fee">Delivery/Shipping Fee</SelectItem>
                         <SelectItem value="Personal">Personal / Drawings</SelectItem>
                       </SelectContent>
                     </Select>

@@ -204,6 +204,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
                     <SelectItem value="Maintenance">Maintenance</SelectItem>
                     <SelectItem value="Marketing">Marketing</SelectItem>
                     <SelectItem value="Taxes">Taxes</SelectItem>
+                    <SelectItem value="Delivery/Shipping Fee">Delivery/Shipping Fee</SelectItem>
                     <SelectItem value="General">General / Others</SelectItem>
                   </SelectContent>
                 </Select>
