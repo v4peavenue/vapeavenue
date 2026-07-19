@@ -1210,11 +1210,23 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 1.5 */}
+              {/* Patch 1.6 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.5: Unified Financial Ledger & Net Flows</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.6: Account Control & Logistical Categories</h4>
                   <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Account Status Control:</strong> Admins can now toggle the active status of any financial account directly in the Finance Accounts Overview. Inactive accounts are automatically hidden from selection in POS checkouts, returns, expense tabs, and transfers.</li>
+                  <li><strong>Delivery & Shipping Category:</strong> Added "Delivery/Shipping Fee" as a standard category inside the Expense logs and claims selectors for more precise logistical cost tracking.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.5 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.5: Unified Financial Ledger & Net Flows</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Unified Ledger Tab:</strong> Introduced a new 'Unified Ledger' tab in Sales & Returns History displaying all inflows and outflows (Sales, Returns, Voids, Expenses, Transfers) line-by-line.</li>
