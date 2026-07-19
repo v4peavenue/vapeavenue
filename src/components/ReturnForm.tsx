@@ -37,7 +37,7 @@ interface ReturnFormProps {
 }
 
 export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, paymentOptions, onSuccess }) => {
-  const { profile } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const [loading, setLoading] = useState(false);
   const [selectedItems, setSelectedItems] = useState<{ [key: string]: { quantity: number, type: 'return' | 'replacement', reason: string, restock: boolean } }>({});
   const [overallReason, setOverallReason] = useState('');
@@ -408,7 +408,7 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
                 <SelectContent>
                   {accounts.map(acc => (
                     <SelectItem key={acc.id} value={acc.id}>
-                      {acc.name} (Balance: ₱{(acc.balance ?? 0).toFixed(2)})
+                      {acc.name}{isAdmin ? ` (Balance: ₱${(acc.balance ?? 0).toFixed(2)})` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

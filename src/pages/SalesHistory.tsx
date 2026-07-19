@@ -2566,7 +2566,7 @@ export const SalesHistory: React.FC = () => {
                   <SelectContent>
                     {accounts.map(acc => (
                       <SelectItem key={acc.id} value={acc.id}>
-                        {acc.name} (Balance: {settings.currency}{(acc.balance ?? 0).toFixed(2)})
+                        {acc.name}{isAdmin ? ` (Balance: ${settings.currency}${(acc.balance ?? 0).toFixed(2)})` : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2733,7 +2733,7 @@ export const SalesHistory: React.FC = () => {
                     <SelectContent>
                       {accounts.map(acc => (
                         <SelectItem key={acc.id} value={acc.id}>
-                          {acc.name} (Balance: {settings.currency}{(acc.balance ?? 0).toFixed(2)})
+                          {acc.name}{isAdmin ? ` (Balance: ${settings.currency}${(acc.balance ?? 0).toFixed(2)})` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>
