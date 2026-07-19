@@ -242,6 +242,7 @@ export interface FinancialAccount {
   type: 'bank' | 'ewallet' | 'cash' | 'card';
   balance: number;
   lastUpdated: Timestamp;
+  active?: boolean;
 }
 
 export interface Transaction {

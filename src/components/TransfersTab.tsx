@@ -148,7 +148,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ accounts, transactio
                     <SelectValue placeholder="Source" />
                   </SelectTrigger>
                   <SelectContent>
-                    {accounts.map(acc => (
+                    {accounts.filter(acc => acc.active !== false).map(acc => (
                       <SelectItem key={acc.id} value={acc.id}>
                         {acc.name} ({settings.currency}{(acc.balance || 0).toLocaleString()})
                       </SelectItem>
@@ -168,7 +168,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ accounts, transactio
                     <SelectValue placeholder="Destination" />
                   </SelectTrigger>
                   <SelectContent>
-                    {accounts.map(acc => (
+                    {accounts.filter(acc => acc.active !== false).map(acc => (
                       <SelectItem key={acc.id} value={acc.id}>
                         {acc.name} ({settings.currency}{(acc.balance || 0).toLocaleString()})
                       </SelectItem>

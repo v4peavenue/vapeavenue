@@ -140,7 +140,10 @@ export const Finance: React.FC = () => {
 
     if (isStaffUser) {
       unsubAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
-        const accountsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinancialAccount));
+        const accountsList = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return { id: doc.id, ...data, active: data.active !== false } as FinancialAccount;
+        });
         setAccounts(accountsList);
         if (accountsList.length > 0) {
           setNewTransaction(prev => prev.accountId ? prev : { ...prev, accountId: accountsList[0].id });
@@ -232,7 +235,8 @@ export const Finance: React.FC = () => {
         name: newAccount.name,
         type: newAccount.type,
         balance: Number(newAccount.initialBalance),
-        lastUpdated: Timestamp.now()
+        lastUpdated: Timestamp.now(),
+        active: true
       });
 
       await logAction(profile, 'CREATE_ACCOUNT', `Added financial account: ${newAccount.name} with initial balance ${newAccount.initialBalance}`, paymentRef.id, 'account');
@@ -269,6 +273,44 @@ export const Finance: React.FC = () => {
       setEditingAccount(null);
     } catch (error) {
       toast.error('Failed to update account');
+      console.error(error);
+    }
+  };
+
+  const handleToggleAccountActive = async (account: FinancialAccount) => {
+    if (!isAdmin) {
+      toast.error('Only admins can toggle account status');
+      return;
+    }
+
+    const newActiveState = account.active === false ? true : false;
+
+    try {
+      await updateDoc(doc(db, 'accounts', account.id), {
+        active: newActiveState,
+        lastUpdated: Timestamp.now()
+      });
+
+      // Also update paymentOptions if it exists
+      try {
+        await updateDoc(doc(db, 'paymentOptions', account.id), {
+          active: newActiveState
+        });
+      } catch (err) {
+        console.warn("Could not update matching payment option:", err);
+      }
+
+      await logAction(
+        profile, 
+        'UPDATE_ACCOUNT', 
+        `Toggled account active status for ${account.name} to ${newActiveState ? 'active' : 'inactive'}`, 
+        account.id, 
+        'account'
+      );
+
+      toast.success(`Account ${account.name} is now ${newActiveState ? 'active' : 'inactive'}`);
+    } catch (error) {
+      toast.error('Failed to toggle account status');
       console.error(error);
     }
   };
@@ -586,7 +628,7 @@ export const Finance: React.FC = () => {
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                          {accounts.map(acc => (
+                          {accounts.filter(acc => acc.active !== false).map(acc => (
                             <SelectItem key={acc.id} value={acc.id}>
                               {acc.name} ({settings.currency}{acc.balance.toLocaleString()})
                             </SelectItem>
@@ -842,11 +884,38 @@ export const Finance: React.FC = () => {
                 <p className="text-xl font-black text-[#1A2B4B] font-heading">
                   {settings.currency}{(acc.balance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </p>
-                <div className="mt-2.5 pt-2.5 border-t border-slate-50 flex items-center justify-between">
-                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Last Updated</span>
-                  <span className="text-[9px] text-slate-500 font-mono">
-                    {acc.lastUpdated ? format(acc.lastUpdated.toDate(), 'MMM dd, HH:mm') : 'N/A'}
-                  </span>
+                <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn(
+                      "text-[9px] font-bold uppercase tracking-wider",
+                      acc.active !== false ? "text-emerald-600" : "text-slate-400"
+                    )}>
+                      {acc.active !== false ? "Active" : "Inactive"}
+                    </span>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleToggleAccountActive(acc)}
+                        className={cn(
+                          "relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none",
+                          acc.active !== false ? "bg-emerald-500" : "bg-slate-200"
+                        )}
+                        title="Toggle active status"
+                      >
+                        <span
+                          className={cn(
+                            "pointer-events-none block h-3 w-3 rounded-full bg-white shadow ring-0 transition-transform",
+                            acc.active !== false ? "translate-x-3.5" : "translate-x-0.5"
+                          )}
+                        />
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <span>Updated:</span>
+                    <span className="font-mono text-slate-500 normal-case font-normal">
+                      {acc.lastUpdated ? format(acc.lastUpdated.toDate(), 'MMM dd, HH:mm') : 'N/A'}
+                    </span>
+                  </div>
                 </div>
               </CardContent>
             </Card>

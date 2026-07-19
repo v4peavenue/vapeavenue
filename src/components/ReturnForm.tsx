@@ -408,7 +408,7 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
                   <SelectValue placeholder="Select financial account" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map(acc => (
+                  {accounts.filter(acc => acc.active !== false).map(acc => (
                     <SelectItem key={acc.id} value={acc.id}>
                       {acc.name}{isAdmin ? ` (Balance: ₱${(acc.balance ?? 0).toFixed(2)})` : ''}
                     </SelectItem>

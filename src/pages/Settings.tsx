@@ -2119,7 +2119,7 @@ export const Settings: React.FC = () => {
                       <SelectValue placeholder="Select asset account" />
                     </SelectTrigger>
                     <SelectContent>
-                      {accounts.map((acc: any) => (
+                      {accounts.filter((acc: any) => acc.active !== false).map((acc: any) => (
                         <SelectItem key={acc.id} value={acc.id}>
                           {acc.name} (Balance: {settings.currency}{(acc.balance || 0).toFixed(2)})
                         </SelectItem>

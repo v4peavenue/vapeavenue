@@ -1756,7 +1756,7 @@ export const POS: React.FC = () => {
                             <SelectContent>
                               <SelectItem value="cash">Cash</SelectItem>
                               <SelectItem value="card">Card</SelectItem>
-                              {paymentOptions.map(o => (
+                              {paymentOptions.filter(o => o.active !== false).map(o => (
                                 <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                               ))}
                             </SelectContent>

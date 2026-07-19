@@ -176,7 +176,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map(acc => (
+                  {accounts.filter(acc => acc.active !== false).map(acc => (
                     <SelectItem key={acc.id} value={acc.id}>
                       {acc.name}{isAdmin ? ` (${settings.currency}${(acc.balance || 0).toLocaleString()})` : ''}
                     </SelectItem>

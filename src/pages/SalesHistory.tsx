@@ -2577,7 +2577,7 @@ export const SalesHistory: React.FC = () => {
                     <SelectValue placeholder="Select financial account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {accounts.map(acc => (
+                    {accounts.filter(acc => acc.active !== false).map(acc => (
                       <SelectItem key={acc.id} value={acc.id}>
                         {acc.name}{isAdmin ? ` (Balance: ${settings.currency}${(acc.balance ?? 0).toFixed(2)})` : ''}
                       </SelectItem>
@@ -2744,7 +2744,7 @@ export const SalesHistory: React.FC = () => {
                       <SelectValue placeholder="Select financial account" />
                     </SelectTrigger>
                     <SelectContent>
-                      {accounts.map(acc => (
+                      {accounts.filter(acc => acc.active !== false).map(acc => (
                         <SelectItem key={acc.id} value={acc.id}>
                           {acc.name}{isAdmin ? ` (Balance: ${settings.currency}${(acc.balance ?? 0).toFixed(2)})` : ''}
                         </SelectItem>
