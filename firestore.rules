@@ -356,7 +356,7 @@ service cloud.firestore {
     }
 
     match /financialTransactions/{transId} {
-      allow read: if isManager();
+      allow read: if isStaff();
       allow create: if isStaff() && isValidFinancialTransaction(request.resource.data);
       allow delete: if isAdmin();
     }

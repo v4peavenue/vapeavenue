@@ -95,8 +95,12 @@ export const Finance: React.FC = () => {
   // Tab control state
   const isManagerOrAdmin = isAdmin || isManager || ['admin', 'manager'].includes(profile?.role || '');
   const [activeTab, setActiveTab] = useState<'accounts' | 'expenses' | 'transfers' | 'history'>(
-    isManagerOrAdmin ? 'accounts' : 'expenses'
+    isAdmin ? 'accounts' : 'expenses'
   );
+
+  useEffect(() => {
+    setActiveTab(isAdmin ? 'accounts' : 'expenses');
+  }, [isAdmin]);
 
   // Expense tab form state
   const [expenseAmount, setExpenseAmount] = useState<number>(0);
@@ -518,215 +522,217 @@ export const Finance: React.FC = () => {
           <p className="text-xs text-slate-500 mt-0.5">Track your banks, e-wallets, and cash on hand balances.</p>
         </div>
         
-        <div className="flex flex-wrap items-center gap-2">
-          <Dialog open={isAddTransactionOpen} onOpenChange={setIsAddTransactionOpen}>
-            <DialogTrigger 
-              render={
-                <Button className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white gap-1.5 h-8 px-3 rounded-lg shadow-sm text-xs font-bold transition-all">
-                  <Plus className="w-3.5 h-3.5" />
-                  New Transaction
-                </Button>
-              } 
-            />
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>New Manual Transaction</DialogTitle>
-                <DialogDescription>
-                  Record expenses or income not tracked automatically.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleAddTransaction} className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
+        {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Dialog open={isAddTransactionOpen} onOpenChange={setIsAddTransactionOpen}>
+              <DialogTrigger 
+                render={
+                  <Button className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white gap-1.5 h-8 px-3 rounded-lg shadow-sm text-xs font-bold transition-all">
+                    <Plus className="w-3.5 h-3.5" />
+                    New Transaction
+                  </Button>
+                } 
+              />
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>New Manual Transaction</DialogTitle>
+                  <DialogDescription>
+                    Record expenses or income not tracked automatically.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddTransaction} className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Transaction Type</Label>
+                      <Select 
+                        value={newTransaction.type} 
+                        onValueChange={(v: any) => setNewTransaction({ ...newTransaction, type: v })}
+                      >
+                        <SelectTrigger className="bg-slate-50">
+                          <SelectValue>
+                            {newTransaction.type === 'income' ? 'Income / Deposit' : 'Expense / Withdrawal'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="income">Income / Deposit</SelectItem>
+                          <SelectItem value="expense">Expense / Withdrawal</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Amount ({settings.currency})</Label>
+                      <Input 
+                        type="number"
+                        step="0.01"
+                        value={newTransaction.amount || ''}
+                        onChange={(e) => setNewTransaction({ ...newTransaction, amount: Number(e.target.value) })}
+                        placeholder="0.00"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="trans-acc">Source/Destination Account</Label>
+                      <Select 
+                        required
+                        value={newTransaction.accountId} 
+                        onValueChange={(v: any) => setNewTransaction({ ...newTransaction, accountId: v })}
+                      >
+                        <SelectTrigger id="trans-acc" className="bg-slate-50">
+                          <SelectValue placeholder="Select account">
+                            {accounts.find(a => a.id === newTransaction.accountId)?.name || 'Select account'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts.map(acc => (
+                            <SelectItem key={acc.id} value={acc.id}>
+                              {acc.name} ({settings.currency}{acc.balance.toLocaleString()})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="trans-loc">Location (Optional)</Label>
+                      <Select 
+                        value={newTransaction.locationId || "central"} 
+                        onValueChange={(v: any) => setNewTransaction({ ...newTransaction, locationId: v === "central" ? "" : v })}
+                      >
+                        <SelectTrigger id="trans-loc" className="bg-slate-50">
+                          <SelectValue placeholder="Select branch">
+                            {newTransaction.locationId 
+                              ? (locations.find(l => l.id === newTransaction.locationId)?.name || 'Select branch') 
+                              : 'None / Central'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="central">None / Central</SelectItem>
+                          {locations.map(loc => (
+                            <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label>Transaction Type</Label>
+                    <Label htmlFor="trans-cat">Category</Label>
                     <Select 
-                      value={newTransaction.type} 
-                      onValueChange={(v: any) => setNewTransaction({ ...newTransaction, type: v })}
+                      required
+                      value={newTransaction.category} 
+                      onValueChange={(v: any) => setNewTransaction({ ...newTransaction, category: v })}
                     >
-                      <SelectTrigger className="bg-slate-50">
+                      <SelectTrigger id="trans-cat" className="bg-slate-50">
                         <SelectValue>
-                          {newTransaction.type === 'income' ? 'Income / Deposit' : 'Expense / Withdrawal'}
+                          {newTransaction.category}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="income">Income / Deposit</SelectItem>
-                        <SelectItem value="expense">Expense / Withdrawal</SelectItem>
+                        <SelectItem value="General">General</SelectItem>
+                        <SelectItem value="Rent">Rent</SelectItem>
+                        <SelectItem value="Utilities">Utilities</SelectItem>
+                        <SelectItem value="Salary">Salary</SelectItem>
+                        <SelectItem value="Supplies">Supplies</SelectItem>
+                        <SelectItem value="Maintenance">Maintenance</SelectItem>
+                        <SelectItem value="Marketing">Marketing</SelectItem>
+                        <SelectItem value="Taxes">Taxes</SelectItem>
+                        <SelectItem value="Personal">Personal / Drawings</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div className="space-y-2">
-                    <Label>Amount ({settings.currency})</Label>
+                    <Label>Description</Label>
                     <Input 
-                      type="number"
-                      step="0.01"
-                      value={newTransaction.amount || ''}
-                      onChange={(e) => setNewTransaction({ ...newTransaction, amount: Number(e.target.value) })}
-                      placeholder="0.00"
+                      value={newTransaction.description}
+                      onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
+                      placeholder="Brief details about this transaction"
                       required
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                  <DialogFooter className="pt-4 mt-auto border-t">
+                    <Button type="button" variant="outline" onClick={() => setIsAddTransactionOpen(false)}>Cancel</Button>
+                    <Button type="submit" className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white">Record Transaction</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
+              <DialogTrigger 
+                render={
+                  <Button variant="outline" className="gap-1.5 h-8 px-3 rounded-lg border-[#D4AF37]/25 hover:bg-[#D4AF37]/5 text-slate-700 text-xs font-semibold">
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Account
+                  </Button>
+                } 
+              />
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Add Financial Account</DialogTitle>
+                  <DialogDescription>
+                    Add a new bank or e-wallet account to track your money.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleAddAccount} className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="trans-acc">Source/Destination Account</Label>
-                    <Select 
-                      required
-                      value={newTransaction.accountId} 
-                      onValueChange={(v: any) => setNewTransaction({ ...newTransaction, accountId: v })}
-                    >
-                      <SelectTrigger id="trans-acc" className="bg-slate-50">
-                        <SelectValue placeholder="Select account">
-                          {accounts.find(a => a.id === newTransaction.accountId)?.name || 'Select account'}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts.map(acc => (
-                          <SelectItem key={acc.id} value={acc.id}>
-                            {acc.name} ({settings.currency}{acc.balance.toLocaleString()})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="trans-loc">Location (Optional)</Label>
-                    <Select 
-                      value={newTransaction.locationId || "central"} 
-                      onValueChange={(v: any) => setNewTransaction({ ...newTransaction, locationId: v === "central" ? "" : v })}
-                    >
-                      <SelectTrigger id="trans-loc" className="bg-slate-50">
-                        <SelectValue placeholder="Select branch">
-                          {newTransaction.locationId 
-                            ? (locations.find(l => l.id === newTransaction.locationId)?.name || 'Select branch') 
-                            : 'None / Central'}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="central">None / Central</SelectItem>
-                        {locations.map(loc => (
-                          <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="trans-cat">Category</Label>
-                  <Select 
-                    required
-                    value={newTransaction.category} 
-                    onValueChange={(v: any) => setNewTransaction({ ...newTransaction, category: v })}
-                  >
-                    <SelectTrigger id="trans-cat" className="bg-slate-50">
-                      <SelectValue>
-                        {newTransaction.category}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="General">General</SelectItem>
-                      <SelectItem value="Rent">Rent</SelectItem>
-                      <SelectItem value="Utilities">Utilities</SelectItem>
-                      <SelectItem value="Salary">Salary</SelectItem>
-                      <SelectItem value="Supplies">Supplies</SelectItem>
-                      <SelectItem value="Maintenance">Maintenance</SelectItem>
-                      <SelectItem value="Marketing">Marketing</SelectItem>
-                      <SelectItem value="Taxes">Taxes</SelectItem>
-                      <SelectItem value="Personal">Personal / Drawings</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Input 
-                    value={newTransaction.description}
-                    onChange={(e) => setNewTransaction({ ...newTransaction, description: e.target.value })}
-                    placeholder="Brief details about this transaction"
-                    required
-                  />
-                </div>
-
-                <DialogFooter className="pt-4 mt-auto border-t">
-                  <Button type="button" variant="outline" onClick={() => setIsAddTransactionOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white">Record Transaction</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isAddAccountOpen} onOpenChange={setIsAddAccountOpen}>
-            <DialogTrigger 
-              render={
-                <Button variant="outline" className="gap-1.5 h-8 px-3 rounded-lg border-[#D4AF37]/25 hover:bg-[#D4AF37]/5 text-slate-700 text-xs font-semibold">
-                  <Plus className="w-3.5 h-3.5" />
-                  Add Account
-                </Button>
-              } 
-            />
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Add Financial Account</DialogTitle>
-                <DialogDescription>
-                  Add a new bank or e-wallet account to track your money.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleAddAccount} className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="acc-name">Account Name</Label>
-                  <Input 
-                    id="acc-name" 
-                    value={newAccount.name}
-                    onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
-                    placeholder="e.g. BDO Savings, GCash Personal" 
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="acc-type">Type</Label>
-                    <Select 
-                      required
-                      value={newAccount.type} 
-                      onValueChange={(v: any) => setNewAccount({ ...newAccount, type: v })}
-                    >
-                      <SelectTrigger id="acc-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bank">Bank</SelectItem>
-                        <SelectItem value="ewallet">E-Wallet</SelectItem>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="card">Card</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="acc-balance">Initial Balance ({settings.currency})</Label>
+                    <Label htmlFor="acc-name">Account Name</Label>
                     <Input 
-                      id="acc-balance"
-                      type="number"
-                      value={newAccount.initialBalance}
-                      onChange={(e) => setNewAccount({ ...newAccount, initialBalance: Number(e.target.value) })}
-                      placeholder="0.00"
+                      id="acc-name" 
+                      value={newAccount.name}
+                      onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                      placeholder="e.g. BDO Savings, GCash Personal" 
                       required
                     />
                   </div>
-                </div>
-                <DialogFooter className="pt-4 mt-auto border-t">
-                  <Button type="button" variant="outline" onClick={() => setIsAddAccountOpen(false)}>Cancel</Button>
-                  <Button type="submit" className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white">Add Account</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="acc-type">Type</Label>
+                      <Select 
+                        required
+                        value={newAccount.type} 
+                        onValueChange={(v: any) => setNewAccount({ ...newAccount, type: v })}
+                      >
+                        <SelectTrigger id="acc-type">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bank">Bank</SelectItem>
+                          <SelectItem value="ewallet">E-Wallet</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="card">Card</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="acc-balance">Initial Balance ({settings.currency})</Label>
+                      <Input 
+                        id="acc-balance"
+                        type="number"
+                        value={newAccount.initialBalance}
+                        onChange={(e) => setNewAccount({ ...newAccount, initialBalance: Number(e.target.value) })}
+                        placeholder="0.00"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter className="pt-4 mt-auto border-t">
+                    <Button type="button" variant="outline" onClick={() => setIsAddAccountOpen(false)}>Cancel</Button>
+                    <Button type="submit" className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white">Add Account</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
       </div>
 
       {/* Tab Navigation */}
       <div className="flex border-b border-slate-200 gap-1 overflow-x-auto pb-px scrollbar-none mb-1">
-        {isManagerOrAdmin && (
+        {isAdmin && (
           <button
             type="button"
             onClick={() => setActiveTab('accounts')}
@@ -752,7 +758,7 @@ export const Finance: React.FC = () => {
         >
           Expenses & Claims
         </button>
-        {isManagerOrAdmin && (
+        {isAdmin && (
           <button
             type="button"
             onClick={() => setActiveTab('transfers')}
@@ -766,21 +772,23 @@ export const Finance: React.FC = () => {
             Fund Transfers
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setActiveTab('history')}
-          className={cn(
-            "px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
-            activeTab === 'history' 
-              ? "border-[#1A2B4B] text-[#1A2B4B] font-extrabold" 
-              : "border-transparent text-slate-400 hover:text-slate-600 font-medium"
-          )}
-        >
-          Transaction Ledger
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={cn(
+              "px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all whitespace-nowrap",
+              activeTab === 'history' 
+                ? "border-[#1A2B4B] text-[#1A2B4B] font-extrabold" 
+                : "border-transparent text-slate-400 hover:text-slate-600 font-medium"
+            )}
+          >
+            Transaction Ledger
+          </button>
+        )}
       </div>
 
-      {activeTab === 'accounts' && isManagerOrAdmin && (
+      {activeTab === 'accounts' && isAdmin && (
         <div className="grid md:grid-cols-3 gap-4">
         <Card className="md:col-span-1 border-none shadow-md bg-gradient-to-br from-[#1C2D4E] to-[#0D1627] text-white overflow-hidden relative rounded-xl hover:scale-[1.01] transition-all duration-300">
           <div className="absolute top-0 right-0 p-3 opacity-5">
@@ -858,11 +866,11 @@ export const Finance: React.FC = () => {
         <ExpensesTab accounts={accounts} transactions={transactions} />
       )}
 
-      {activeTab === 'transfers' && isManagerOrAdmin && (
+      {activeTab === 'transfers' && isAdmin && (
         <TransfersTab accounts={accounts} transactions={transactions} />
       )}
 
-      {activeTab === 'history' && (
+      {activeTab === 'history' && isAdmin && (
         <div className="grid lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-2 border-none shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">

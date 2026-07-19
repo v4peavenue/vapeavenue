@@ -24,7 +24,7 @@ interface ExpensesTabProps {
 
 export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions }) => {
   const { settings } = useSettings();
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const { locations } = useLocations();
 
   // Form states
@@ -40,6 +40,12 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
       setExpenseAccountId(accounts[0].id);
     }
   }, [accounts, expenseAccountId]);
+
+  React.useEffect(() => {
+    if (!isAdmin && profile?.locationId) {
+      setExpenseLocationId(profile.locationId);
+    }
+  }, [profile, isAdmin]);
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +67,11 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
     }
 
     const locationIdResolved = expenseLocationId || profile?.locationId || null;
+    if (!locationIdResolved) {
+      toast.error('Please select a branch/location for this expense');
+      return;
+    }
+
     const location = locations.find(l => l.id === locationIdResolved);
     const newBalance = (account.balance || 0) - expenseAmount;
 
@@ -99,14 +110,21 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
       setExpenseAmount(0);
       setExpenseDescription('');
       setExpenseCategory('Supplies');
-      setExpenseLocationId('');
+      setExpenseLocationId(!isAdmin && profile?.locationId ? profile.locationId : '');
     } catch (error) {
       toast.error('Failed to record expense');
       console.error(error);
     }
   };
 
-  const expenseTransactions = transactions.filter(t => t.type === 'expense');
+  const expenseTransactions = transactions.filter(t => {
+    if (t.type !== 'expense') return false;
+    // Non-admin users are locked to viewing only their assigned branch/location's expenses and claims
+    if (!isAdmin && profile?.locationId) {
+      return t.locationId === profile.locationId;
+    }
+    return true;
+  });
   const filteredExpenses = expenseTransactions.filter(t => {
     const searchLower = expenseSearch.toLowerCase();
     return (t.description || '').toLowerCase().includes(searchLower) ||
@@ -194,6 +212,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
               <div className="space-y-2">
                 <Label htmlFor="expense-location" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Branch / Location</Label>
                 <Select 
+                  disabled={!isAdmin && !!profile?.locationId}
                   value={expenseLocationId || "central"} 
                   onValueChange={(v) => setExpenseLocationId(v === "central" ? "" : v)}
                 >
