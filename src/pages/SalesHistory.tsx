@@ -145,10 +145,14 @@ export const SalesHistory: React.FC = () => {
 
     const unsubscribeTiers = onSnapshot(collection(db, 'priceTiers'), (snapshot) => {
       setPriceTiers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PriceTier)));
+    }, (error) => {
+      console.warn("SalesHistory: Error listening to priceTiers:", error);
     });
 
     const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
       setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PaymentOption)));
+    }, (error) => {
+      console.warn("SalesHistory: Error listening to paymentOptions:", error);
     });
 
     let unsubscribeAccounts = () => {};
@@ -159,11 +163,15 @@ export const SalesHistory: React.FC = () => {
     if (isStaffUser) {
       unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
         setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => {
+        console.warn("SalesHistory: Error listening to accounts:", error);
       });
     }
 
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("SalesHistory: Error listening to users:", error);
     });
 
     return () => {
@@ -186,6 +194,9 @@ export const SalesHistory: React.FC = () => {
       }
       
       setSales(salesList);
+      setLoading(false);
+    }, (error) => {
+      console.warn("SalesHistory: Error listening to sales:", error);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -229,6 +240,8 @@ export const SalesHistory: React.FC = () => {
       }
       
       setReturnTransactions(returnsList);
+    }, (error) => {
+      console.warn("SalesHistory: Error listening to returnTransactions:", error);
     });
     return () => unsubscribe();
   }, [selectedLocationId, profile]);

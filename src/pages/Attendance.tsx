@@ -277,15 +277,21 @@ export const Attendance: React.FC = () => {
       const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType));
       logs.sort((a, b) => b.date.localeCompare(a.date));
       setPersonalLogs(logs.slice(0, 10));
+    }, (error) => {
+      console.warn("Attendance: Error listening to personal history:", error);
     });
 
     // Listen to all users and schedules (needed for everyone to view schedule)
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
+    }, (error) => {
+      console.warn("Attendance: Error listening to users:", error);
     });
 
     const unsubscribeSchedules = onSnapshot(collection(db, 'schedules'), (snapshot) => {
       setSchedules(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Schedule)));
+    }, (error) => {
+      console.warn("Attendance: Error listening to schedules:", error);
     });
 
     let unsubscribeAllLogs = () => {};
@@ -296,10 +302,15 @@ export const Attendance: React.FC = () => {
         (snapshot) => {
           setAllLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
           setLoading(false);
+        }, (error) => {
+          console.warn("Attendance: Error listening to all attendance logs:", error);
+          setLoading(false);
         }
       );
       unsubscribeRates = onSnapshot(collection(db, 'staffRates'), (snapshot) => {
         setRatesList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      }, (error) => {
+        console.warn("Attendance: Error listening to staffRates:", error);
       });
     } else {
       setLoading(false);

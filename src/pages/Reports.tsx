@@ -141,6 +141,8 @@ export const Reports: React.FC = () => {
       }
       
       setSales(salesList);
+    }, (error) => {
+      console.warn("Reports: Error listening to sales:", error);
     });
 
     const unsubscribeProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
@@ -152,6 +154,8 @@ export const Reports: React.FC = () => {
 
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Reports: Error listening to users:", error);
     });
 
     const adjQ = query(
@@ -167,14 +171,20 @@ export const Reports: React.FC = () => {
         adjList = adjList.filter(a => a.locationId === selectedLocationId);
       }
       setAdjustments(adjList);
+    }, (error) => {
+      console.warn("Reports: Error listening to adjustments:", error);
     });
 
     const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
       setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Reports: Error listening to payment options:", error);
     });
 
     const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
       setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Reports: Error listening to accounts:", error);
     });
 
     return () => {

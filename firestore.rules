@@ -374,7 +374,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isManager());
+      allow read: if isAuthenticated();
       // Allow users to create their own profile if they are the primary admin or have been invited
       // (Role validation is handled in Login.tsx, but we ensure it's a valid role here)
       allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data);

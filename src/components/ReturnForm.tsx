@@ -49,6 +49,8 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'accounts'), (snapshot) => {
       setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("ReturnForm: Error listening to accounts:", error);
     });
     return () => unsub();
   }, []);
