@@ -40,7 +40,7 @@ const navItems = [
   { name: 'Directory', path: '/directory', icon: BookOpen, roles: ['admin', 'manager'] },
   { name: 'Sales History', path: '/sales', icon: History, roles: ['admin', 'manager', 'staff'] },
   { name: 'Reports', path: '/reports', icon: TrendingUp, roles: ['admin'] },
-  { name: 'Finance', path: '/finance', icon: Wallet, roles: ['admin'] },
+  { name: 'Finance', path: '/finance', icon: Wallet, roles: ['admin', 'manager', 'staff'] },
   { name: 'Attendance', path: '/attendance', icon: Clock, roles: ['admin', 'manager', 'staff'] },
   { name: 'System', path: '/settings', icon: Settings, roles: ['admin', 'manager', 'staff'] },
 ];

@@ -12,7 +12,14 @@ import {
   Undo2,
   Plus,
   X,
-  RotateCcw
+  RotateCcw,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ArrowLeftRight,
+  TrendingUp,
+  TrendingDown,
+  Wallet,
+  Banknote
 } from 'lucide-react';
 import { 
   collection, 
@@ -92,6 +99,27 @@ export const SalesHistory: React.FC = () => {
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
+
+  const getSaturdayToSundayOfCurrentWeek = () => {
+    const today = new Date();
+    const day = today.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diffToMonday);
+    
+    const saturday = new Date(monday);
+    saturday.setDate(monday.getDate() + 5);
+    
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    
+    return {
+      start: format(saturday, 'yyyy-MM-dd'),
+      end: format(sunday, 'yyyy-MM-dd')
+    };
+  };
+
   const [dateRange, setDateRange] = useState(() => {
     const today = format(new Date(), 'yyyy-MM-dd');
     return { start: today, end: today };
@@ -102,7 +130,8 @@ export const SalesHistory: React.FC = () => {
   const [voidAccountId, setVoidAccountId] = useState('');
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'sales' | 'returns' | 'pending'>('sales');
+  const [activeTab, setActiveTab] = useState<'sales' | 'returns' | 'pending' | 'ledger'>('sales');
+  const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
   const [pendingSales, setPendingSales] = useState<Sale[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<any[]>([]);
   const [selectedReturn, setSelectedReturn] = useState<any | null>(null);
@@ -200,6 +229,24 @@ export const SalesHistory: React.FC = () => {
       }
       
       setReturnTransactions(returnsList);
+    });
+    return () => unsubscribe();
+  }, [selectedLocationId, profile]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const q = query(collection(db, 'financialTransactions'), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Filter by global location
+      if (selectedLocationId !== 'all') {
+        list = list.filter((t: any) => t.locationId === selectedLocationId);
+      }
+      
+      setLedgerTransactions(list);
+    }, (error) => {
+      console.warn("Ledger error loading financial transactions:", error);
     });
     return () => unsubscribe();
   }, [selectedLocationId, profile]);
@@ -812,6 +859,50 @@ export const SalesHistory: React.FC = () => {
     return matchesSearch && matchesDate;
   });
 
+  const filteredLedger = ledgerTransactions.filter(t => {
+    const searchLower = searchTerm.toLowerCase();
+    const createdByLower = (t.createdByName || '').toLowerCase();
+    const descLower = (t.description || '').toLowerCase();
+    const catLower = (t.category || '').toLowerCase();
+    const accLower = (t.accountName || '').toLowerCase();
+    const toAccLower = (t.toAccountName || '').toLowerCase();
+    const idLower = t.id.toLowerCase();
+
+    const matchesSearch = idLower.includes(searchLower) ||
+      descLower.includes(searchLower) ||
+      catLower.includes(searchLower) ||
+      accLower.includes(searchLower) ||
+      toAccLower.includes(searchLower) ||
+      createdByLower.includes(searchLower);
+
+    let matchesDate = true;
+    if (dateRange.start) {
+      const tDate = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
+      const start = new Date(dateRange.start);
+      start.setHours(0, 0, 0, 0);
+      matchesDate = matchesDate && tDate >= start;
+    }
+    if (dateRange.end) {
+      const tDate = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
+      const end = new Date(dateRange.end);
+      end.setHours(23, 59, 59, 999);
+      matchesDate = matchesDate && tDate <= end;
+    }
+
+    let matchesPayment = true;
+    if (paymentFilter !== 'all') {
+      const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter);
+      const filterName = selectedOption ? selectedOption.name.toLowerCase() : '';
+      if (filterName) {
+        matchesPayment = accLower === filterName || toAccLower === filterName || t.accountId === paymentFilter || t.toAccountId === paymentFilter;
+      } else {
+        matchesPayment = t.accountId === paymentFilter || t.toAccountId === paymentFilter;
+      }
+    }
+
+    return matchesSearch && matchesDate && matchesPayment;
+  });
+
   const clearFilters = () => {
     setDateRange({ start: '', end: '' });
     setPaymentFilter('all');
@@ -885,7 +976,12 @@ export const SalesHistory: React.FC = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
             className="pl-10 bg-white" 
-            placeholder={activeTab === 'sales' ? "Search by Sale ID or Product name..." : "Search by Return ID, Sale ID, and reason..."} 
+            placeholder={
+              activeTab === 'sales' ? "Search by Sale ID or Product name..." : 
+              activeTab === 'returns' ? "Search by Return ID, Sale ID, and reason..." : 
+              activeTab === 'ledger' ? "Search ledger by description, account, category..." :
+              "Search pending payments..."
+            } 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -902,7 +998,7 @@ export const SalesHistory: React.FC = () => {
             <CalendarIcon className="w-4 h-4" />
             Date Range
           </Button>
-          {activeTab === 'sales' && (
+          {(activeTab === 'sales' || activeTab === 'ledger') && (
             <Button 
               variant="outline" 
               className={cn(
@@ -915,7 +1011,7 @@ export const SalesHistory: React.FC = () => {
               Payment
             </Button>
           )}
-          {(searchTerm || dateRange.start || dateRange.end || (activeTab === 'sales' && paymentFilter !== 'all')) && (
+          {(searchTerm || dateRange.start || dateRange.end || paymentFilter !== 'all') && (
             <Button variant="ghost" className="text-xs text-slate-500 hover:text-rose-600 h-10 px-2" onClick={clearFilters}>
               <X className="w-3 h-3 mr-1" />
               Clear
@@ -1009,6 +1105,138 @@ export const SalesHistory: React.FC = () => {
         </div>
       )}
 
+      {activeTab === 'ledger' && (
+        <div className="space-y-4">
+          {/* Quick Date Filter Control Card */}
+          <div className="bg-gradient-to-r from-slate-50 to-indigo-50/40 border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <CalendarIcon className="w-4 h-4 text-indigo-600" />
+                Ledger Date Range
+              </h3>
+              <p className="text-xs text-slate-500">
+                Filter and calculate aggregate cash flows specifically within this duration.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">From</span>
+                <input 
+                  type="date" 
+                  value={dateRange.start} 
+                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  className="text-xs font-semibold text-slate-700 bg-transparent border-none focus:outline-none cursor-pointer"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+                <span className="text-[10px] text-slate-400 font-bold uppercase">To</span>
+                <input 
+                  type="date" 
+                  value={dateRange.end} 
+                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  className="text-xs font-semibold text-slate-700 bg-transparent border-none focus:outline-none cursor-pointer"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDateRange(getSaturdayToSundayOfCurrentWeek())}
+                className="text-xs font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50/50 hover:text-indigo-700 rounded-xl px-3 h-9 shadow-sm"
+              >
+                <CalendarIcon className="w-3.5 h-3.5 mr-1.5" />
+                Sat - Sun (Current Week)
+              </Button>
+              {(dateRange.start || dateRange.end) && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={clearFilters}
+                  className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl px-3 h-9"
+                >
+                  <X className="w-3.5 h-3.5 mr-1" />
+                  Clear Date
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Total Inflow KPI */}
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                    <ArrowDownLeft className="w-3 h-3" />
+                  </span>
+                  Total Cash In (Inflow)
+                </span>
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">Plus (+)</span>
+              </div>
+              <div>
+                <span className="text-2xl font-black text-slate-900">
+                  {settings.currency}{filteredLedger.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                Aggregate of sales receipts and reverse return adjustments.
+              </div>
+            </div>
+
+            {/* Total Outflow KPI */}
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+                    <ArrowUpRight className="w-3 h-3" />
+                  </span>
+                  Total Cash Out (Outflow)
+                </span>
+                <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded">Minus (-)</span>
+              </div>
+              <div>
+                <span className="text-2xl font-black text-slate-900">
+                  {settings.currency}{filteredLedger.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                Aggregate of sales returns, void deductions, and recorded expenses.
+              </div>
+            </div>
+
+            {/* Net Balance Change KPI */}
+            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                    <TrendingUp className="w-3 h-3" />
+                  </span>
+                  Net Balance Impact
+                </span>
+                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded">Overall Tally</span>
+              </div>
+              <div>
+                {(() => {
+                  const inflow = filteredLedger.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+                  const outflow = filteredLedger.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+                  const net = inflow - outflow;
+                  return (
+                    <span className={cn(
+                      "text-2xl font-black",
+                      net >= 0 ? "text-emerald-600" : "text-rose-600"
+                    )}>
+                      {net >= 0 ? '+' : '-'}{settings.currency}{Math.abs(net).toFixed(2)}
+                    </span>
+                  );
+                })()}
+              </div>
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+                Net movement in and out (transfers neutral to overall cash).
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => {
@@ -1057,6 +1285,22 @@ export const SalesHistory: React.FC = () => {
             )}
           </button>
         )}
+        <button
+          onClick={() => {
+            setActiveTab('ledger');
+            setPaymentFilter('all');
+            setSearchTerm('');
+            setDateRange(getSaturdayToSundayOfCurrentWeek());
+          }}
+          className={cn(
+            "pb-3 pt-1 px-4 text-sm font-bold border-b-2 transition-all relative",
+            activeTab === 'ledger'
+              ? "border-indigo-600 text-indigo-600 font-extrabold"
+              : "border-transparent text-slate-500 hover:text-slate-800"
+          )}
+        >
+          Unified Ledger
+        </button>
       </div>
 
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -1221,6 +1465,103 @@ export const SalesHistory: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   ))
+                )}
+              </TableBody>
+            </>
+          ) : activeTab === 'ledger' ? (
+            <>
+              <TableHeader className="bg-slate-50">
+                <TableRow>
+                  <TableHead>Date & Time</TableHead>
+                  <TableHead>Transaction ID</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Account (Flow)</TableHead>
+                  <TableHead className="text-right">Inflow (+)</TableHead>
+                  <TableHead className="text-right">Outflow (-)</TableHead>
+                  <TableHead className="text-right">Account Balance</TableHead>
+                  <TableHead>Staff</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-24 text-center">Loading ledger transactions...</TableCell>
+                  </TableRow>
+                ) : filteredLedger.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-24 text-center text-slate-500">No ledger transactions found.</TableCell>
+                  </TableRow>
+                ) : (
+                  filteredLedger.map((t) => {
+                    const isIncome = t.type === 'income';
+                    const isExpense = t.type === 'expense';
+                    const isTransfer = t.type === 'transfer';
+                    const date = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
+
+                    return (
+                      <TableRow key={t.id} className="hover:bg-slate-50/50">
+                        <TableCell className="whitespace-nowrap">
+                          <div className="font-medium text-slate-900">
+                            {format(date, 'MMM dd, yyyy')}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {format(date, 'HH:mm:ss')}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-slate-500">
+                          {t.id.substring(0, 8)}...
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn(
+                            "capitalize font-semibold text-[10px]",
+                            isIncome ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            isExpense ? "bg-rose-50 text-rose-700 border-rose-200" :
+                            "bg-blue-50 text-blue-700 border-blue-200"
+                          )}>
+                            {t.category || t.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[180px] truncate text-slate-700 text-xs font-medium">
+                          {t.description || 'No description'}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {isTransfer ? (
+                            <div className="flex items-center gap-1 text-blue-600 font-semibold">
+                              <span>{t.accountName || 'Unknown'}</span>
+                              <ArrowLeftRight className="w-3 h-3" />
+                              <span>{t.toAccountName || 'Unknown'}</span>
+                            </div>
+                          ) : (
+                            <span className="font-semibold text-slate-600">
+                              {t.accountName || 'Unknown'}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-emerald-600 text-xs">
+                          {isIncome ? `+${settings.currency}${t.amount.toFixed(2)}` : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-rose-600 text-xs">
+                          {isExpense ? `-${settings.currency}${t.amount.toFixed(2)}` : '—'}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-slate-900 text-xs">
+                          {t.accountBalance !== undefined ? (
+                            <span>
+                              {settings.currency}{t.accountBalance.toFixed(2)}
+                              {isTransfer && t.destAccountBalance !== undefined && (
+                                <span className="block text-[10px] text-slate-400 font-normal">
+                                  Dest: {settings.currency}{t.destAccountBalance.toFixed(2)}
+                                </span>
+                              )}
+                            </span>
+                          ) : '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-600 font-medium">
+                          {t.createdByName || 'Staff'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </>
@@ -1492,6 +1833,114 @@ export const SalesHistory: React.FC = () => {
                 </div>
               </motion.div>
             ))
+          )
+        ) : activeTab === 'ledger' ? (
+          loading ? (
+            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
+              Loading ledger transactions...
+            </div>
+          ) : filteredLedger.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
+              No ledger transactions found.
+            </div>
+          ) : (
+            filteredLedger.map((t, index) => {
+              const isIncome = t.type === 'income';
+              const isExpense = t.type === 'expense';
+              const isTransfer = t.type === 'transfer';
+              const date = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
+
+              return (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: Math.min(index * 0.01, 0.15) }}
+                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-900">
+                        {format(date, 'MMM dd, yyyy')}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {format(date, 'HH:mm:ss')}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                      #{t.id.substring(0, 8)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 py-1 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Flow Type</span>
+                      <Badge variant="outline" className={cn(
+                        "capitalize font-bold text-[10px] py-0 px-1.5",
+                        isIncome ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                        isExpense ? "bg-rose-50 text-rose-700 border-rose-200" :
+                        "bg-blue-50 text-blue-700 border-blue-200"
+                      )}>
+                        {t.category || t.type}
+                      </Badge>
+                    </div>
+
+                    <div className="flex justify-between items-start">
+                      <span className="text-slate-400 shrink-0">Description</span>
+                      <span className="text-slate-700 font-medium text-right max-w-[170px] truncate block" title={t.description}>
+                        {t.description || 'No description'}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Account Channel</span>
+                      {isTransfer ? (
+                        <div className="flex items-center gap-1 text-blue-600 font-semibold text-right">
+                          <span>{t.accountName || 'Unknown'}</span>
+                          <ArrowLeftRight className="w-3 h-3" />
+                          <span>{t.toAccountName || 'Unknown'}</span>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-slate-600 text-right">
+                          {t.accountName || 'Unknown'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400">Recorded By</span>
+                      <span className="font-medium text-slate-700 text-right">
+                        {t.createdByName || 'Staff'}
+                      </span>
+                    </div>
+
+                    {t.accountBalance !== undefined && (
+                      <div className="flex justify-between items-center pt-1 border-t border-slate-50">
+                        <span className="text-slate-400">Account Balance</span>
+                        <span className="font-bold text-slate-800">
+                          {settings.currency}{t.accountBalance.toFixed(2)}
+                          {isTransfer && t.destAccountBalance !== undefined && (
+                            <span className="text-[10px] text-slate-400 font-normal ml-1">
+                              (Dest: {settings.currency}{t.destAccountBalance.toFixed(2)})
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center border-t border-slate-100 pt-1.5 mt-1 align-middle">
+                      <span className="text-slate-400 font-semibold">Transaction Amount</span>
+                      <span className={cn(
+                        "font-black text-sm",
+                        isIncome ? "text-emerald-600" : isExpense ? "text-rose-600" : "text-blue-600"
+                      )}>
+                        {isIncome ? '+' : isExpense ? '-' : ''}{settings.currency}{t.amount.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })
           )
         ) : (
           loading ? (

@@ -1210,11 +1210,24 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 1.4 */}
+              {/* Patch 1.5 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.4: Delivery Fees & Tappable Presets</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.5: Unified Financial Ledger & Net Flows</h4>
                   <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Unified Ledger Tab:</strong> Introduced a new 'Unified Ledger' tab in Sales & Returns History displaying all inflows and outflows (Sales, Returns, Voids, Expenses, Transfers) line-by-line.</li>
+                  <li><strong>Balance Sheet KPI:</strong> Added aggregate summaries showing Total Cash In, Total Cash Out, and the Net Cash Balance Impact dynamically reflecting chosen filters.</li>
+                  <li><strong>Account Auditing:</strong> Included direct account balances, transaction descriptors, and transfer flow pathways (source ➔ destination) for comprehensive auditing.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.4 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.4: Delivery Fees & Tappable Presets</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Cumulative Presets:</strong> Enabled POS quick bill buttons (e.g., +50, +100) to accumulate on consecutive taps instead of replacing the input.</li>
