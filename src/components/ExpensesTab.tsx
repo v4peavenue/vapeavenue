@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { TrendingDown } from 'lucide-react';
+import { TrendingDown, Trash2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, updateDoc, doc, increment, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, increment, Timestamp, deleteDoc } from 'firebase/firestore';
 import { logAction } from '@/lib/audit';
 import { toast } from 'sonner';
 import { FinancialAccount, Transaction } from '@/types';
@@ -26,6 +26,41 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
   const { settings } = useSettings();
   const { user, profile, isAdmin } = useAuth();
   const { locations } = useLocations();
+
+  const handleDeleteExpense = async (id: string, amount: number, accountId: string, description: string) => {
+    if (!isAdmin) {
+      toast.error('Only administrators are allowed to delete expenses');
+      return;
+    }
+
+    const isConfirmed = window.confirm(`Are you sure you want to delete the expense: "${description}"? This will refund ${settings.currency}${amount} to the original account.`);
+    if (!isConfirmed) return;
+
+    try {
+      // 1. Delete the transaction doc
+      await deleteDoc(doc(db, 'financialTransactions', id));
+
+      // 2. Refund original account balance
+      await updateDoc(doc(db, 'accounts', accountId), {
+        balance: increment(amount),
+        lastUpdated: Timestamp.now()
+      });
+
+      // 3. Log action
+      await logAction(
+        profile, 
+        'DELETE_TRANSACTION', 
+        `Deleted expense: ${description} (${settings.currency}${amount}) and refunded to account.`, 
+        id, 
+        'transaction'
+      );
+
+      toast.success('Expense deleted and funds refunded successfully');
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      toast.error('Failed to delete expense');
+    }
+  };
 
   // Form states
   const [expenseAmount, setExpenseAmount] = useState<number>(0);
@@ -280,12 +315,13 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
                   <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Amount</TableHead>
                   <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Recorded By</TableHead>
                   <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Date</TableHead>
+                  {isAdmin && <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredExpenses.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-32 text-center text-slate-400">
+                    <TableCell colSpan={isAdmin ? 7 : 6} className="h-32 text-center text-slate-400">
                       No matching expense records found.
                     </TableCell>
                   </TableRow>
@@ -317,6 +353,18 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
                       <TableCell className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
                         {exp.timestamp ? format(typeof exp.timestamp.toDate === 'function' ? exp.timestamp.toDate() : new Date(exp.timestamp), 'MMM dd, yyyy p') : '--'}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                            onClick={() => handleDeleteExpense(exp.id, exp.amount, exp.accountId, exp.description)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

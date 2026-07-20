@@ -271,7 +271,8 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isManager() && (request.method == 'delete' || isValidProduct(request.resource.data));
+      allow create, update: if isManager() && isValidProduct(request.resource.data);
+      allow delete: if isManager();
       // Staff can update stock during sales
       allow update: if isStaff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock', 'stocks', 'updatedAt']);
     }
@@ -285,22 +286,26 @@ service cloud.firestore {
 
     match /suppliers/{supplierId} {
       allow read: if isAuthenticated();
-      allow write: if isManager() && (request.method == 'delete' || isValidSupplier(request.resource.data));
+      allow create, update: if isManager() && isValidSupplier(request.resource.data);
+      allow delete: if isManager();
     }
 
     match /categories/{categoryId} {
       allow read: if isAuthenticated();
-      allow write: if isManager() && (request.method == 'delete' || isValidCategory(request.resource.data));
+      allow create, update: if isManager() && isValidCategory(request.resource.data);
+      allow delete: if isManager();
     }
 
     match /brands/{brandId} {
       allow read: if isAuthenticated();
-      allow write: if isManager() && (request.method == 'delete' || isValidBrand(request.resource.data));
+      allow create, update: if isManager() && isValidBrand(request.resource.data);
+      allow delete: if isManager();
     }
 
     match /locations/{locationId} {
       allow read: if isAuthenticated();
-      allow write: if isManager() && (request.method == 'delete' || isValidLocation(request.resource.data));
+      allow create, update: if isManager() && isValidLocation(request.resource.data);
+      allow delete: if isManager();
     }
 
     match /customers/{customerId} {
@@ -340,12 +345,14 @@ service cloud.firestore {
 
     match /priceTiers/{tierId} {
       allow read: if isAuthenticated();
-      allow write: if isManager() && (request.method == 'delete' || isValidPriceTier(request.resource.data));
+      allow create, update: if isManager() && isValidPriceTier(request.resource.data);
+      allow delete: if isManager();
     }
 
     match /promos/{promoId} {
       allow read: if isAuthenticated();
-      allow write: if isManager() && (request.method == 'delete' || isValidPromoCode(request.resource.data));
+      allow create, update: if isManager() && isValidPromoCode(request.resource.data);
+      allow delete: if isManager();
     }
 
     match /accounts/{accountId} {

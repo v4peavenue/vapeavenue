@@ -609,6 +609,11 @@ export const Settings: React.FC = () => {
     e.preventDefault();
     if (!newPromo.code.trim()) return;
 
+    if (newPromo.amount < 0) {
+      toast.error('Promo value/discount percentage cannot be negative');
+      return;
+    }
+
     if (promos.some(p => p.code.toLowerCase() === newPromo.code.trim().toLowerCase())) {
       toast.error('Promo with this code already exists');
       return;
@@ -666,6 +671,10 @@ export const Settings: React.FC = () => {
   const handleUpdatePromo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPromo) return;
+    if (editingPromo.amount < 0) {
+      toast.error('Promo value/discount percentage cannot be negative');
+      return;
+    }
     try {
       const { id, ...data } = editingPromo;
       await updateDoc(doc(db, 'promos', id), data);

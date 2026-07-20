@@ -65,6 +65,7 @@ export const POS: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [editedTotal, setEditedTotal] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [lastSaleId, setLastSaleId] = useState('');
@@ -488,8 +489,15 @@ export const POS: React.FC = () => {
   const total = Math.max(0, subtotal - discount + deliveryFeeNum);
   const tax = total * (12/112); // 12% VAT portion included in the price
 
-  const parsedReceived = amountReceived === '' ? total : parseFloat(amountReceived);
-  const changeAmount = isNaN(parsedReceived) ? 0 : Math.max(0, parsedReceived - total);
+  const activeTotal = isCheckoutOpen && editedTotal !== '' ? (parseFloat(editedTotal) || 0) : total;
+  const parsedReceived = amountReceived === '' ? activeTotal : parseFloat(amountReceived);
+  const changeAmount = isNaN(parsedReceived) ? 0 : Math.max(0, parsedReceived - activeTotal);
+
+  useEffect(() => {
+    if (isCheckoutOpen) {
+      setEditedTotal((total ?? 0).toFixed(2));
+    }
+  }, [isCheckoutOpen, total]);
 
   const applyPromo = () => {
     if (!promoCodeInput.trim()) {
@@ -602,6 +610,11 @@ export const POS: React.FC = () => {
         finalCustomerId = customerRef.id;
       }
 
+      const checkoutTotal = isCheckoutOpen && editedTotal !== '' ? (parseFloat(editedTotal) || 0) : total;
+      const isTotalEdited = isCheckoutOpen && Math.abs(checkoutTotal - total) > 0.01;
+      const checkoutParsedReceived = amountReceived === '' ? checkoutTotal : parseFloat(amountReceived);
+      const checkoutChangeAmount = isNaN(checkoutParsedReceived) ? 0 : Math.max(0, checkoutParsedReceived - checkoutTotal);
+
       // Resolve/Create accounts for payments to ensure everything is tracked in Finance
       const resolvedSplits: any[] = [];
       let resolvedPaymentMethod = paymentMethod;
@@ -609,7 +622,7 @@ export const POS: React.FC = () => {
       if (!isPending) {
         const rawSplits = isSplitPayment ? paymentSplits : [{ 
           methodId: paymentMethod, 
-          amount: total,
+          amount: checkoutTotal,
           reference: paymentReference
         }];
 
@@ -702,12 +715,20 @@ export const POS: React.FC = () => {
           return cleanedItem;
         }),
         subtotal,
-        total,
+        total: checkoutTotal,
+        originalTotal: total,
+        isTotalEdited: isTotalEdited,
         tax,
         discount,
         paymentMethod: isPending ? 'pending' : (isSplitPayment ? 'split' : resolvedPaymentMethod),
         paymentSplits: isPending ? [] : resolvedSplits,
-        status: isPending ? 'pending' : (appliedPromo ? 'pending_promo_approval' : 'completed'),
+        status: isPending 
+          ? 'pending' 
+          : (isTotalEdited && !isAdmin)
+            ? 'pending_total_approval'
+            : (appliedPromo && !approvedByInfo)
+              ? 'pending_promo_approval' 
+              : 'completed',
         staffId: profile?.id || 'anonymous',
         staffName: profile?.name || 'Staff',
         locationId: checkoutLocationId,
@@ -721,8 +742,8 @@ export const POS: React.FC = () => {
           country: customerDetails.country,
           zip: customerDetails.zip
         },
-        amountReceived: isNaN(parsedReceived) ? total : parsedReceived,
-        changeAmount: changeAmount,
+        amountReceived: isNaN(checkoutParsedReceived) ? checkoutTotal : checkoutParsedReceived,
+        changeAmount: checkoutChangeAmount,
         saleType,
         deliveryFee: deliveryFeeNum,
         timestamp: Timestamp.now()
@@ -742,9 +763,10 @@ export const POS: React.FC = () => {
       const saleRef = await addDoc(collection(db, 'sales'), saleData);
       setLastSaleId(saleRef.id);
 
-      // 4. Update financial accounts (ONLY IF NOT PENDING AND NOT PENDING PROMO APPROVAL)
+      // 4. Update financial accounts (ONLY IF NOT PENDING, NOT PENDING PROMO APPROVAL, AND NOT PENDING TOTAL APPROVAL)
       const isPromoPending = !!appliedPromo && !approvedByInfo;
-      if (!isPending && !isPromoPending) {
+      const isTotalPending = isTotalEdited && !isAdmin;
+      if (!isPending && !isPromoPending && !isTotalPending) {
         for (const split of resolvedSplits) {
           const account = accounts.find(a => a.id === split.methodId) || { name: split.methodName, balance: 0 };
           const currentBalance = account.balance || 0;
@@ -765,7 +787,10 @@ export const POS: React.FC = () => {
             locationId: checkoutLocationId || null,
             locationName: locations.find(l => l.id === checkoutLocationId)?.name || null,
             category: 'Sales',
-            description: `Sale record: ${customerDetails.name}`,
+            description: isTotalEdited 
+              ? `Sale record (Edited Total): ${customerDetails.name}`
+              : `Sale record: ${customerDetails.name}`,
+            reference: split.reference || null,
             timestamp: Timestamp.now(),
             createdBy: profile?.id || 'anonymous',
             createdByName: profile?.name || 'Staff',
@@ -1809,9 +1834,9 @@ export const POS: React.FC = () => {
                     </Button>
                     <div className={cn(
                       "text-[10px] text-right font-bold",
-                      Math.abs(paymentSplits.reduce((s, i) => s + i.amount, 0) - total) < 0.01 ? "text-emerald-600" : "text-rose-500"
+                      Math.abs(paymentSplits.reduce((s, i) => s + i.amount, 0) - activeTotal) < 0.01 ? "text-emerald-600" : "text-rose-500"
                     )}>
-                      Total Covered: {settings.currency}{(paymentSplits.reduce((s, i) => s + (i.amount ?? 0), 0)).toFixed(2)} / {settings.currency}{(total ?? 0).toFixed(2)}
+                      Total Covered: {settings.currency}{(paymentSplits.reduce((s, i) => s + (i.amount ?? 0), 0)).toFixed(2)} / {settings.currency}{(activeTotal ?? 0).toFixed(2)}
                     </div>
                   </div>
                 )}
@@ -1885,9 +1910,18 @@ export const POS: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-200 flex justify-between text-lg font-bold">
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between text-lg font-bold">
               <span className="text-[#1A2B4B]">Total Amount:</span>
-              <span className="text-[#D4AF37]">{settings.currency}{(total ?? 0).toFixed(2)}</span>
+              <div className="relative w-36">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">{settings.currency}</span>
+                <Input
+                  type="number"
+                  step="any"
+                  className="h-9 pl-7 pr-2 text-right font-black text-sm bg-white border-slate-200 focus-visible:ring-[#1A2B4B] rounded-lg"
+                  value={editedTotal}
+                  onChange={(e) => setEditedTotal(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 

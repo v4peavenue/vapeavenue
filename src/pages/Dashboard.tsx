@@ -1210,11 +1210,26 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 1.6 */}
+              {/* Patch 1.7 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.7: Editable Checkout, Range Schedules, & Admin Controls</h4>
+                  <span className="text-[8px] font-mono text-[#D4AF37] bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold animate-pulse">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Editable Checkout Totals & Approvals:</strong> Staff and managers can now override the computed total during checkout. Overridden checkout totals are flagged as pending total approval, preventing immediate transaction ledger postings until approved by an Admin or Manager.</li>
+                  <li><strong>Date Ranges & Auto-Plot on Schedule Changes:</strong> Staff schedule change requests now support start/end date ranges (with optional end date). Once approved, the changes are automatically plotted across the selected date range in the schedules database.</li>
+                  <li><strong>Admin-Restricted Expense Deletion:</strong> Expense history items can now only be deleted by Administrators. Deletion automatically reverses the entry and refunds the original account's balance.</li>
+                  <li><strong>Negative Promo Safeguards:</strong> Prevented negative values when configuring or updating promotion codes.</li>
+                  <li><strong>Ledger Reference Auditing:</strong> Standardized display of transaction and payment split references inside Sales lists and the Unified Ledger.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.6 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
                   <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.6: Account Control & Logistical Categories</h4>
-                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Latest</span>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Account Status Control:</strong> Admins can now toggle the active status of any financial account directly in the Finance Accounts Overview. Inactive accounts are automatically hidden from selection in POS checkouts, returns, expense tabs, and transfers.</li>

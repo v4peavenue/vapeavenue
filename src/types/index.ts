@@ -100,7 +100,7 @@ export interface Sale {
   promoCode?: string;
   paymentMethod: string; // Dynamic
   paymentSplits: PaymentSplit[];
-  status: 'completed' | 'returned' | 'partially_returned' | 'voided' | 'pending';
+  status: 'completed' | 'returned' | 'partially_returned' | 'voided' | 'pending' | 'pending_promo_approval' | 'pending_total_approval';
   staffId: string;
   locationId: string;
   customerId: string;
@@ -108,6 +108,14 @@ export interface Sale {
   timestamp: Timestamp;
   saleType?: 'in-store' | 'online';
   deliveryFee?: number;
+  isTotalEdited?: boolean;
+  originalTotal?: number;
+  promoApprovedBy?: string;
+  promoApprovedById?: string;
+  promoApprovedAt?: Timestamp;
+  totalApprovedBy?: string;
+  totalApprovedById?: string;
+  totalApprovedAt?: Timestamp;
 }
 
 export interface Supplier {

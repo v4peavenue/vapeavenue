@@ -302,7 +302,7 @@ export const SalesHistory: React.FC = () => {
 
   const handleApprovePromo = async (sale: Sale) => {
     if (!isAdmin && !isManager) {
-      toast.error('Only administrators or managers can approve promo sales');
+      toast.error('Only administrators or managers can approve sales');
       return;
     }
     
@@ -349,7 +349,10 @@ export const SalesHistory: React.FC = () => {
             locationId: sale.locationId || null,
             locationName: locations.find(l => l.id === sale.locationId)?.name || null,
             category: 'Sales',
-            description: `Approved Sale Promo: ${sale.customerDetails?.name || 'Walk-In'}`,
+            description: sale.isTotalEdited 
+              ? `Approved Sale (Edited Total): ${sale.customerDetails?.name || 'Walk-In'}`
+              : `Approved Sale Promo: ${sale.customerDetails?.name || 'Walk-In'}`,
+            reference: split.reference || null,
             timestamp: Timestamp.now(),
             createdBy: profile?.id || 'anonymous',
             createdByName: profile?.name || 'Staff',
@@ -359,25 +362,40 @@ export const SalesHistory: React.FC = () => {
       }
 
       // Update the sale document status and record approval details
-      batch.update(saleRef, {
+      const isPromo = sale.status === 'pending_promo_approval';
+      const updateData: any = {
         status: nextStatus,
-        promoApprovedBy: profile?.name || 'Administrator',
-        promoApprovedById: profile?.id || 'admin',
-        promoApprovedAt: Timestamp.now(),
         updatedAt: Timestamp.now()
-      });
+      };
+
+      if (isPromo) {
+        updateData.promoApprovedBy = profile?.name || 'Administrator';
+        updateData.promoApprovedById = profile?.id || 'admin';
+        updateData.promoApprovedAt = Timestamp.now();
+      } else {
+        updateData.totalApprovedBy = profile?.name || 'Administrator';
+        updateData.totalApprovedById = profile?.id || 'admin';
+        updateData.totalApprovedAt = Timestamp.now();
+      }
+
+      batch.update(saleRef, updateData);
 
       await batch.commit();
 
       await logAction(
         profile, 
-        'APPROVE_PROMO_SALE', 
-        `Approved promo for sale ${sale.id} with code ${sale.promoCode}`, 
+        isPromo ? 'APPROVE_PROMO_SALE' : 'APPROVE_TOTAL_SALE', 
+        isPromo 
+          ? `Approved promo for sale ${sale.id} with code ${sale.promoCode}`
+          : `Approved edited total of ${settings.currency}${sale.total.toFixed(2)} for sale ${sale.id}`, 
         sale.id, 
         'sale'
       );
 
-      toast.success(`Promo code approved successfully for sale #${sale.id.substring(0, 8)}`);
+      toast.success(isPromo 
+        ? `Promo code approved successfully for sale #${sale.id.substring(0, 8)}`
+        : `Edited total approved successfully for sale #${sale.id.substring(0, 8)}`
+      );
     } catch (error) {
       console.error("Error approving promo sale:", error);
       toast.error('Failed to approve promo sale. Please inspect your database connection.');
@@ -772,8 +790,9 @@ export const SalesHistory: React.FC = () => {
     // Search filter
     const searchLower = searchTerm.toLowerCase();
     const sellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
+    const customerName = (s.customerDetails?.name || '').toLowerCase();
     const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
-      s.customerDetails?.name.toLowerCase().includes(searchLower) ||
+      customerName.includes(searchLower) ||
       s.items.some(item => item.name.toLowerCase().includes(searchLower)) ||
       sellerName.includes(searchLower);
 
@@ -824,11 +843,15 @@ export const SalesHistory: React.FC = () => {
   const filteredReturns = returnTransactions.filter(r => {
     const searchLower = searchTerm.toLowerCase();
     const returnSellerName = (usersList.find(u => u.id === r.staffId)?.name || r.staffName || 'Staff').toLowerCase();
+    // Resolve original sale to search by customer name too
+    const originalSale = sales.find(s => s.id === r.originalSaleId);
+    const customerName = (originalSale?.customerDetails?.name || '').toLowerCase();
     const matchesSearch = r.id.toLowerCase().includes(searchLower) ||
       r.originalSaleId.toLowerCase().includes(searchLower) ||
       (r.items && r.items.some((item: any) => item.name.toLowerCase().includes(searchLower))) ||
       returnSellerName.includes(searchLower) ||
-      (r.reason && r.reason.toLowerCase().includes(searchLower));
+      (r.reason && r.reason.toLowerCase().includes(searchLower)) ||
+      customerName.includes(searchLower);
 
     let matchesDate = true;
     if (dateRange.start) {
@@ -850,8 +873,9 @@ export const SalesHistory: React.FC = () => {
   const filteredPendingSales = pendingSales.filter(s => {
     const searchLower = searchTerm.toLowerCase();
     const pendingSellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
+    const customerName = (s.customerDetails?.name || '').toLowerCase();
     const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
-      (s.customerDetails?.name && s.customerDetails.name.toLowerCase().includes(searchLower)) ||
+      customerName.includes(searchLower) ||
       pendingSellerName.includes(searchLower) ||
       (s.items && s.items.some(item => item.name.toLowerCase().includes(searchLower)));
 
@@ -990,10 +1014,10 @@ export const SalesHistory: React.FC = () => {
           <Input 
             className="pl-10 bg-white" 
             placeholder={
-              activeTab === 'sales' ? "Search by Sale ID or Product name..." : 
-              activeTab === 'returns' ? "Search by Return ID, Sale ID, and reason..." : 
+              activeTab === 'sales' ? "Search by Sale ID, Customer, or Product..." : 
+              activeTab === 'returns' ? "Search by Return ID, Sale ID, Customer, or Reason..." : 
               activeTab === 'ledger' ? "Search ledger by description, account, category..." :
-              "Search pending payments..."
+              "Search pending payments by Customer or ID..."
             } 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -1374,26 +1398,40 @@ export const SalesHistory: React.FC = () => {
                     <div className="text-xs text-slate-500">{sale.items.length} items</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn(
-                      "capitalize border-slate-200 font-medium",
-                      sale.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : 
-                      sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
-                      sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
-                      sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
-                      sale.status === 'pending_promo_approval' ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse" :
-                      "bg-emerald-50 text-emerald-600 border-emerald-200"
-                    )}>
-                      {sale.status === 'voided' ? 'Voided' :
-                       sale.status === 'returned' ? 'Returned' :
-                       sale.status === 'partially_returned' ? 'Partially Returned' :
-                       sale.status === 'pending' ? 'Pending' :
-                       sale.status === 'pending_promo_approval' ? 'Pending Promo' : 'Completed'}
-                    </Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant="outline" className={cn(
+                        "capitalize border-slate-200 font-medium w-fit",
+                        sale.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : 
+                        sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
+                        sale.status === 'partially_returned' ? "bg-[#EEF2F6] text-[#475569] border-slate-200" :
+                        sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
+                        sale.status === 'pending_promo_approval' ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse" :
+                        sale.status === 'pending_total_approval' ? "bg-indigo-100 text-indigo-800 border-indigo-300 animate-pulse" :
+                        "bg-emerald-50 text-emerald-600 border-emerald-200"
+                      )}>
+                        {sale.status === 'voided' ? 'Voided' :
+                         sale.status === 'returned' ? 'Returned' :
+                         sale.status === 'partially_returned' ? 'Partially Returned' :
+                         sale.status === 'pending' ? 'Pending' :
+                         sale.status === 'pending_promo_approval' ? 'Pending Promo' :
+                         sale.status === 'pending_total_approval' ? 'Pending Total' : 'Completed'}
+                      </Badge>
+                      
+                      {sale.paymentSplits?.some(s => s.reference) && (
+                        <div className="flex flex-col gap-0.5 mt-0.5 max-w-[150px]">
+                          {sale.paymentSplits.filter(s => s.reference).map((s, idx) => (
+                            <span key={idx} className="text-[9px] font-mono text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded leading-none border border-indigo-100/30 truncate" title={`${s.methodName}: ${s.reference}`}>
+                              Ref: {s.reference}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="font-bold text-slate-900">{settings.currency}{(sale.total ?? 0).toFixed(2)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      {sale.status === 'pending_promo_approval' && (isAdmin || isManager) && (
+                      {(sale.status === 'pending_promo_approval' || sale.status === 'pending_total_approval') && (isAdmin || isManager) && (
                         <Button 
                           className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-7 px-2 font-bold uppercase tracking-wider rounded-lg shadow-sm"
                           onClick={() => handleApprovePromo(sale)}
@@ -1535,8 +1573,13 @@ export const SalesHistory: React.FC = () => {
                             {t.category || t.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="max-w-[180px] truncate text-slate-700 text-xs font-medium">
-                          {t.description || 'No description'}
+                        <TableCell className="max-w-[180px] text-slate-700 text-xs font-medium">
+                          <div className="truncate">{t.description || 'No description'}</div>
+                          {t.reference && (
+                            <span className="inline-block mt-0.5 text-[9px] font-mono text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-1 py-0.2 rounded" title={t.reference}>
+                              Ref: {t.reference}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="text-xs">
                           {isTransfer ? (
@@ -1718,24 +1761,38 @@ export const SalesHistory: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                  <Badge variant="outline" className={cn(
-                    "capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5",
-                    sale.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : 
-                    sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
-                    sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
-                    sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
-                    sale.status === 'pending_promo_approval' ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse" :
-                    "bg-emerald-50 text-emerald-600 border-emerald-200"
-                  )}>
-                    {sale.status === 'voided' ? 'Voided' :
-                     sale.status === 'returned' ? 'Returned' :
-                     sale.status === 'partially_returned' ? 'Partially Returned' :
-                     sale.status === 'pending' ? 'Pending' :
-                     sale.status === 'pending_promo_approval' ? 'Pending Promo' : 'Completed'}
-                  </Badge>
+                  <div className="flex flex-col gap-1">
+                    <Badge variant="outline" className={cn(
+                      "capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5 w-fit",
+                      sale.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : 
+                      sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
+                      sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
+                      sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
+                      sale.status === 'pending_promo_approval' ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse" :
+                      sale.status === 'pending_total_approval' ? "bg-indigo-100 text-indigo-800 border-indigo-300 animate-pulse" :
+                      "bg-emerald-50 text-emerald-600 border-emerald-200"
+                    )}>
+                      {sale.status === 'voided' ? 'Voided' :
+                       sale.status === 'returned' ? 'Returned' :
+                       sale.status === 'partially_returned' ? 'Partially Returned' :
+                       sale.status === 'pending' ? 'Pending' :
+                       sale.status === 'pending_promo_approval' ? 'Pending Promo' :
+                       sale.status === 'pending_total_approval' ? 'Pending Total' : 'Completed'}
+                    </Badge>
+
+                    {sale.paymentSplits?.some(s => s.reference) && (
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {sale.paymentSplits.filter(s => s.reference).map((s, idx) => (
+                          <span key={idx} className="text-[8px] font-mono text-indigo-600 bg-indigo-50 px-1 rounded border border-indigo-100/30">
+                            Ref: {s.reference}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-1.5">
-                    {sale.status === 'pending_promo_approval' && (isAdmin || isManager) && (
+                    {(sale.status === 'pending_promo_approval' || sale.status === 'pending_total_approval') && (isAdmin || isManager) && (
                       <Button 
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8"
@@ -2265,6 +2322,8 @@ export const SalesHistory: React.FC = () => {
                         ? "text-amber-600 border-amber-200 bg-amber-50"
                         : selectedSale.status === 'pending_promo_approval'
                         ? "text-amber-800 border-amber-300 bg-amber-100 animate-pulse"
+                        : selectedSale.status === 'pending_total_approval'
+                        ? "text-indigo-800 border-indigo-300 bg-indigo-100 animate-pulse"
                         : "text-emerald-600 border-emerald-200 bg-emerald-50"
                     )}
                   >
@@ -2272,11 +2331,12 @@ export const SalesHistory: React.FC = () => {
                      selectedSale.status === 'returned' ? 'Returned' :
                      selectedSale.status === 'partially_returned' ? 'Partially Returned' :
                      selectedSale.status === 'pending' ? 'Pending' :
-                     selectedSale.status === 'pending_promo_approval' ? 'Pending Promo' : 'Completed'}
+                     selectedSale.status === 'pending_promo_approval' ? 'Pending Promo' :
+                     selectedSale.status === 'pending_total_approval' ? 'Pending Total' : 'Completed'}
                   </Badge>
                 </div>
                 <div className="flex justify-end gap-2">
-                  {selectedSale.status === 'pending_promo_approval' && (isAdmin || isManager) && (
+                  {(selectedSale.status === 'pending_promo_approval' || selectedSale.status === 'pending_total_approval') && (isAdmin || isManager) && (
                     <Button 
                       variant="default"
                       size="sm"
@@ -2287,7 +2347,7 @@ export const SalesHistory: React.FC = () => {
                       }}
                       disabled={approvingPromoId === selectedSale.id}
                     >
-                      {approvingPromoId === selectedSale.id ? 'Approving...' : 'Approve Promo Code'}
+                      {approvingPromoId === selectedSale.id ? 'Approving...' : 'Approve Transaction'}
                     </Button>
                   )}
                   {selectedSale.status === 'pending' && (

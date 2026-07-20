@@ -700,6 +700,38 @@ export const Attendance: React.FC = () => {
               notes: 'Time correction requested and approved'
             });
           }
+        } else if (req && req.type === 'schedule_change') {
+          const start = new Date(req.startDate);
+          const end = req.endDate ? new Date(req.endDate) : start;
+          
+          if (isValid(start) && isValid(end)) {
+            const days = eachDayOfInterval({ start, end });
+            const batch = writeBatch(db);
+            
+            for (const day of days) {
+              const dateStr = format(day, 'yyyy-MM-dd');
+              
+              // Find existing schedule for this user and date
+              const existing = schedules.find(s => s.userId === req.userId && s.date === dateStr);
+              
+              const scheduleData = {
+                userId: req.userId,
+                userName: req.userName,
+                date: dateStr,
+                isDayOff: false,
+                startTime: req.newStartTime || null,
+                endTime: req.newEndTime || null,
+                updatedAt: serverTimestamp()
+              };
+              
+              if (existing) {
+                batch.update(doc(db, 'schedules', existing.id), scheduleData);
+              } else {
+                batch.set(doc(collection(db, 'schedules')), scheduleData);
+              }
+            }
+            await batch.commit();
+          }
         }
       }
 
@@ -2480,7 +2512,7 @@ export const Attendance: React.FC = () => {
               </div>
             </div>
 
-            {newRequest.type === 'leave' && (
+            {(newRequest.type === 'leave' || newRequest.type === 'schedule_change') && (
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400">End Date (optional)</Label>
                 <Input 
