@@ -1210,11 +1210,23 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 1.7 */}
+              {/* Patch 1.8 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.7: Editable Checkout, Range Schedules, & Admin Controls</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.8: Customer Search & Default Cash Filter</h4>
                   <span className="text-[8px] font-mono text-[#D4AF37] bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold animate-pulse">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Customer Name Search:</strong> Allowed searching customer names directly in the Sales History searchbox, filtering records across Sales, Returns, and Pending Payments.</li>
+                  <li><strong>Default Cash Payment Filter:</strong> The Sales & Returns page now defaults to the "Cash" payment method filter upon load for streamlined cash flow monitoring.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.7 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.7: Editable Checkout, Range Schedules, & Admin Controls</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Editable Checkout Totals & Approvals:</strong> Staff and managers can now override the computed total during checkout. Overridden checkout totals are flagged as pending total approval, preventing immediate transaction ledger postings until approved by an Admin or Manager.</li>
