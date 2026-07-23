@@ -1218,7 +1218,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Customer Name Search:</strong> Allowed searching customer names directly in the Sales History searchbox, filtering records across Sales, Returns, and Pending Payments.</li>
-                  <li><strong>Default Filter Selection Rework:</strong> Sales History defaults to "All" payment methods across Sales, Returns, and Pending Payments, while defaulting specifically to "Cash" on the Unified Ledger.</li>
+                  <li><strong>Finance Cash Account Alignment:</strong> Tied the default Cash filter and ledger aggregation directly to the configured Cash account created in Finance/Accounts rather than hardcoded fallbacks.</li>
                   <li><strong>Saturday–Friday Weekly Cycle:</strong> Updated weekly date ranges to run from Saturday to Friday (matching the Friday cutoff). On Saturdays, the filter retains the week that ended Friday, rolling over to the new Saturday–Friday week on Sundays.</li>
                 </ul>
               </div>

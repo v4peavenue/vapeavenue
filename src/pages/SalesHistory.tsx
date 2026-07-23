@@ -739,29 +739,44 @@ export const SalesHistory: React.FC = () => {
     return id.charAt(0).toUpperCase() + id.slice(1);
   }, [accounts, paymentOptions]);
 
+  const financeCashAccount = React.useMemo(() => {
+    return accounts.find(a => a.name?.trim().toLowerCase() === 'cash') ||
+           paymentOptions.find(o => o.name?.trim().toLowerCase() === 'cash') ||
+           accounts.find(a => a.type === 'cash' && !a.name?.toLowerCase().includes('gcash')) ||
+           paymentOptions.find(o => o.type === 'cash' && !o.name?.toLowerCase().includes('gcash'));
+  }, [accounts, paymentOptions]);
+
+  const financeCashId = financeCashAccount ? financeCashAccount.id : 'cash';
+
   const getUnifiedMethodId = React.useCallback((id: string) => {
-    if (!id) return 'cash';
+    if (!id) return '';
     const idLower = id.toLowerCase().trim();
-    if (idLower === 'cash') return 'cash';
+    if (id === financeCashId || idLower === 'cash') return financeCashId;
     
     // Find in paymentOptions
-    const opt = paymentOptions.find(o => o.id === id || o.name.toLowerCase() === idLower);
-    if (opt && (opt.id.toLowerCase() === 'cash' || opt.name.toLowerCase() === 'cash' || opt.type === 'cash')) {
-      return 'cash';
+    const opt = paymentOptions.find(o => o.id === id || o.name?.toLowerCase().trim() === idLower);
+    if (opt) {
+      if (opt.id === financeCashId || opt.name?.toLowerCase().trim() === 'cash') {
+        return financeCashId;
+      }
+      return opt.id;
     }
 
     // Find in accounts
-    const acc = accounts.find(a => a.id === id || a.name.toLowerCase() === idLower);
-    if (acc && (acc.id.toLowerCase() === 'cash' || acc.name.toLowerCase() === 'cash' || acc.type === 'cash')) {
-      return 'cash';
+    const acc = accounts.find(a => a.id === id || a.name?.toLowerCase().trim() === idLower);
+    if (acc) {
+      if (acc.id === financeCashId || acc.name?.toLowerCase().trim() === 'cash') {
+        return financeCashId;
+      }
+      return acc.id;
     }
 
     return id;
-  }, [paymentOptions, accounts]);
+  }, [paymentOptions, accounts, financeCashId]);
 
   const dynamicPaymentOptions = React.useMemo(() => {
     const unifiedMethodsInUse = new Set<string>();
-    unifiedMethodsInUse.add('cash');
+    unifiedMethodsInUse.add(financeCashId);
 
     sales.forEach(sale => {
       if (sale.paymentMethod) {
@@ -788,8 +803,8 @@ export const SalesHistory: React.FC = () => {
       if (seenIds.has(unifiedId)) return;
       seenIds.add(unifiedId);
 
-      if (unifiedId === 'cash') {
-        list.push({ id: 'cash', name: 'Cash' });
+      if (unifiedId === financeCashId) {
+        list.push({ id: financeCashId, name: financeCashAccount?.name || 'Cash' });
       } else {
         const name = getPaymentMethodName(unifiedId, sales.flatMap(s => s.paymentSplits || []));
         list.push({ id: unifiedId, name });
@@ -797,7 +812,7 @@ export const SalesHistory: React.FC = () => {
     });
 
     return list;
-  }, [sales, paymentOptions, getPaymentMethodName, getUnifiedMethodId]);
+  }, [sales, paymentOptions, getPaymentMethodName, getUnifiedMethodId, financeCashId, financeCashAccount]);
 
   const filteredSales = sales.filter(s => {
     // Search filter
@@ -834,20 +849,21 @@ export const SalesHistory: React.FC = () => {
       } else {
         const filterUnified = getUnifiedMethodId(paymentFilter);
         const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === filterUnified);
-        const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase();
+        const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase().trim();
 
-        const saleUnified = getUnifiedMethodId(s.paymentMethod);
-        const saleName = getPaymentMethodName(s.paymentMethod, s.paymentSplits).toLowerCase();
+        const saleUnified = getUnifiedMethodId(s.paymentMethod || '');
+        const saleName = getPaymentMethodName(s.paymentMethod, s.paymentSplits).toLowerCase().trim();
 
-        const matchesMain = s.paymentMethod === paymentFilter ||
-                            saleUnified === filterUnified ||
+        const matchesMain = (!!s.paymentMethod && s.paymentMethod === paymentFilter) ||
+                            (!!saleUnified && !!filterUnified && saleUnified === filterUnified) ||
                             (filterName !== '' && saleName === filterName);
 
         const matchesSplit = s.paymentSplits?.some(split => {
+          if (!split.methodId) return false;
           const splitUnified = getUnifiedMethodId(split.methodId);
-          const splitName = getPaymentMethodName(split.methodId, s.paymentSplits).toLowerCase();
+          const splitName = getPaymentMethodName(split.methodId, s.paymentSplits).toLowerCase().trim();
           return split.methodId === paymentFilter ||
-                 splitUnified === filterUnified ||
+                 (!!splitUnified && !!filterUnified && splitUnified === filterUnified) ||
                  (filterName !== '' && splitName === filterName);
         }) === true;
 
@@ -948,17 +964,22 @@ export const SalesHistory: React.FC = () => {
     if (paymentFilter !== 'all') {
       const filterUnified = getUnifiedMethodId(paymentFilter);
       const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === filterUnified);
-      const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase();
+      const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase().trim();
 
       const accUnified = getUnifiedMethodId(t.accountId || '');
       const toAccUnified = getUnifiedMethodId(t.toAccountId || '');
+      const accName = (t.accountName || '').toLowerCase().trim();
+      const toAccName = (t.toAccountName || '').toLowerCase().trim();
 
-      matchesPayment = accLower === filterName ||
-                       toAccLower === filterName ||
-                       t.accountId === paymentFilter ||
-                       t.toAccountId === paymentFilter ||
-                       accUnified === filterUnified ||
-                       toAccUnified === filterUnified;
+      const matchesAccount = (!!t.accountId && t.accountId === paymentFilter) ||
+                             (!!accUnified && !!filterUnified && accUnified === filterUnified) ||
+                             (filterName !== '' && accName === filterName);
+
+      const matchesToAccount = (!!t.toAccountId && t.toAccountId === paymentFilter) ||
+                               (!!toAccUnified && !!filterUnified && toAccUnified === filterUnified) ||
+                               (filterName !== '' && toAccName === filterName);
+
+      matchesPayment = matchesAccount || matchesToAccount;
     }
 
     return matchesSearch && matchesDate && matchesPayment;
@@ -967,7 +988,7 @@ export const SalesHistory: React.FC = () => {
   const clearFiltersForTab = (tab = activeTab) => {
     if (tab === 'ledger') {
       setDateRange(getSaturdayToFridayWeekRange());
-      setPaymentFilter('cash');
+      setPaymentFilter(financeCashId);
     } else {
       setDateRange({ start: '', end: '' });
       setPaymentFilter('all');
@@ -977,16 +998,23 @@ export const SalesHistory: React.FC = () => {
 
   const clearFilters = () => clearFiltersForTab(activeTab);
 
+  useEffect(() => {
+    if (paymentFilter === 'cash' && financeCashId !== 'cash') {
+      setPaymentFilter(financeCashId);
+    }
+  }, [financeCashId, paymentFilter]);
+
   const accountTotals = (() => {
     const totals: { [accountId: string]: { name: string; amount: number; type: string } } = {};
     
-    // Initialize with cash
-    totals['cash'] = { name: 'Cash', amount: 0, type: 'cash' };
+    // Initialize with cash account from Finance
+    const cashName = financeCashAccount?.name || 'Cash';
+    totals[financeCashId] = { name: cashName, amount: 0, type: 'cash' };
 
     // Initialize configured paymentOptions
     paymentOptions.forEach(opt => {
       const unifiedId = getUnifiedMethodId(opt.id);
-      if (unifiedId === 'cash') {
+      if (unifiedId === financeCashId) {
         return; // Merge/avoid duplicate 'Cash' options in KPI list
       }
       totals[opt.id] = { name: opt.name, amount: 0, type: opt.type };
@@ -997,26 +1025,29 @@ export const SalesHistory: React.FC = () => {
     activeSales.forEach(sale => {
       if (sale.paymentSplits && sale.paymentSplits.length > 0) {
         sale.paymentSplits.forEach(split => {
-          const rawId = split.methodId || 'cash';
-          const mId = getUnifiedMethodId(rawId);
+          const rawId = split.methodId || '';
+          if (!rawId) return;
+          const mId = getUnifiedMethodId(rawId) || rawId;
           if (!totals[mId]) {
             totals[mId] = { 
-              name: mId === 'cash' ? 'Cash' : (split.methodName || mId), 
+              name: mId === financeCashId ? cashName : (split.methodName || mId), 
               amount: 0, 
-              type: mId === 'cash' ? 'cash' : 'ewallet' 
+              type: mId === financeCashId ? 'cash' : 'ewallet' 
             };
           }
           totals[mId].amount += split.amount || 0;
         });
       } else {
-        const rawId = sale.paymentMethod || 'cash';
-        const mId = getUnifiedMethodId(rawId);
+        const rawId = sale.paymentMethod || '';
+        if (!rawId) return;
+        const mId = getUnifiedMethodId(rawId) || rawId;
         if (!totals[mId]) {
           const opt = paymentOptions.find(o => o.id === mId);
+          const acc = accounts.find(a => a.id === mId);
           totals[mId] = { 
-            name: mId === 'cash' ? 'Cash' : (opt?.name || mId), 
+            name: mId === financeCashId ? cashName : (opt?.name || acc?.name || mId), 
             amount: 0, 
-            type: mId === 'cash' ? 'cash' : (opt?.type || 'ewallet') 
+            type: mId === financeCashId ? 'cash' : (opt?.type || acc?.type || 'ewallet') 
           };
         }
         totals[mId].amount += sale.total || 0;
