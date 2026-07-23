@@ -120,11 +120,8 @@ export const SalesHistory: React.FC = () => {
     };
   };
 
-  const [dateRange, setDateRange] = useState(() => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    return { start: today, end: today };
-  });
-  const [paymentFilter, setPaymentFilter] = useState('cash');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [paymentFilter, setPaymentFilter] = useState('all');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [voidAccountId, setVoidAccountId] = useState('');
@@ -715,21 +712,21 @@ export const SalesHistory: React.FC = () => {
 
   const getPaymentMethodName = React.useCallback((id: string, splits?: any[]) => {
     if (!id) return '';
-    const idLower = id.toLowerCase();
+    const idLower = id.toLowerCase().trim();
     if (idLower === 'cash') return 'Cash';
     if (idLower === 'card') return 'Card';
     if (idLower === 'digital') return 'Digital Payment';
     if (idLower === 'pending') return 'Pending/Unpaid';
     if (idLower === 'split') return 'Split Payment';
 
-    const acc = accounts.find(a => a.id === id);
+    const acc = accounts.find(a => a.id === id || a.name.toLowerCase() === idLower);
     if (acc) return acc.name;
 
-    const opt = paymentOptions.find(o => o.id === id);
+    const opt = paymentOptions.find(o => o.id === id || o.name.toLowerCase() === idLower);
     if (opt) return opt.name;
 
     if (splits && splits.length > 0) {
-      const matchingSplit = splits.find(split => split.methodId === id);
+      const matchingSplit = splits.find(split => split.methodId === id || split.methodName?.toLowerCase() === idLower);
       if (matchingSplit && matchingSplit.methodName) {
         return matchingSplit.methodName;
       }
@@ -739,18 +736,18 @@ export const SalesHistory: React.FC = () => {
 
   const getUnifiedMethodId = React.useCallback((id: string) => {
     if (!id) return 'cash';
-    const idLower = id.toLowerCase();
+    const idLower = id.toLowerCase().trim();
     if (idLower === 'cash') return 'cash';
     
     // Find in paymentOptions
-    const opt = paymentOptions.find(o => o.id === id);
+    const opt = paymentOptions.find(o => o.id === id || o.name.toLowerCase() === idLower);
     if (opt && (opt.id.toLowerCase() === 'cash' || opt.name.toLowerCase() === 'cash' || opt.type === 'cash')) {
       return 'cash';
     }
 
     // Find in accounts
-    const acc = accounts.find(a => a.id === id);
-    if (acc && (acc.id.toLowerCase() === 'cash' || acc.name.toLowerCase() === 'cash')) {
+    const acc = accounts.find(a => a.id === id || a.name.toLowerCase() === idLower);
+    if (acc && (acc.id.toLowerCase() === 'cash' || acc.name.toLowerCase() === 'cash' || acc.type === 'cash')) {
       return 'cash';
     }
 
@@ -758,33 +755,44 @@ export const SalesHistory: React.FC = () => {
   }, [paymentOptions, accounts]);
 
   const dynamicPaymentOptions = React.useMemo(() => {
-    const methodsInUse = new Set<string>();
+    const unifiedMethodsInUse = new Set<string>();
+    unifiedMethodsInUse.add('cash');
+
     sales.forEach(sale => {
       if (sale.paymentMethod) {
-        methodsInUse.add(sale.paymentMethod);
+        unifiedMethodsInUse.add(getUnifiedMethodId(sale.paymentMethod));
       }
       if (sale.paymentSplits && sale.paymentSplits.length > 0) {
         sale.paymentSplits.forEach(split => {
           if (split.methodId) {
-            methodsInUse.add(split.methodId);
+            unifiedMethodsInUse.add(getUnifiedMethodId(split.methodId));
           }
         });
       }
     });
 
-    const list: { id: string; name: string }[] = [];
-    const seenNames = new Set<string>();
+    paymentOptions.forEach(opt => {
+      unifiedMethodsInUse.add(getUnifiedMethodId(opt.id));
+    });
 
-    methodsInUse.forEach(id => {
-      const name = getPaymentMethodName(id, sales.flatMap(s => s.paymentSplits || []));
-      const nameKey = name.trim().toLowerCase();
-      if (!seenNames.has(nameKey)) {
-        seenNames.add(nameKey);
-        list.push({ id, name });
+    const list: { id: string; name: string }[] = [];
+    const seenIds = new Set<string>();
+
+    unifiedMethodsInUse.forEach(unifiedId => {
+      if (unifiedId === 'split' || unifiedId === 'pending') return;
+      if (seenIds.has(unifiedId)) return;
+      seenIds.add(unifiedId);
+
+      if (unifiedId === 'cash') {
+        list.push({ id: 'cash', name: 'Cash' });
+      } else {
+        const name = getPaymentMethodName(unifiedId, sales.flatMap(s => s.paymentSplits || []));
+        list.push({ id: unifiedId, name });
       }
     });
+
     return list;
-  }, [sales, getPaymentMethodName]);
+  }, [sales, paymentOptions, getPaymentMethodName, getUnifiedMethodId]);
 
   const filteredSales = sales.filter(s => {
     // Search filter
@@ -819,21 +827,26 @@ export const SalesHistory: React.FC = () => {
       } else if (paymentFilter === 'pending') {
         matchesPayment = s.paymentMethod === 'pending' || s.status === 'pending';
       } else {
-        const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter);
-        const filterName = selectedOption ? selectedOption.name.toLowerCase() : '';
-        if (filterName) {
-          const saleMethodName = getPaymentMethodName(s.paymentMethod, s.paymentSplits).toLowerCase();
-          const matchesMain = saleMethodName === filterName;
-          const matchesSplit = s.paymentSplits?.some(split => {
-            const splitMethodName = getPaymentMethodName(split.methodId, s.paymentSplits).toLowerCase();
-            return splitMethodName === filterName;
-          }) === true;
+        const filterUnified = getUnifiedMethodId(paymentFilter);
+        const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === filterUnified);
+        const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase();
 
-          matchesPayment = matchesMain || matchesSplit;
-        } else {
-          matchesPayment = s.paymentMethod === paymentFilter || 
-                           s.paymentSplits?.some(split => split.methodId === paymentFilter) === true;
-        }
+        const saleUnified = getUnifiedMethodId(s.paymentMethod);
+        const saleName = getPaymentMethodName(s.paymentMethod, s.paymentSplits).toLowerCase();
+
+        const matchesMain = s.paymentMethod === paymentFilter ||
+                            saleUnified === filterUnified ||
+                            (filterName !== '' && saleName === filterName);
+
+        const matchesSplit = s.paymentSplits?.some(split => {
+          const splitUnified = getUnifiedMethodId(split.methodId);
+          const splitName = getPaymentMethodName(split.methodId, s.paymentSplits).toLowerCase();
+          return split.methodId === paymentFilter ||
+                 splitUnified === filterUnified ||
+                 (filterName !== '' && splitName === filterName);
+        }) === true;
+
+        matchesPayment = matchesMain || matchesSplit;
       }
     }
 
@@ -928,23 +941,36 @@ export const SalesHistory: React.FC = () => {
 
     let matchesPayment = true;
     if (paymentFilter !== 'all') {
-      const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter);
-      const filterName = selectedOption ? selectedOption.name.toLowerCase() : '';
-      if (filterName) {
-        matchesPayment = accLower === filterName || toAccLower === filterName || t.accountId === paymentFilter || t.toAccountId === paymentFilter;
-      } else {
-        matchesPayment = t.accountId === paymentFilter || t.toAccountId === paymentFilter;
-      }
+      const filterUnified = getUnifiedMethodId(paymentFilter);
+      const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === filterUnified);
+      const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase();
+
+      const accUnified = getUnifiedMethodId(t.accountId || '');
+      const toAccUnified = getUnifiedMethodId(t.toAccountId || '');
+
+      matchesPayment = accLower === filterName ||
+                       toAccLower === filterName ||
+                       t.accountId === paymentFilter ||
+                       t.toAccountId === paymentFilter ||
+                       accUnified === filterUnified ||
+                       toAccUnified === filterUnified;
     }
 
     return matchesSearch && matchesDate && matchesPayment;
   });
 
-  const clearFilters = () => {
-    setDateRange({ start: '', end: '' });
-    setPaymentFilter('cash');
+  const clearFiltersForTab = (tab = activeTab) => {
+    if (tab === 'ledger') {
+      setDateRange(getSaturdayToSundayOfCurrentWeek());
+      setPaymentFilter('cash');
+    } else {
+      setDateRange({ start: '', end: '' });
+      setPaymentFilter('all');
+    }
     setSearchTerm('');
   };
+
+  const clearFilters = () => clearFiltersForTab(activeTab);
 
   const accountTotals = (() => {
     const totals: { [accountId: string]: { name: string; amount: number; type: string } } = {};
@@ -1278,7 +1304,7 @@ export const SalesHistory: React.FC = () => {
         <button
           onClick={() => {
             setActiveTab('sales');
-            clearFilters();
+            clearFiltersForTab('sales');
           }}
           className={cn(
             "pb-3 pt-1 px-4 text-sm font-bold border-b-2 transition-all relative",
@@ -1292,7 +1318,7 @@ export const SalesHistory: React.FC = () => {
         <button
           onClick={() => {
             setActiveTab('returns');
-            clearFilters();
+            clearFiltersForTab('returns');
           }}
           className={cn(
             "pb-3 pt-1 px-4 text-sm font-bold border-b-2 transition-all relative",
@@ -1307,7 +1333,7 @@ export const SalesHistory: React.FC = () => {
           <button
             onClick={() => {
               setActiveTab('pending');
-              clearFilters();
+              clearFiltersForTab('pending');
             }}
             className={cn(
               "pb-3 pt-1 px-4 text-sm font-bold border-b-2 transition-all relative flex items-center gap-1.5",
@@ -1325,9 +1351,7 @@ export const SalesHistory: React.FC = () => {
         <button
           onClick={() => {
             setActiveTab('ledger');
-            setPaymentFilter('all');
-            setSearchTerm('');
-            setDateRange(getSaturdayToSundayOfCurrentWeek());
+            clearFiltersForTab('ledger');
           }}
           className={cn(
             "pb-3 pt-1 px-4 text-sm font-bold border-b-2 transition-all relative",

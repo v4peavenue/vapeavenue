@@ -1213,12 +1213,12 @@ export const Dashboard: React.FC = () => {
               {/* Patch 1.8 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.8: Customer Search & Default Cash Filter</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.8: Customer Search & Default Selection Rework</h4>
                   <span className="text-[8px] font-mono text-[#D4AF37] bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold animate-pulse">Latest</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Customer Name Search:</strong> Allowed searching customer names directly in the Sales History searchbox, filtering records across Sales, Returns, and Pending Payments.</li>
-                  <li><strong>Default Cash Payment Filter:</strong> The Sales & Returns page now defaults to the "Cash" payment method filter upon load for streamlined cash flow monitoring.</li>
+                  <li><strong>Default Filter Selection Rework:</strong> Sales History defaults to "All" payment methods across Sales, Returns, and Pending Payments, while defaulting specifically to "Cash" on the Unified Ledger.</li>
                 </ul>
               </div>
 
