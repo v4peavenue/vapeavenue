@@ -100,23 +100,28 @@ export const SalesHistory: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
 
-  const getSaturdayToSundayOfCurrentWeek = () => {
+  const getSaturdayToFridayWeekRange = () => {
     const today = new Date();
     const day = today.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
-    const diffToMonday = day === 0 ? -6 : 1 - day;
     
-    const monday = new Date(today);
-    monday.setDate(today.getDate() + diffToMonday);
-    
-    const saturday = new Date(monday);
-    saturday.setDate(monday.getDate() + 5);
-    
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    
+    let daysBackToStartSaturday: number;
+    if (day === 6) {
+      // On Saturday, Friday is cutoff so users look at the week that ended yesterday (Saturday to Friday)
+      daysBackToStartSaturday = 7;
+    } else {
+      // On Sunday (0) through Friday (5), show current week starting from the most recent Saturday
+      daysBackToStartSaturday = day + 1;
+    }
+
+    const startSaturday = new Date(today);
+    startSaturday.setDate(today.getDate() - daysBackToStartSaturday);
+
+    const endFriday = new Date(startSaturday);
+    endFriday.setDate(startSaturday.getDate() + 6);
+
     return {
-      start: format(saturday, 'yyyy-MM-dd'),
-      end: format(sunday, 'yyyy-MM-dd')
+      start: format(startSaturday, 'yyyy-MM-dd'),
+      end: format(endFriday, 'yyyy-MM-dd')
     };
   };
 
@@ -961,7 +966,7 @@ export const SalesHistory: React.FC = () => {
 
   const clearFiltersForTab = (tab = activeTab) => {
     if (tab === 'ledger') {
-      setDateRange(getSaturdayToSundayOfCurrentWeek());
+      setDateRange(getSaturdayToFridayWeekRange());
       setPaymentFilter('cash');
     } else {
       setDateRange({ start: '', end: '' });
@@ -1203,11 +1208,11 @@ export const SalesHistory: React.FC = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setDateRange(getSaturdayToSundayOfCurrentWeek())}
+                onClick={() => setDateRange(getSaturdayToFridayWeekRange())}
                 className="text-xs font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50/50 hover:text-indigo-700 rounded-xl px-3 h-9 shadow-sm"
               >
                 <CalendarIcon className="w-3.5 h-3.5 mr-1.5" />
-                Sat - Sun (Current Week)
+                Sat - Fri (Current Week)
               </Button>
               {(dateRange.start || dateRange.end) && (
                 <Button 
