@@ -109,12 +109,19 @@ export const StockAdjustmentForm: React.FC<StockAdjustmentFormProps> = ({
 
       // Update Product
       const productRef = doc(db, 'products', data.productId);
-      await updateDoc(productRef, {
-        [`stocks.${data.locationId}`]: newStockAtLocation,
+      const updateData: any = {
         stock: increment(adjustmentAmount),
         locationIds: arrayUnion(data.locationId),
         updatedAt: Timestamp.now()
-      });
+      };
+
+      if (data.type === 'set') {
+        updateData[`stocks.${data.locationId}`] = newStockAtLocation;
+      } else {
+        updateData[`stocks.${data.locationId}`] = increment(adjustmentAmount);
+      }
+
+      await updateDoc(productRef, updateData);
 
       // Record Adjustment
       const adjustment: Omit<StockAdjustment, 'id'> = {

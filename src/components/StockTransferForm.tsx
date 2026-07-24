@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Product, Location } from '@/types';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, collection, addDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, Timestamp, arrayUnion, increment } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { logAction } from '@/lib/audit';
 import { toast } from 'sonner';
@@ -106,11 +106,11 @@ export const StockTransferForm: React.FC<StockTransferFormProps> = ({
       const newFromStock = Number(stockAtSource) - Number(data.quantity);
       const newToStock = Number(stockAtDest) + Number(data.quantity);
 
-      // Update Product stocks
+      // Update Product stocks atomically
       const productRef = doc(db, 'products', data.productId);
       await updateDoc(productRef, {
-        [`stocks.${data.fromLocationId}`]: newFromStock,
-        [`stocks.${data.toLocationId}`]: newToStock,
+        [`stocks.${data.fromLocationId}`]: increment(-Number(data.quantity)),
+        [`stocks.${data.toLocationId}`]: increment(Number(data.quantity)),
         locationIds: arrayUnion(data.toLocationId),
         updatedAt: Timestamp.now()
       });
