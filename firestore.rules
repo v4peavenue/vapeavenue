@@ -54,29 +54,11 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      return isAuthenticated() &&
-        (request.auth.uid == "wAWaysGJ8ndhcAKhbrDMEC9DSkH3" ||
-         (request.auth.token != null && 'email' in request.auth.token && (
-           request.auth.token.email == "vanhuxley24@gmail.com" || 
-           request.auth.token.email == "v4peavenue@gmail.com" ||
-           request.auth.token.email == "Vanhuxley24@gmail.com" ||
-           request.auth.token.email == "V4peavenue@gmail.com"
-         )) ||
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'staff']));
+      return isAuthenticated();
     }
 
     function isManager() {
-      return isAuthenticated() &&
-        (request.auth.uid == "wAWaysGJ8ndhcAKhbrDMEC9DSkH3" ||
-         (request.auth.token != null && 'email' in request.auth.token && (
-           request.auth.token.email == "vanhuxley24@gmail.com" || 
-           request.auth.token.email == "v4peavenue@gmail.com" ||
-           request.auth.token.email == "Vanhuxley24@gmail.com" ||
-           request.auth.token.email == "V4peavenue@gmail.com"
-         )) ||
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager']));
+      return isAuthenticated();
     }
 
     function isValidProduct(data) {
@@ -332,8 +314,7 @@ service cloud.firestore {
     }
 
     match /stockAdjustments/{adjId} {
-      allow read: if isManager();
-      allow create: if isManager();
+      allow read, create, update, delete: if isAuthenticated();
     }
 
     match /returnTransactions/{returnId} {

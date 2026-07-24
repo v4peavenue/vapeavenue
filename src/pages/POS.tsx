@@ -815,7 +815,8 @@ export const POS: React.FC = () => {
         });
       }
 
-      await logAction(profile, isPending ? 'CREATE_PENDING_SALE' : 'CREATE_SALE', `Processed ${isPending ? 'pending ' : ''}sale: Total ${(total ?? 0).toFixed(2)} (${cart.length} items)`, saleRef.id, 'sale');
+      const itemSummary = cart.map(i => `${i.name}${i.quantity > 1 ? ` (x${i.quantity})` : ''}`).join(', ');
+      await logAction(profile, isPending ? 'CREATE_PENDING_SALE' : 'CREATE_SALE', `Processed ${isPending ? 'pending ' : ''}sale: Total ${(total ?? 0).toFixed(2)} [${itemSummary}]`, saleRef.id, 'sale');
 
       setCart([]);
       setAppliedPromo(null);

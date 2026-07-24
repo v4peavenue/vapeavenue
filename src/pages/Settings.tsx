@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit, getDocs, writeBatch, Timestamp, setDoc, deleteField, getDoc, increment, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Category, Supplier, UserProfile, Location, Invite, AuditLog, Customer, Product, PromoCode, PaymentOption } from '@/types';
+import { Category, Supplier, UserProfile, Location, Invite, AuditLog, Customer, Product, PromoCode, PaymentOption, Sale } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -96,6 +96,7 @@ export const Settings: React.FC = () => {
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [auditSearch, setAuditSearch] = useState('');
   const [auditStartDate, setAuditStartDate] = useState('');
   const [auditEndDate, setAuditEndDate] = useState('');
@@ -154,6 +155,12 @@ export const Settings: React.FC = () => {
       console.warn("Settings: Error listening to products:", error);
     });
 
+    const unsubscribeSales = onSnapshot(query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(100)), (snapshot) => {
+      setSales(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale)));
+    }, (error) => {
+      console.warn("Settings: Error listening to sales:", error);
+    });
+
     let unsubscribeUsers: () => void = () => {};
     let unsubscribeInvites: () => void = () => {};
     let unsubscribeAudit: () => void = () => {};
@@ -182,6 +189,7 @@ export const Settings: React.FC = () => {
       unsubscribePayments();
       unsubscribeAccounts();
       unsubscribeProducts();
+      unsubscribeSales();
       unsubscribeUsers();
       unsubscribeInvites();
       unsubscribeAudit();
@@ -192,14 +200,27 @@ export const Settings: React.FC = () => {
     if (profile) setProfileName(profile.name || '');
   }, [profile]);
 
-  const getProductNameFromLog = React.useCallback((log: AuditLog, productsList: Product[]) => {
+  const getProductNameFromLog = React.useCallback((log: AuditLog, productsList: Product[], salesList: Sale[] = []) => {
+    // 1. Direct product entity
     if (log.entityType === 'product' && log.entityId) {
       const found = productsList.find(p => p.id === log.entityId);
       if (found?.name) return found.name;
     }
 
+    // 2. Sale entity - lookup from loaded sales collection
+    if ((log.entityType === 'sale' || (log.action && log.action.includes('SALE'))) && log.entityId) {
+      const foundSale = salesList.find(s => s.id === log.entityId);
+      if (foundSale?.items && foundSale.items.length > 0) {
+        return foundSale.items.map(i => `${i.name}${i.quantity > 1 ? ` (x${i.quantity})` : ''}`).join(', ');
+      }
+    }
+
     const details = log.details || '';
     if (!details) return null;
+
+    // 3. Extracted from bracket summary in log details (e.g. Processed sale: Total $100 [Black Pod Formula (x2)])
+    const matchBracket = details.match(/\[(.*?)\]/);
+    if (matchBracket && matchBracket[1]) return matchBracket[1].trim();
 
     const matchProd = details.match(/(?:Updated|Created|Deleted) product:\s*([^\(]+?)(?:\s*\(SKU:|\s*$)/i);
     if (matchProd && matchProd[1]) return matchProd[1].trim();
@@ -239,7 +260,7 @@ export const Settings: React.FC = () => {
         const userEmail = (log.userEmail || '').toLowerCase();
         const action = (log.action || '').toLowerCase();
         const details = (log.details || '').toLowerCase();
-        const prodName = (getProductNameFromLog(log, products) || '').toLowerCase();
+        const prodName = (getProductNameFromLog(log, products, sales) || '').toLowerCase();
 
         const matchesSearch = userName.includes(q) ||
                               userEmail.includes(q) ||
@@ -268,7 +289,7 @@ export const Settings: React.FC = () => {
 
       return true;
     });
-  }, [auditLogs, auditSearch, auditStartDate, auditEndDate, products, getProductNameFromLog]);
+  }, [auditLogs, auditSearch, auditStartDate, auditEndDate, products, sales, getProductNameFromLog]);
 
   // JSON serialization/deserialization helpers for Firestore Timestamps
   const serializeData = (data: any): any => {
@@ -1199,14 +1220,17 @@ export const Settings: React.FC = () => {
         const adjSnap = await getDocs(
           query(
             collection(db, 'stockAdjustments'), 
-            where('productId', '==', revertLog.entityId),
-            orderBy('timestamp', 'desc'),
-            limit(1)
+            where('productId', '==', revertLog.entityId)
           )
         );
 
         if (!adjSnap.empty) {
-          const adjDoc = adjSnap.docs[0];
+          const sortedDocs = adjSnap.docs.slice().sort((a, b) => {
+            const tA = a.data().timestamp?.toMillis ? a.data().timestamp.toMillis() : (a.data().timestamp?.toDate ? a.data().timestamp.toDate().getTime() : 0);
+            const tB = b.data().timestamp?.toMillis ? b.data().timestamp.toMillis() : (b.data().timestamp?.toDate ? b.data().timestamp.toDate().getTime() : 0);
+            return tB - tA;
+          });
+          const adjDoc = sortedDocs[0];
           const adjData = adjDoc.data();
           const pId = adjData.productId;
           const locId = adjData.locationId;
@@ -2216,7 +2240,7 @@ export const Settings: React.FC = () => {
                   {filteredAuditLogs.map((log) => {
                     const nonRevertible = ['LOGIN', 'LOGOUT', 'SYNC_STOCK', 'SEND_INVITE', 'TIME_IN', 'TIME_OUT'];
                     const isRevertible = !nonRevertible.includes(log.action);
-                    const productName = getProductNameFromLog(log, products);
+                    const productName = getProductNameFromLog(log, products, sales);
 
                     return (
                       <div key={log.id} className="grid grid-cols-12 p-3.5 text-xs items-center hover:bg-slate-50/80 transition-colors">

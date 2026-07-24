@@ -197,91 +197,6 @@ export const Reports: React.FC = () => {
     };
   }, [dateRange, customStartDate, customEndDate, selectedLocationId, profile, isAdmin]);
 
-  const handleExportCSV = () => {
-    let data: any[] = [];
-    let name = 'Report';
-
-    if (reportType === 'sales') {
-      name = 'Sales_Report';
-      data = filteredSales.map(s => {
-        const returnedAmount = (s.items || []).reduce((sum, item) => sum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
-        const netTotal = Math.max(0, (s.total ?? 0) - returnedAmount);
-        return {
-          ID: s.id,
-          Date: format(s.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
-          Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
-          Items: s.items.map(i => {
-            const netQty = i.quantity - (i.returnedQuantity || 0);
-            return `${i.name} x${netQty}${i.returnedQuantity ? ` (${i.returnedQuantity} returned)` : ''}`;
-          }).join('; '),
-          Total: netTotal.toFixed(2),
-          Payment: getPaymentMethodName(s.paymentMethod)
-        };
-      });
-    } else if (reportType === 'inventory') {
-      name = 'Inventory_Report';
-      data = products.map(p => ({
-        Name: p.name,
-        Category: p.category,
-        Stock: selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0),
-        Cost: (p.cost ?? 0).toFixed(2),
-        Value: ((p.cost ?? 0) * (selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0))).toFixed(2)
-      }));
-    } else if (reportType === 'profit') {
-      name = 'Profitability_Report';
-      data = products.map(p => {
-        const pSales = sales.reduce((acc, s) => {
-          const item = s.items.find(i => i.productId === p.id);
-          if (item) {
-            const netQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
-            const netSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
-            acc.quantity += netQty;
-            acc.revenue += netSubtotal;
-          }
-          return acc;
-        }, { quantity: 0, revenue: 0 });
-        const cost = pSales.quantity * p.cost;
-        return {
-          Name: p.name,
-          UnitsSold: pSales.quantity,
-          Revenue: (pSales.revenue ?? 0).toFixed(2),
-          Cost: (cost ?? 0).toFixed(2),
-          Profit: ((pSales.revenue ?? 0) - cost).toFixed(2)
-        };
-      });
-    } else if (reportType === 'stock-adjustments') {
-      name = 'Adjustments_Report';
-      data = adjustments.map(a => ({
-        Date: format(a.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
-        Product: a.productName,
-        Location: a.locationName,
-        Type: a.type,
-        Quantity: a.adjustmentQuantity,
-        Reason: a.reason,
-        By: a.adjustedByName
-      }));
-    } else if (reportType === 'sales-by-seller') {
-      name = 'Sales_by_Seller_Report';
-      data = salesBySellerData.map(d => ({
-        'Seller Name': d.sellerName,
-        Role: d.sellerRole,
-        'Orders Count': d.ordersCount,
-        'Items Sold': d.itemsCount,
-        Revenue: d.revenue.toFixed(2),
-        'Gross Profit': d.profit.toFixed(2),
-        'Avg Order Value': (d.revenue / (d.ordersCount || 1)).toFixed(2)
-      }));
-    }
-
-    if (data.length === 0) {
-      toast.error('No data available to export for the selected filters.');
-      return;
-    }
-
-    exportToCSV(data, name);
-    toast.success(`${name.replace('_', ' ')} exported`);
-  };
-
   const handleGeneratePDF = () => {
     window.print();
   };
@@ -292,9 +207,18 @@ export const Reports: React.FC = () => {
   }, [products]);
 
   const uniqueBrands = useMemo(() => {
-    const brands = products.map(p => p.brand).filter(Boolean) as string[];
+    const list = selectedCategory !== 'all' ? products.filter(p => p.category === selectedCategory) : products;
+    const brands = list.map(p => p.brand).filter(Boolean) as string[];
     return Array.from(new Set(brands)).sort();
-  }, [products]);
+  }, [products, selectedCategory]);
+
+  const selectableProducts = useMemo(() => {
+    return products.filter(p => {
+      if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
+      if (selectedBrand !== 'all' && p.brand !== selectedBrand) return false;
+      return true;
+    }).sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, selectedCategory, selectedBrand]);
 
   const processedSales = useMemo(() => {
     return sales.map(s => {
@@ -353,7 +277,7 @@ export const Reports: React.FC = () => {
         const sellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
         const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
           sellerName.includes(searchLower) ||
-          s.items.some(i => i.name.toLowerCase().includes(searchLower));
+          s.matchingItems.some(i => i.name.toLowerCase().includes(searchLower));
         if (!matchesSearch) return false;
       }
 
@@ -361,20 +285,57 @@ export const Reports: React.FC = () => {
     });
   }, [processedSales, selectedSeller, searchTerm, selectedCategory, selectedBrand, selectedProduct, usersList]);
 
-  const totalRevenue = useMemo(() => {
-    return filteredSales.reduce((sum, s) => sum + s.netTotal, 0);
-  }, [filteredSales]);
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
+      if (selectedBrand !== 'all' && p.brand !== selectedBrand) return false;
+      if (selectedProduct !== 'all' && p.id !== selectedProduct) return false;
 
-  const totalProfit = useMemo(() => {
-    return filteredSales.reduce((sum, s) => sum + s.netProfit, 0);
-  }, [filteredSales]);
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        const nameMatch = p.name.toLowerCase().includes(q);
+        const skuMatch = p.sku?.toLowerCase().includes(q);
+        const catMatch = p.category?.toLowerCase().includes(q);
+        const brandMatch = p.brand?.toLowerCase().includes(q);
+        if (!nameMatch && !skuMatch && !catMatch && !brandMatch) return false;
+      }
 
-  const inventoryValue = useMemo(() => {
-    return products.reduce((sum, p) => {
-      const stock = selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0);
-      return sum + (p.cost * stock);
-    }, 0);
-  }, [products, selectedLocationId]);
+      return true;
+    });
+  }, [products, selectedCategory, selectedBrand, selectedProduct, searchTerm]);
+
+  const profitabilityData = useMemo(() => {
+    const items = filteredProducts.map(product => {
+      // Calculate sales from filteredSales (which considers date range, location, seller)
+      const productSales = filteredSales.reduce((acc, sale) => {
+        const item = sale.matchingItems.find(i => i.productId === product.id);
+        if (item) {
+          const netQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
+          const netSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
+          acc.quantity += netQty;
+          acc.revenue += netSubtotal;
+        }
+        return acc;
+      }, { quantity: 0, revenue: 0 });
+
+      const totalCost = productSales.quantity * (product.cost || 0);
+      const profit = productSales.revenue - totalCost;
+
+      return {
+        product,
+        unitsSold: productSales.quantity,
+        revenue: productSales.revenue,
+        cost: totalCost,
+        profit
+      };
+    });
+
+    if (selectedSeller !== 'all') {
+      return items.filter(item => item.unitsSold > 0 || (selectedProduct !== 'all' && item.product.id === selectedProduct));
+    }
+
+    return items;
+  }, [filteredProducts, filteredSales, selectedSeller, selectedProduct]);
 
   const salesBySellerData = useMemo(() => {
     const groups: { [staffId: string]: {
@@ -387,26 +348,15 @@ export const Reports: React.FC = () => {
       profit: number;
     }} = {};
 
-    usersList.forEach(u => {
-      groups[u.id] = {
-        sellerId: u.id,
-        sellerName: u.name || 'Unknown',
-        sellerRole: u.role || 'Staff',
-        ordersCount: 0,
-        itemsCount: 0,
-        revenue: 0,
-        profit: 0
-      };
-    });
-
     filteredSales.forEach(s => {
       const staffId = s.staffId || 'anonymous';
       const staffName = s.staffName || 'Staff';
       if (!groups[staffId]) {
+        const matchedUser = usersList.find(u => u.id === staffId);
         groups[staffId] = {
           sellerId: staffId,
-          sellerName: staffName,
-          sellerRole: 'Staff',
+          sellerName: matchedUser?.name || staffName,
+          sellerRole: matchedUser?.role || 'Staff',
           ordersCount: 0,
           itemsCount: 0,
           revenue: 0,
@@ -422,8 +372,127 @@ export const Reports: React.FC = () => {
       group.profit += s.netProfit;
     });
 
-    return Object.values(groups).sort((a, b) => b.revenue - a.revenue);
-  }, [filteredSales, usersList]);
+    let result = Object.values(groups).filter(g => g.ordersCount > 0);
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(g => g.sellerName.toLowerCase().includes(q) || g.sellerRole.toLowerCase().includes(q));
+    }
+
+    return result.sort((a, b) => b.revenue - a.revenue);
+  }, [filteredSales, usersList, searchTerm]);
+
+  const filteredAdjustments = useMemo(() => {
+    return adjustments.filter(adj => {
+      if (selectedProduct !== 'all' && adj.productId !== selectedProduct) return false;
+
+      if (selectedCategory !== 'all' || selectedBrand !== 'all') {
+        const prod = products.find(p => p.id === adj.productId);
+        if (selectedCategory !== 'all' && (!prod || prod.category !== selectedCategory)) return false;
+        if (selectedBrand !== 'all' && (!prod || prod.brand !== selectedBrand)) return false;
+      }
+
+      if (selectedSeller !== 'all' && adj.adjustedBy !== selectedSeller) return false;
+
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        const prodNameMatch = adj.productName?.toLowerCase().includes(q);
+        const reasonMatch = adj.reason?.toLowerCase().includes(q);
+        const byMatch = adj.adjustedByName?.toLowerCase().includes(q);
+        const locMatch = adj.locationName?.toLowerCase().includes(q);
+        if (!prodNameMatch && !reasonMatch && !byMatch && !locMatch) return false;
+      }
+
+      return true;
+    });
+  }, [adjustments, products, selectedProduct, selectedCategory, selectedBrand, selectedSeller, searchTerm]);
+
+  const totalRevenue = useMemo(() => {
+    return filteredSales.reduce((sum, s) => sum + s.netTotal, 0);
+  }, [filteredSales]);
+
+  const totalProfit = useMemo(() => {
+    return filteredSales.reduce((sum, s) => sum + s.netProfit, 0);
+  }, [filteredSales]);
+
+  const inventoryValue = useMemo(() => {
+    return filteredProducts.reduce((sum, p) => {
+      const stock = selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0);
+      return sum + (p.cost * stock);
+    }, 0);
+  }, [filteredProducts, selectedLocationId]);
+
+  const handleExportCSV = () => {
+    let data: any[] = [];
+    let name = 'Report';
+    const hasItemFilter = selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all';
+
+    if (reportType === 'sales') {
+      name = 'Sales_Report';
+      data = filteredSales.map(s => {
+        const itemsToExport = hasItemFilter ? s.matchingItems : s.items;
+        return {
+          ID: s.id,
+          Date: format(s.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
+          Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
+          Items: itemsToExport.map(i => {
+            const netQty = i.quantity - (i.returnedQuantity || 0);
+            return `${i.name} x${netQty}${i.returnedQuantity ? ` (${i.returnedQuantity} returned)` : ''}`;
+          }).join('; '),
+          Total: s.netTotal.toFixed(2),
+          Payment: getPaymentMethodName(s.paymentMethod)
+        };
+      });
+    } else if (reportType === 'inventory') {
+      name = 'Inventory_Report';
+      data = filteredProducts.map(p => ({
+        Name: p.name,
+        Category: p.category,
+        Brand: p.brand || 'N/A',
+        Stock: selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0),
+        Cost: (p.cost ?? 0).toFixed(2),
+        Value: ((p.cost ?? 0) * (selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0))).toFixed(2)
+      }));
+    } else if (reportType === 'profit') {
+      name = 'Profitability_Report';
+      data = profitabilityData.map(item => ({
+        Name: item.product.name,
+        UnitsSold: item.unitsSold,
+        Revenue: item.revenue.toFixed(2),
+        Cost: item.cost.toFixed(2),
+        Profit: item.profit.toFixed(2)
+      }));
+    } else if (reportType === 'stock-adjustments') {
+      name = 'Adjustments_Report';
+      data = filteredAdjustments.map(a => ({
+        Date: format(a.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
+        Product: a.productName,
+        Location: a.locationName,
+        Type: a.type,
+        Quantity: a.adjustmentQuantity,
+        Reason: a.reason,
+        By: a.adjustedByName
+      }));
+    } else if (reportType === 'sales-by-seller') {
+      name = 'Sales_by_Seller_Report';
+      data = salesBySellerData.map(d => ({
+        'Seller Name': d.sellerName,
+        Role: d.sellerRole,
+        'Orders Count': d.ordersCount,
+        'Items Sold': d.itemsCount,
+        Revenue: d.revenue.toFixed(2),
+        'Gross Profit': d.profit.toFixed(2),
+        'Avg Order Value': (d.revenue / (d.ordersCount || 1)).toFixed(2)
+      }));
+    }
+
+    if (data.length === 0) {
+      toast.error('No data available to export for the selected filters.');
+      return;
+    }
+
+    exportToCSV(data, name);
+    toast.success(`${name.replace('_', ' ')} exported`);
+  };
 
   return (
     <div className="space-y-8 pb-12">
@@ -477,8 +546,8 @@ export const Reports: React.FC = () => {
             <ShoppingBag className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{sales.length}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Avg: {settings.currency}{(totalRevenue / (sales.length || 1)).toFixed(2)} / order</p>
+            <div className="text-2xl font-bold text-slate-900">{filteredSales.length}</div>
+            <p className="text-[10px] text-slate-400 mt-1">Avg: {settings.currency}{(totalRevenue / (filteredSales.length || 1)).toFixed(2)} / order</p>
           </CardContent>
         </Card>
         <Card className="shadow-sm border-slate-200/60 overflow-hidden">
@@ -489,7 +558,7 @@ export const Reports: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">{settings.currency}{inventoryValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            <p className="text-[10px] text-slate-400 mt-1">{products.length} products in stock</p>
+            <p className="text-[10px] text-slate-400 mt-1">{filteredProducts.length} products matching filter</p>
           </CardContent>
         </Card>
       </div>
@@ -665,7 +734,7 @@ export const Reports: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Products</SelectItem>
-                    {products.map(p => (
+                    {selectableProducts.map(p => (
                       <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -724,7 +793,7 @@ export const Reports: React.FC = () => {
                       )}
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {sale.items.map((item, idx) => {
+                          {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' ? sale.matchingItems : sale.items).map((item, idx) => {
                             const netQty = item.quantity - (item.returnedQuantity || 0);
                             return (
                               <Badge key={idx} variant="outline" className="text-[10px] font-normal bg-white">
@@ -743,11 +812,7 @@ export const Reports: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-bold text-slate-900">
-                        {settings.currency}{(() => {
-                          const returnedAmount = (sale.items || []).reduce((sum, item) => sum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
-                          const netTotal = Math.max(0, (sale.total ?? 0) - returnedAmount);
-                          return netTotal.toFixed(2);
-                        })()}
+                        {settings.currency}{sale.netTotal.toFixed(2)}
                       </TableCell>
                     </TableRow>
                   ))
@@ -837,40 +902,67 @@ export const Reports: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => (
-                  <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
-                    <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px]">{product.category}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold ${
-                          (selectedLocationId === 'all' 
-                            ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
-                            : Number(product.stocks?.[selectedLocationId] || 0)) <= product.lowStockThreshold 
-                            ? 'text-rose-600' : 'text-slate-700'
-                        }`}>
-                          {selectedLocationId === 'all' 
-                            ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
-                            : Number(product.stocks?.[selectedLocationId] || 0)}
-                        </span>
-                        {(selectedLocationId === 'all' 
-                          ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
-                          : Number(product.stocks?.[selectedLocationId] || 0)) <= product.lowStockThreshold && (
-                          <Badge variant="destructive" className="h-4 px-1 text-[8px]">LOW</Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">{settings.currency}{(product.cost ?? 0).toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-bold text-slate-900">
-                      {settings.currency}{((product.cost ?? 0) * (selectedLocationId === 'all' 
-                        ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
-                        : Number(product.stocks?.[selectedLocationId] || 0))).toFixed(2)}
+                {filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-12 text-slate-400 italic">
+                      No inventory records match the selected filters
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredProducts.map((product) => {
+                    const currentStock = selectedLocationId === 'all' 
+                      ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
+                      : Number(product.stocks?.[selectedLocationId] || 0);
+
+                    return (
+                      <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[10px]">{product.category}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold ${currentStock <= product.lowStockThreshold ? 'text-rose-600' : 'text-slate-700'}`}>
+                              {currentStock}
+                            </span>
+                            {currentStock <= product.lowStockThreshold && (
+                              <Badge variant="destructive" className="h-4 px-1 text-[8px]">LOW</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">{settings.currency}{(product.cost ?? 0).toFixed(2)}</TableCell>
+                        <TableCell className="text-right font-bold text-slate-900">
+                          {settings.currency}{((product.cost ?? 0) * currentStock).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
+              {filteredProducts.length > 0 && (
+                <tfoot className="bg-slate-50 font-bold">
+                  <TableRow>
+                    <TableCell colSpan={2}>TOTAL ({filteredProducts.length} items)</TableCell>
+                    <TableCell className="text-xs">
+                      {filteredProducts.reduce((sum, p) => {
+                        const stock = selectedLocationId === 'all' 
+                          ? Object.values(p.stocks || {}).reduce((s, val) => (s as number) + Number(val), 0) as number
+                          : Number(p.stocks?.[selectedLocationId] || 0);
+                        return sum + stock;
+                      }, 0)}
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-500">-</TableCell>
+                    <TableCell className="text-right text-slate-900">
+                      {settings.currency}{filteredProducts.reduce((sum, p) => {
+                        const stock = selectedLocationId === 'all' 
+                          ? Object.values(p.stocks || {}).reduce((s, val) => (s as number) + Number(val), 0) as number
+                          : Number(p.stocks?.[selectedLocationId] || 0);
+                        return sum + ((p.cost ?? 0) * stock);
+                      }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                  </TableRow>
+                </tfoot>
+              )}
             </Table>
           )}
 
@@ -886,57 +978,43 @@ export const Reports: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => {
-                  const productSales = sales.reduce((acc, sale) => {
-                    const item = sale.items.find(i => i.productId === product.id);
-                    if (item) {
-                      const netQty = Math.max(0, item.quantity - (item.returnedQuantity || 0));
-                      const netSubtotal = item.quantity > 0 ? (item.subtotal / item.quantity) * netQty : 0;
-                      acc.quantity += netQty;
-                      acc.revenue += netSubtotal;
-                    }
-                    return acc;
-                  }, { quantity: 0, revenue: 0 });
-
-                  const totalCost = productSales.quantity * product.cost;
-                  const profit = productSales.revenue - totalCost;
-
-                  return (
+                {profitabilityData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-12 text-slate-400 italic">
+                      No sales records match the selected filters
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  profitabilityData.map(({ product, unitsSold, revenue, cost, profit }) => (
                     <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-medium">{product.name}</TableCell>
-                      <TableCell className="text-xs">{productSales.quantity}</TableCell>
-                      <TableCell className="text-xs text-slate-600">{settings.currency}{(productSales.revenue ?? 0).toFixed(2)}</TableCell>
-                      <TableCell className="text-xs text-slate-400">{settings.currency}{(totalCost ?? 0).toFixed(2)}</TableCell>
+                      <TableCell className="text-xs">{unitsSold}</TableCell>
+                      <TableCell className="text-xs text-slate-600">{settings.currency}{revenue.toFixed(2)}</TableCell>
+                      <TableCell className="text-xs text-slate-400">{settings.currency}{cost.toFixed(2)}</TableCell>
                       <TableCell className="text-right">
                         <span className={`font-bold ${profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {settings.currency}{(profit ?? 0).toFixed(2)}
+                          {settings.currency}{profit.toFixed(2)}
                         </span>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                  ))
+                )}
               </TableBody>
-              {products.length > 0 && (
+              {profitabilityData.length > 0 && (
                 <tfoot className="bg-slate-50 font-bold">
                   <TableRow>
                     <TableCell>TOTAL</TableCell>
                     <TableCell className="text-xs">
-                      {products.reduce((sum, p) => {
-                        return sum + sales.reduce((acc, s) => {
-                          const item = s.items.find(i => i.productId === p.id);
-                          const netQty = item ? Math.max(0, item.quantity - (item.returnedQuantity || 0)) : 0;
-                          return acc + netQty;
-                        }, 0);
-                      }, 0)}
+                      {profitabilityData.reduce((sum, item) => sum + item.unitsSold, 0)}
                     </TableCell>
                     <TableCell className="text-xs text-indigo-600">
-                      {settings.currency}{(totalRevenue ?? 0).toFixed(2)}
+                      {settings.currency}{profitabilityData.reduce((sum, item) => sum + item.revenue, 0).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-xs text-slate-500">
-                      {settings.currency}{(totalRevenue - totalProfit).toFixed(2)}
+                      {settings.currency}{profitabilityData.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right text-emerald-600">
-                      {settings.currency}{(totalProfit ?? 0).toFixed(2)}
+                      {settings.currency}{profitabilityData.reduce((sum, item) => sum + item.profit, 0).toFixed(2)}
                     </TableCell>
                   </TableRow>
                 </tfoot>
@@ -959,14 +1037,14 @@ export const Reports: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {adjustments.length === 0 ? (
+                {filteredAdjustments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={selectedLocationId === 'all' ? 8 : 7} className="text-center py-12 text-slate-400 italic">
-                      No stock adjustments found for this period
+                      No stock adjustments match the selected filters
                     </TableCell>
                   </TableRow>
                 ) : (
-                  adjustments.map((adj) => (
+                  filteredAdjustments.map((adj) => (
                     <TableRow key={adj.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="text-xs">
                         {format(adj.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}
