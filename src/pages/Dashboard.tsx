@@ -256,7 +256,7 @@ export const Dashboard: React.FC = () => {
 
     const unsubscribeSales = onSnapshot(salesQuery, (snapshot) => {
       let sales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
-      sales = sales.filter(s => s.status !== 'voided');
+      sales = sales.filter(s => s.status !== 'voided' && s.status !== 'pending' && s.status !== 'pending_total_approval' && s.status !== 'pending_promo_approval');
 
       if (selectedLocationId !== 'all') {
         sales = sales.filter(s => s.locationId === selectedLocationId);

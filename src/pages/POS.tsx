@@ -620,11 +620,26 @@ export const POS: React.FC = () => {
       let resolvedPaymentMethod = paymentMethod;
 
       if (!isPending) {
-        const rawSplits = isSplitPayment ? paymentSplits : [{ 
+        let rawSplits = isSplitPayment ? paymentSplits : [{ 
           methodId: paymentMethod, 
           amount: checkoutTotal,
           reference: paymentReference
         }];
+
+        if (isSplitPayment && paymentSplits.length > 0) {
+          const currentSum = paymentSplits.reduce((acc, s) => acc + (Number(s.amount) || 0), 0);
+          if (currentSum > 0 && Math.abs(currentSum - checkoutTotal) > 0.01) {
+            let runningSum = 0;
+            rawSplits = paymentSplits.map((s, idx) => {
+              if (idx === paymentSplits.length - 1) {
+                return { ...s, amount: Math.max(0, checkoutTotal - runningSum) };
+              }
+              const scaledAmount = Math.round(((Number(s.amount) || 0) / currentSum) * checkoutTotal * 100) / 100;
+              runningSum += scaledAmount;
+              return { ...s, amount: scaledAmount };
+            });
+          }
+        }
 
         for (const split of rawSplits) {
           if (!split.methodId) continue;
@@ -788,9 +803,10 @@ export const POS: React.FC = () => {
             locationName: locations.find(l => l.id === checkoutLocationId)?.name || null,
             category: 'Sales',
             description: isTotalEdited 
-              ? `Sale record (Edited Total): ${customerDetails.name}`
-              : `Sale record: ${customerDetails.name}`,
-            reference: split.reference || null,
+              ? `Sale Payment (Edited Total) #${saleRef.id.substring(0, 8)}: ${customerDetails.name || 'Walk-In'}`
+              : `Sale Payment #${saleRef.id.substring(0, 8)}: ${customerDetails.name || 'Walk-In'}`,
+            reference: split.reference || saleRef.id,
+            saleId: saleRef.id,
             timestamp: Timestamp.now(),
             createdBy: profile?.id || 'anonymous',
             createdByName: profile?.name || 'Staff',

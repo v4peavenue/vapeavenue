@@ -9,13 +9,17 @@ export const logAction = async (
   entityId?: string,
   entityType?: string
 ) => {
-  if (!user) return;
+  const activeUser = user || {
+    id: 'system',
+    name: 'Staff / POS System',
+    email: 'pos@system.local'
+  };
 
   try {
     await addDoc(collection(db, 'audit_logs'), {
-      userId: user.id,
-      userName: user.name || 'Unknown',
-      userEmail: user.email,
+      userId: activeUser.id,
+      userName: activeUser.name || 'Staff / POS System',
+      userEmail: activeUser.email || '',
       action,
       details,
       entityId: entityId || null,

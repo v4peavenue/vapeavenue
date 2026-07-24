@@ -60,6 +60,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { logAction } from '@/lib/audit';
+import { reconcileSystemData } from '@/lib/reconciliation';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ExpensesTab } from '@/components/ExpensesTab';
@@ -124,6 +125,8 @@ export const Finance: React.FC = () => {
 
   useEffect(() => {
     if (!profile) return;
+
+    reconcileSystemData().catch(err => console.warn("Finance reconciliation notice:", err));
 
     const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || 
                         user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || 

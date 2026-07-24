@@ -44,6 +44,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { MapPin, Coins } from 'lucide-react';
 import { logAction } from '@/lib/audit';
+import { reconcileSystemData } from '@/lib/reconciliation';
 import { motion } from 'motion/react';
 import { 
   Dialog, 
@@ -113,6 +114,9 @@ export const Settings: React.FC = () => {
   const [isResetting, setIsResetting] = useState(false);
   const [resetStep, setResetStep] = useState('');
 
+  // Reconciliation state
+  const [isReconciling, setIsReconciling] = useState(false);
+
   // Backup / Restore states
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -121,6 +125,24 @@ export const Settings: React.FC = () => {
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoreConfirmText, setRestoreConfirmText] = useState('');
   const [restoreOption, setRestoreOption] = useState<'merge' | 'replace'>('merge');
+
+  useEffect(() => {
+    if (!profile) return;
+    // Auto reconcile historical data on load
+    reconcileSystemData().catch(err => console.warn("Auto reconciliation notice:", err));
+  }, [profile]);
+
+  const handleReconcileSystemData = async () => {
+    setIsReconciling(true);
+    try {
+      const res = await reconcileSystemData();
+      toast.success(res.message);
+    } catch (err: any) {
+      toast.error('Reconciliation error: ' + (err?.message || 'Failed'));
+    } finally {
+      setIsReconciling(false);
+    }
+  };
 
   useEffect(() => {
     if (!profile) return;
@@ -176,7 +198,7 @@ export const Settings: React.FC = () => {
       }, (error) => {
         console.warn("Settings: Error listening to invites:", error);
       });
-      unsubscribeAudit = onSnapshot(query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(100)), (snapshot) => {
+      unsubscribeAudit = onSnapshot(query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc')), (snapshot) => {
         setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog)));
       }, (error) => {
         console.warn("Settings: Error listening to audit_logs:", error);
@@ -261,12 +283,16 @@ export const Settings: React.FC = () => {
         const action = (log.action || '').toLowerCase();
         const details = (log.details || '').toLowerCase();
         const prodName = (getProductNameFromLog(log, products, sales) || '').toLowerCase();
+        const entityId = (log.entityId || '').toLowerCase();
+        const logId = (log.id || '').toLowerCase();
 
         const matchesSearch = userName.includes(q) ||
                               userEmail.includes(q) ||
                               action.includes(q) ||
                               details.includes(q) ||
-                              prodName.includes(q);
+                              prodName.includes(q) ||
+                              entityId.includes(q) ||
+                              logId.includes(q);
 
         if (!matchesSearch) return false;
       }
@@ -1989,6 +2015,35 @@ export const Settings: React.FC = () => {
                   {isSyncing ? 'Syncing...' : 'Sync Stock Now'}
                 </Button>
               </div>
+
+              {isAdmin && (
+                <div className="border border-border rounded-2xl p-5 bg-indigo-50/40 mt-2 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-white rounded-lg shadow-sm border border-indigo-200">
+                      <RotateCcw className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900">System Connection & Tally Reconciliation</p>
+                      <p className="text-xs text-slate-500 max-w-lg">
+                        Audit and synchronize all historical sales, POS records, purchasing orders, and inventory. Backtracks missing entries in Unified Ledger, Financial Accounts, and Audit Logs so all KPIs tally across Dashboard, Sales History, Finance, Reports, and System Audit.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleReconcileSystemData}
+                      disabled={isReconciling}
+                      className="gap-2 font-semibold shadow-sm text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50 border-indigo-300"
+                    >
+                      <RotateCcw className={`w-4 h-4 ${isReconciling ? 'animate-spin' : ''}`} />
+                      {isReconciling ? 'Reconciling System Tally...' : 'Reconcile & Tally Historical Sales & Financials'}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {isAdmin && (
                 <div className="border border-border rounded-2xl p-5 bg-slate-50/50 mt-2 space-y-4">

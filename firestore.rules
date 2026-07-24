@@ -303,7 +303,7 @@ service cloud.firestore {
     }
 
     match /audit_logs/{logId} {
-      allow read: if isManager();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated();
     }
 
@@ -387,6 +387,10 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidAttendanceRequest(request.resource.data);
       allow update: if isManager() && isValidAttendanceRequest(request.resource.data);
       allow delete: if isManager();
+    }
+
+    match /staffRates/{rateId} {
+      allow read, write: if isAuthenticated();
     }
   }
 }

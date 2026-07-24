@@ -320,22 +320,45 @@ export const SalesHistory: React.FC = () => {
       if (sale.paymentMethod !== 'pending') {
         let splitsToProcess: any[] = [];
         if (sale.paymentMethod === 'split' && sale.paymentSplits && sale.paymentSplits.length > 0) {
-          splitsToProcess = sale.paymentSplits;
+          const currentSplitSum = sale.paymentSplits.reduce((acc: number, s: any) => acc + (Number(s.amount) || 0), 0);
+          if (currentSplitSum > 0 && Math.abs(currentSplitSum - sale.total) > 0.01) {
+            let runningSum = 0;
+            splitsToProcess = sale.paymentSplits.map((s: any, idx: number) => {
+              if (idx === sale.paymentSplits.length - 1) {
+                return { ...s, amount: Math.max(0, sale.total - runningSum) };
+              }
+              const scaledAmount = Math.round(((Number(s.amount) || 0) / currentSplitSum) * sale.total * 100) / 100;
+              runningSum += scaledAmount;
+              return { ...s, amount: scaledAmount };
+            });
+          } else {
+            splitsToProcess = sale.paymentSplits;
+          }
         } else if (sale.paymentMethod) {
+          const matchedAccount = accounts.find(a => 
+            a.id === sale.paymentMethod || 
+            a.name.toLowerCase() === (sale.paymentSplits?.[0]?.methodName || '').toLowerCase()
+          );
+          const methodName = matchedAccount?.name || sale.paymentSplits?.[0]?.methodName || (sale.paymentMethod.charAt(0).toUpperCase() + sale.paymentMethod.slice(1));
           splitsToProcess = [{
-            methodId: sale.paymentMethod,
-            methodName: accounts.find(a => a.id === sale.paymentMethod)?.name || sale.paymentMethod,
+            methodId: matchedAccount?.id || sale.paymentMethod,
+            methodName: methodName,
             amount: sale.total
           }];
         }
 
         // Process each payment split
         for (const split of splitsToProcess) {
-          const account = accounts.find(a => a.id === split.methodId) || { name: split.methodName, balance: 0 };
-          const currentBalance = account.balance || 0;
+          const account = accounts.find(a => 
+            a.id === split.methodId || 
+            a.name.toLowerCase() === (split.methodName || '').toLowerCase()
+          );
+          const targetAccountId = account?.id || split.methodId;
+          const accountName = account?.name || split.methodName || 'Sales Account';
+          const currentBalance = account?.balance || 0;
           const newBalance = currentBalance + split.amount;
 
-          const accountRef = doc(db, 'accounts', split.methodId);
+          const accountRef = doc(db, 'accounts', targetAccountId);
           batch.update(accountRef, {
             balance: increment(split.amount),
             lastUpdated: Timestamp.now()
@@ -346,15 +369,16 @@ export const SalesHistory: React.FC = () => {
           batch.set(transRef, {
             amount: split.amount,
             type: 'income',
-            accountId: split.methodId,
-            accountName: split.methodName,
+            accountId: targetAccountId,
+            accountName: accountName,
             locationId: sale.locationId || null,
             locationName: locations.find(l => l.id === sale.locationId)?.name || null,
             category: 'Sales',
             description: sale.isTotalEdited 
-              ? `Approved Sale (Edited Total): ${sale.customerDetails?.name || 'Walk-In'}`
-              : `Approved Sale Promo: ${sale.customerDetails?.name || 'Walk-In'}`,
-            reference: split.reference || null,
+              ? `Approved Sale (Edited Total) #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`
+              : `Approved Sale Promo #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`,
+            reference: split.reference || sale.id,
+            saleId: sale.id,
             timestamp: Timestamp.now(),
             createdBy: profile?.id || 'anonymous',
             createdByName: profile?.name || 'Staff',
@@ -672,27 +696,37 @@ export const SalesHistory: React.FC = () => {
 
       // Update financial accounts
       for (const split of finalSplits) {
-        if (split.methodId && split.methodId !== 'card' && split.methodId !== 'cash' && split.methodId !== 'digital') {
-          const account = accounts.find(a => a.id === split.methodId);
+        if (split.methodId) {
+          const account = accounts.find(a => 
+            a.id === split.methodId || 
+            a.name.toLowerCase() === (split.methodName || '').toLowerCase()
+          );
+          const targetAccountId = account?.id || split.methodId;
+          const accountName = account?.name || split.methodName || 'Sales Account';
           const currentBalance = account?.balance || 0;
           const newBalance = currentBalance + split.amount;
 
-          const accountRef = doc(db, 'accounts', split.methodId);
+          const accountRef = doc(db, 'accounts', targetAccountId);
           batch.update(accountRef, {
             balance: increment(split.amount),
             lastUpdated: Timestamp.now()
           });
 
           // Create financial transaction record
-          await addDoc(collection(db, 'financialTransactions'), {
+          const transRef = doc(collection(db, 'financialTransactions'));
+          batch.set(transRef, {
             amount: split.amount,
             type: 'income',
-            accountId: split.methodId,
-            accountName: account?.name || 'Unknown',
+            accountId: targetAccountId,
+            accountName: accountName,
             locationId: selectedSale.locationId || null,
             locationName: locations.find(l => l.id === selectedSale.locationId)?.name || null,
             category: 'Sales',
-            description: `Sale Payment: ${selectedSale.customerDetails?.name}`,
+            description: selectedSale.isTotalEdited 
+              ? `Sale Payment (Edited Total) #${selectedSale.id.substring(0, 8)}: ${selectedSale.customerDetails?.name || 'Walk-In'}`
+              : `Sale Payment #${selectedSale.id.substring(0, 8)}: ${selectedSale.customerDetails?.name || 'Walk-In'}`,
+            reference: split.reference || selectedSale.id,
+            saleId: selectedSale.id,
             timestamp: Timestamp.now(),
             createdBy: profile?.id || 'anonymous',
             createdByName: profile?.name || 'Staff',
@@ -937,9 +971,13 @@ export const SalesHistory: React.FC = () => {
     const catLower = (t.category || '').toLowerCase();
     const accLower = (t.accountName || '').toLowerCase();
     const toAccLower = (t.toAccountName || '').toLowerCase();
+    const saleIdLower = (t.saleId || '').toLowerCase();
+    const refLower = (t.reference || '').toLowerCase();
     const idLower = t.id.toLowerCase();
 
     const matchesSearch = idLower.includes(searchLower) ||
+      saleIdLower.includes(searchLower) ||
+      refLower.includes(searchLower) ||
       descLower.includes(searchLower) ||
       catLower.includes(searchLower) ||
       accLower.includes(searchLower) ||
