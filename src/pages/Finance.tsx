@@ -161,7 +161,26 @@ export const Finance: React.FC = () => {
         orderBy('timestamp', 'desc')
       );
       unsubTrans = onSnapshot(qTrans, (snapshot) => {
-        setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)).slice(0, 100));
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+        
+        const deduplicated: Transaction[] = [];
+        const seenKeys = new Set<string>();
+
+        for (const t of list as any[]) {
+          const refKey = (t.saleId || t.reference || t.description?.match(/#([a-zA-Z0-9]{8})/)?.[1] || '').substring(0, 8);
+          const timeMin = t.timestamp?.seconds ? Math.floor(t.timestamp.seconds / 300) : 0;
+          
+          const key = refKey 
+            ? `${refKey}_${t.accountId}_${t.type}_${Number(t.amount || 0).toFixed(2)}`
+            : `${(t.description || '').toLowerCase()}_${t.accountId}_${t.type}_${Number(t.amount || 0).toFixed(2)}_${timeMin}`;
+
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            deduplicated.push(t as Transaction);
+          }
+        }
+
+        setTransactions(deduplicated.slice(0, 100));
         if (!isManagerUser) {
           setLoading(false);
         }

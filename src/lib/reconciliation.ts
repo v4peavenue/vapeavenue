@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, writeBatch, Timestamp, addDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, Timestamp, addDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 export interface ReconciliationResult {
@@ -8,7 +8,18 @@ export interface ReconciliationResult {
   message: string;
 }
 
+let isReconcilingInProgress = false;
+
 export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
+  if (isReconcilingInProgress) {
+    return {
+      repairedSales: 0,
+      repairedFinancials: 0,
+      repairedAudits: 0,
+      message: 'Reconciliation deferred: Already in progress'
+    };
+  }
+
   if (!auth.currentUser) {
     return {
       repairedSales: 0,
@@ -17,6 +28,8 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       message: 'Reconciliation deferred: User not authenticated yet'
     };
   }
+
+  isReconcilingInProgress = true;
 
   try {
     const [salesSnap, finSnap, auditSnap, accountsSnap, locsSnap, poSnap, returnsSnap] = await Promise.all([
@@ -29,8 +42,8 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       getDocs(collection(db, 'returnTransactions'))
     ]);
 
+    let financials = finSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
     const sales = salesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-    const financials = finSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
     const audits = auditSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
     const accounts = accountsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
     const locations = locsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
@@ -40,9 +53,51 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
     let repairedSales = 0;
     let repairedFinancials = 0;
     let repairedAudits = 0;
+    let duplicatesRemoved = 0;
 
     // Helper for finding accounts
     const defaultAccount = accounts[0] || { id: 'cash', name: 'Cash' };
+
+    // 0. Clean up duplicate financial transactions in Firestore
+    const duplicateIdsToDelete: string[] = [];
+    const seenFinKeys = new Set<string>();
+
+    // Sort financials so those with full saleId/reference come first
+    const sortedFins = [...financials].sort((a, b) => {
+      const aScore = (a.saleId ? 2 : 0) + (a.reference ? 1 : 0);
+      const bScore = (b.saleId ? 2 : 0) + (b.reference ? 1 : 0);
+      return bScore - aScore;
+    });
+
+    for (const fin of sortedFins) {
+      const refKey = (fin.saleId || fin.reference || fin.description?.match(/#([a-zA-Z0-9]{8})/)?.[1] || '').substring(0, 8);
+      const timeMin = fin.timestamp?.seconds ? Math.floor(fin.timestamp.seconds / 300) : 0; // 5-min window for unreferenced
+      
+      const key = refKey 
+        ? `${refKey}_${fin.accountId}_${fin.type}_${Number(fin.amount || 0).toFixed(2)}`
+        : `${(fin.description || '').toLowerCase()}_${fin.accountId}_${fin.type}_${Number(fin.amount || 0).toFixed(2)}_${timeMin}`;
+
+      if (seenFinKeys.has(key)) {
+        duplicateIdsToDelete.push(fin.id);
+      } else {
+        seenFinKeys.add(key);
+      }
+    }
+
+    if (duplicateIdsToDelete.length > 0) {
+      // Perform batch deletions
+      for (let i = 0; i < duplicateIdsToDelete.length; i += 450) {
+        const batch = writeBatch(db);
+        const chunk = duplicateIdsToDelete.slice(i, i + 450);
+        for (const id of chunk) {
+          batch.delete(doc(db, 'financialTransactions', id));
+        }
+        await batch.commit();
+      }
+      duplicatesRemoved = duplicateIdsToDelete.length;
+      // Filter out deleted docs from local array
+      financials = financials.filter(f => !duplicateIdsToDelete.includes(f.id));
+    }
 
     // 1. Backtrack & Sync Sales -> Financial Transactions & Audit Logs
     for (const sale of sales) {
@@ -52,8 +107,8 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
 
       // Check if financial transaction exists for this sale
       const existingFin = financials.find(f => 
-        f.saleId === sale.id || 
-        f.reference === sale.id || 
+        (f.saleId && f.saleId === sale.id) || 
+        (f.reference && f.reference === sale.id) || 
         (f.description && (f.description.includes(sale.id) || f.description.includes(sale.id.substring(0, 8))))
       );
 
@@ -86,7 +141,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
             ? `Sale Payment (Edited Total) #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`
             : `Sale Payment #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`;
 
-          await addDoc(collection(db, 'financialTransactions'), {
+          const newDocRef = await addDoc(collection(db, 'financialTransactions'), {
             amount: split.amount || sale.total || 0,
             type: 'income',
             accountId: matchedAcc.id,
@@ -100,6 +155,17 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
             timestamp: sale.timestamp || Timestamp.now(),
             createdBy: sale.staffId || 'system',
             createdByName: sale.staffName || 'Staff'
+          });
+
+          // Add to local financials list to avoid duplicate creation in same loop
+          financials.push({
+            id: newDocRef.id,
+            saleId: sale.id,
+            reference: sale.id,
+            description: desc,
+            amount: split.amount || sale.total || 0,
+            accountId: matchedAcc.id,
+            type: 'income'
           });
 
           repairedFinancials++;
@@ -201,11 +267,21 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       }
     }
 
+    let msg = `System reconciliation completed successfully! Rechecked ${repairedSales} sales.`;
+    if (duplicatesRemoved > 0) {
+      msg += ` Removed ${duplicatesRemoved} duplicate transaction line(s).`;
+    }
+    if (repairedFinancials > 0 || repairedAudits > 0) {
+      msg += ` Added ${repairedFinancials} missing financial transaction(s) and ${repairedAudits} missing audit record(s).`;
+    } else if (duplicatesRemoved === 0) {
+      msg += ` All financial transactions and ledgers are fully aligned and balanced.`;
+    }
+
     return {
       repairedSales,
       repairedFinancials,
       repairedAudits,
-      message: `System reconciliation completed successfully! Rechecked ${repairedSales} sales. Added ${repairedFinancials} missing financial transactions and ${repairedAudits} missing audit records.`
+      message: msg
     };
 
   } catch (error: any) {
@@ -216,5 +292,8 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       repairedAudits: 0,
       message: `Reconciliation error: ${error?.message || 'Unknown error'}`
     };
+  } finally {
+    isReconcilingInProgress = false;
   }
 };
+

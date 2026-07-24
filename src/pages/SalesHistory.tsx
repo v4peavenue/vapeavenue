@@ -19,7 +19,12 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  Banknote
+  Banknote,
+  Users,
+  CreditCard,
+  Building2,
+  DollarSign,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   collection, 
@@ -100,32 +105,12 @@ export const SalesHistory: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
 
-  const getSaturdayToFridayWeekRange = () => {
-    const today = new Date();
-    const day = today.getDay(); // 0 is Sunday, 1 is Monday, ..., 6 is Saturday
-    
-    let daysBackToStartSaturday: number;
-    if (day === 6) {
-      // On Saturday, Friday is cutoff so users look at the week that ended yesterday (Saturday to Friday)
-      daysBackToStartSaturday = 7;
-    } else {
-      // On Sunday (0) through Friday (5), show current week starting from the most recent Saturday
-      daysBackToStartSaturday = day + 1;
-    }
-
-    const startSaturday = new Date(today);
-    startSaturday.setDate(today.getDate() - daysBackToStartSaturday);
-
-    const endFriday = new Date(startSaturday);
-    endFriday.setDate(startSaturday.getDate() + 6);
-
-    return {
-      start: format(startSaturday, 'yyyy-MM-dd'),
-      end: format(endFriday, 'yyyy-MM-dd')
-    };
+  const getTodayDateRange = () => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    return { start: todayStr, end: todayStr };
   };
 
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => getTodayDateRange());
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
@@ -259,7 +244,25 @@ export const SalesHistory: React.FC = () => {
         list = list.filter((t: any) => t.locationId === selectedLocationId);
       }
       
-      setLedgerTransactions(list);
+      // Deduplicate transactions by saleId/reference + accountId + type + amount
+      const deduplicated: any[] = [];
+      const seenKeys = new Set<string>();
+
+      for (const t of list as any[]) {
+        const refKey = (t.saleId || t.reference || t.description?.match(/#([a-zA-Z0-9]{8})/)?.[1] || '').substring(0, 8);
+        const timeMin = t.timestamp?.seconds ? Math.floor(t.timestamp.seconds / 300) : 0;
+        
+        const key = refKey 
+          ? `${refKey}_${t.accountId}_${t.type}_${Number(t.amount || 0).toFixed(2)}`
+          : `${(t.description || '').toLowerCase()}_${t.accountId}_${t.type}_${Number(t.amount || 0).toFixed(2)}_${timeMin}`;
+
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          deduplicated.push(t);
+        }
+      }
+
+      setLedgerTransactions(deduplicated);
     }, (error) => {
       console.warn("Ledger error loading financial transactions:", error);
     });
@@ -1023,14 +1026,9 @@ export const SalesHistory: React.FC = () => {
     return matchesSearch && matchesDate && matchesPayment;
   });
 
-  const clearFiltersForTab = (tab = activeTab) => {
-    if (tab === 'ledger') {
-      setDateRange(getSaturdayToFridayWeekRange());
-      setPaymentFilter(financeCashId);
-    } else {
-      setDateRange({ start: '', end: '' });
-      setPaymentFilter('all');
-    }
+  const clearFiltersForTab = (_tab = activeTab) => {
+    setDateRange(getTodayDateRange());
+    setPaymentFilter('all');
     setSearchTerm('');
   };
 
@@ -1244,59 +1242,6 @@ export const SalesHistory: React.FC = () => {
 
       {activeTab === 'ledger' && (
         <div className="space-y-4">
-          {/* Quick Date Filter Control Card */}
-          <div className="bg-gradient-to-r from-slate-50 to-indigo-50/40 border border-slate-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="space-y-1">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
-                <CalendarIcon className="w-4 h-4 text-indigo-600" />
-                Ledger Date Range
-              </h3>
-              <p className="text-xs text-slate-500">
-                Filter and calculate aggregate cash flows specifically within this duration.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">From</span>
-                <input 
-                  type="date" 
-                  value={dateRange.start} 
-                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  className="text-xs font-semibold text-slate-700 bg-transparent border-none focus:outline-none cursor-pointer"
-                />
-              </div>
-              <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">To</span>
-                <input 
-                  type="date" 
-                  value={dateRange.end} 
-                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  className="text-xs font-semibold text-slate-700 bg-transparent border-none focus:outline-none cursor-pointer"
-                />
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDateRange(getSaturdayToFridayWeekRange())}
-                className="text-xs font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50/50 hover:text-indigo-700 rounded-xl px-3 h-9 shadow-sm"
-              >
-                <CalendarIcon className="w-3.5 h-3.5 mr-1.5" />
-                Sat - Fri (Current Week)
-              </Button>
-              {(dateRange.start || dateRange.end) && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={clearFilters}
-                  className="text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl px-3 h-9"
-                >
-                  <X className="w-3.5 h-3.5 mr-1" />
-                  Clear Date
-                </Button>
-              )}
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Inflow KPI */}
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
