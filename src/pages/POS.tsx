@@ -805,12 +805,10 @@ export const POS: React.FC = () => {
         if (!product) continue;
 
         const productRef = doc(db, 'products', item.productId);
-        const newStocks = { ...product.stocks };
-        newStocks[checkoutLocationId] = (newStocks[checkoutLocationId] || 0) - item.quantity;
         
         await updateDoc(productRef, {
           stock: increment(-item.quantity),
-          stocks: newStocks,
+          [`stocks.${checkoutLocationId}`]: increment(-item.quantity),
           updatedAt: Timestamp.now()
         });
       }

@@ -1240,24 +1240,16 @@ export const Settings: React.FC = () => {
 
           const productRef = doc(db, 'products', pId);
 
-          if (type === 'add') {
-            batch.update(productRef, {
-              stock: increment(-qty),
-              [`stocks.${locId}`]: increment(-qty),
-              updatedAt: Timestamp.now()
-            });
-          } else if (type === 'subtract') {
-            batch.update(productRef, {
-              stock: increment(-qty),
-              [`stocks.${locId}`]: increment(-qty),
-              updatedAt: Timestamp.now()
-            });
-          } else if (type === 'set') {
-            batch.update(productRef, {
-              [`stocks.${locId}`]: prev,
-              updatedAt: Timestamp.now()
-            });
+          let undoDelta = -qty;
+          if (type === 'subtract' && qty > 0) {
+            undoDelta = qty;
           }
+
+          batch.update(productRef, {
+            stock: increment(undoDelta),
+            [`stocks.${locId}`]: increment(undoDelta),
+            updatedAt: Timestamp.now()
+          });
 
           batch.delete(adjDoc.ref);
           await batch.commit();
@@ -1278,10 +1270,14 @@ export const Settings: React.FC = () => {
           if (parsedQty > 0) {
             const productRef = doc(db, 'products', revertLog.entityId || '');
             const undoVal = isAdd ? -parsedQty : parsedQty;
-            batch.update(productRef, {
+            const updatePayload: any = {
               stock: increment(undoVal),
               updatedAt: Timestamp.now()
-            });
+            };
+            if (revertLog.locationId) {
+              updatePayload[`stocks.${revertLog.locationId}`] = increment(undoVal);
+            }
+            batch.update(productRef, updatePayload);
             await batch.commit();
             await logAction(profile, 'STOCK_ADJUSTMENT_REVERTED', `Reverted stock adjustment for product`, revertLog.entityId || 'system', 'product');
             toast.success(`Stock levels adjusted by ${undoVal} to offset.`);
