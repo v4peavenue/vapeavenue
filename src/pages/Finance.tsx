@@ -954,15 +954,15 @@ export const Finance: React.FC = () => {
             <History className="w-5 h-5 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="hidden md:block">
-              <Table>
+            <div className="hidden md:block w-full overflow-x-auto min-w-0">
+              <Table className="w-full table-fixed text-xs min-w-full">
               <TableHeader>
-                <TableRow className="hover:bg-transparent border-slate-100">
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Transaction</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Account / Type</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Amount</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Ending Balance</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Timestamp</TableHead>
+                <TableRow className="hover:bg-transparent border-slate-100 bg-slate-50/50">
+                  <TableHead className="w-[38%] text-[10px] uppercase font-black tracking-widest text-slate-400 px-3 py-2.5">Transaction</TableHead>
+                  <TableHead className="w-[22%] text-[10px] uppercase font-black tracking-widest text-slate-400 px-3 py-2.5">Account / Type</TableHead>
+                  <TableHead className="w-[14%] text-[10px] uppercase font-black tracking-widest text-slate-400 px-3 py-2.5">Amount</TableHead>
+                  <TableHead className="w-[13%] text-[10px] uppercase font-black tracking-widest text-slate-400 px-3 py-2.5">Ending Balance</TableHead>
+                  <TableHead className="w-[13%] text-[10px] uppercase font-black tracking-widest text-slate-400 px-3 py-2.5">Timestamp</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1010,20 +1010,20 @@ export const Finance: React.FC = () => {
                   
                   return (
                     <TableRow key={item.id} className="hover:bg-slate-50/50 border-slate-50">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl ${isIncome ? 'bg-emerald-50 text-emerald-600' : isExpense ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600'}`}>
-                            {isIncome ? <TrendingUp className="w-4 h-4" /> : isExpense ? <TrendingDown className="w-4 h-4" /> : <DollarSign className="w-4 h-4" />}
+                      <TableCell className="px-3 py-2.5 overflow-hidden">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`p-1.5 rounded-lg shrink-0 ${isIncome ? 'bg-emerald-50 text-emerald-600' : isExpense ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-600'}`}>
+                            {isIncome ? <TrendingUp className="w-3.5 h-3.5" /> : isExpense ? <TrendingDown className="w-3.5 h-3.5" /> : <DollarSign className="w-3.5 h-3.5" />}
                           </div>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-700">{item.details}</span>
-                            {item.type === 'TRANSACTION' && <span className="text-[10px] text-slate-400 font-medium uppercase tracking-tighter">{item.category}</span>}
+                          <div className="flex flex-col min-w-0 overflow-hidden">
+                            <span className="text-xs font-bold text-slate-700 truncate" title={item.details}>{item.details}</span>
+                            {item.type === 'TRANSACTION' && <span className="text-[9px] text-slate-400 font-medium uppercase tracking-tighter truncate">{item.category}</span>}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-[#1A2B4B]">
+                      <TableCell className="px-3 py-2.5 overflow-hidden">
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-bold text-[#1A2B4B] truncate">
                             {item.type === 'TRANSACTION' ? item.accountName : 'System Event'}
                             {item.type === 'TRANSACTION' && item.locationName && (
                               <span className="ml-1 text-slate-400 font-normal">
@@ -1031,21 +1031,21 @@ export const Finance: React.FC = () => {
                               </span>
                             )}
                           </span>
-                          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">
+                          <span className="text-[9px] text-slate-400 uppercase font-bold tracking-tighter truncate">
                             {item.type === 'TRANSACTION' ? item.transType : item.action?.replace('_', ' ')}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-3 py-2.5 whitespace-nowrap">
                         {item.type === 'TRANSACTION' ? (
-                          <span className={`font-mono text-sm font-bold ${isIncome ? 'text-emerald-600' : isExpense ? 'text-rose-600' : 'text-slate-600'}`}>
+                          <span className={`font-mono text-xs font-bold ${isIncome ? 'text-emerald-600' : isExpense ? 'text-rose-600' : 'text-slate-600'}`}>
                             {isIncome ? '+' : '-'}{settings.currency}{(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </span>
                         ) : (
                           <span className="text-xs text-slate-400 italic">Audit Log</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-3 py-2.5 whitespace-nowrap">
                         {item.type === 'TRANSACTION' && item.accountBalance !== undefined ? (
                           <span className="font-mono text-xs font-bold text-slate-500">
                             {settings.currency}{(item.accountBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -1054,7 +1054,7 @@ export const Finance: React.FC = () => {
                           <span className="text-[10px] text-slate-300">--</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-slate-500 font-mono whitespace-nowrap">
+                      <TableCell className="px-3 py-2.5 text-[11px] text-slate-500 font-mono whitespace-nowrap">
                         {item.timestamp ? (
                           format(typeof item.timestamp.toDate === 'function' ? item.timestamp.toDate() : new Date(item.timestamp), 'MMM dd, p')
                         ) : (

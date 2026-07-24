@@ -1438,9 +1438,9 @@ export const SalesHistory: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-        <div className="hidden md:block">
-          <Table>
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden w-full max-w-full">
+        <div className="hidden md:block w-full overflow-x-auto min-w-0">
+          <Table className="w-full table-fixed text-xs min-w-full">
             {activeTab === 'sales' ? (
             <>
               <TableHeader className="bg-slate-50">
@@ -1621,15 +1621,15 @@ export const SalesHistory: React.FC = () => {
             <>
               <TableHeader className="bg-slate-50">
                 <TableRow>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Transaction ID</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Account (Flow)</TableHead>
-                  <TableHead className="text-right">Inflow (+)</TableHead>
-                  <TableHead className="text-right">Outflow (-)</TableHead>
-                  <TableHead className="text-right">Account Balance</TableHead>
-                  <TableHead>Staff</TableHead>
+                  <TableHead className="w-[12%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Date & Time</TableHead>
+                  <TableHead className="w-[9%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Trans ID</TableHead>
+                  <TableHead className="w-[10%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Category</TableHead>
+                  <TableHead className="w-[22%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Description</TableHead>
+                  <TableHead className="w-[15%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Account (Flow)</TableHead>
+                  <TableHead className="w-[10%] px-2 py-2.5 text-right text-[11px] font-bold text-slate-700">Inflow (+)</TableHead>
+                  <TableHead className="w-[10%] px-2 py-2.5 text-right text-[11px] font-bold text-slate-700">Outflow (-)</TableHead>
+                  <TableHead className="w-[12%] px-2 py-2.5 text-right text-[11px] font-bold text-slate-700">Balance</TableHead>
+                  <TableHead className="w-[10%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Staff</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1650,20 +1650,20 @@ export const SalesHistory: React.FC = () => {
 
                     return (
                       <TableRow key={t.id} className="hover:bg-slate-50/50">
-                        <TableCell className="whitespace-nowrap">
-                          <div className="font-medium text-slate-900">
+                        <TableCell className="px-2 py-2 text-xs overflow-hidden">
+                          <div className="font-medium text-slate-900 truncate">
                             {format(date, 'MMM dd, yyyy')}
                           </div>
-                          <div className="text-xs text-slate-500">
+                          <div className="text-[10px] text-slate-500">
                             {format(date, 'HH:mm:ss')}
                           </div>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-slate-500">
+                        <TableCell className="font-mono text-[11px] text-slate-500 px-2 py-2 truncate" title={t.id}>
                           {t.id.substring(0, 8)}...
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="px-2 py-2 overflow-hidden">
                           <Badge variant="outline" className={cn(
-                            "capitalize font-semibold text-[10px]",
+                            "capitalize font-semibold text-[10px] px-1.5 py-0.5 truncate max-w-full",
                             isIncome ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                             isExpense ? "bg-rose-50 text-rose-700 border-rose-200" :
                             "bg-blue-50 text-blue-700 border-blue-200"
@@ -1671,34 +1671,34 @@ export const SalesHistory: React.FC = () => {
                             {t.category || t.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="max-w-[180px] text-slate-700 text-xs font-medium">
-                          <div className="truncate">{t.description || 'No description'}</div>
+                        <TableCell className="px-2 py-2 text-slate-700 text-xs font-medium overflow-hidden">
+                          <div className="truncate" title={t.description || 'No description'}>{t.description || 'No description'}</div>
                           {t.reference && (
-                            <span className="inline-block mt-0.5 text-[9px] font-mono text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-1 py-0.2 rounded" title={t.reference}>
+                            <span className="inline-block mt-0.5 text-[9px] font-mono text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-1 py-0.2 rounded truncate max-w-full" title={t.reference}>
                               Ref: {t.reference}
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="px-2 py-2 text-xs overflow-hidden">
                           {isTransfer ? (
-                            <div className="flex items-center gap-1 text-blue-600 font-semibold">
-                              <span>{t.accountName || 'Unknown'}</span>
-                              <ArrowLeftRight className="w-3 h-3" />
-                              <span>{t.toAccountName || 'Unknown'}</span>
+                            <div className="flex items-center gap-1 text-blue-600 font-semibold truncate">
+                              <span className="truncate">{t.accountName || 'Unknown'}</span>
+                              <ArrowLeftRight className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{t.toAccountName || 'Unknown'}</span>
                             </div>
                           ) : (
-                            <span className="font-semibold text-slate-600">
+                            <span className="font-semibold text-slate-600 truncate block">
                               {t.accountName || 'Unknown'}
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-emerald-600 text-xs">
+                        <TableCell className="text-right font-bold text-emerald-600 text-xs px-2 py-2 whitespace-nowrap">
                           {isIncome ? `+${settings.currency}${t.amount.toFixed(2)}` : '—'}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-rose-600 text-xs">
+                        <TableCell className="text-right font-bold text-rose-600 text-xs px-2 py-2 whitespace-nowrap">
                           {isExpense ? `-${settings.currency}${t.amount.toFixed(2)}` : '—'}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-slate-900 text-xs">
+                        <TableCell className="text-right font-bold text-slate-900 text-xs px-2 py-2 whitespace-nowrap">
                           {t.accountBalance !== undefined ? (
                             <span>
                               {settings.currency}{t.accountBalance.toFixed(2)}
@@ -1710,8 +1710,8 @@ export const SalesHistory: React.FC = () => {
                             </span>
                           ) : '—'}
                         </TableCell>
-                        <TableCell className="text-xs text-slate-600 font-medium">
-                          {t.createdByName || 'Staff'}
+                        <TableCell className="px-2 py-2 text-xs text-slate-600 font-medium overflow-hidden">
+                          <span className="truncate block">{t.createdByName || 'Staff'}</span>
                         </TableCell>
                       </TableRow>
                     );
