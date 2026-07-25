@@ -154,9 +154,28 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
 
   const expenseTransactions = transactions.filter(t => {
     if (t.type !== 'expense') return false;
-    // Non-admin users are locked to viewing only their assigned branch/location's expenses and claims
-    if (!isAdmin && profile?.locationId) {
-      return t.locationId === profile.locationId;
+    // Staffs and managers (non-admins) are restricted to viewing only their own submitted expense entries
+    if (!isAdmin) {
+      const isMyEntry = 
+        (!!t.createdBy && (
+          t.createdBy === profile?.id || 
+          t.createdBy === user?.uid || 
+          t.createdBy === profile?.email || 
+          t.createdBy === user?.email
+        )) ||
+        (!!t.createdByName && (
+          (!!profile?.name && t.createdByName.toLowerCase().trim() === profile.name.toLowerCase().trim()) ||
+          (!!user?.displayName && t.createdByName.toLowerCase().trim() === user.displayName.toLowerCase().trim()) ||
+          (!!user?.email && t.createdByName.toLowerCase().trim() === user.email.toLowerCase().trim()) ||
+          (!!profile?.email && t.createdByName.toLowerCase().trim() === profile.email.toLowerCase().trim())
+        ));
+
+      if (!isMyEntry) return false;
+
+      if (profile?.locationId) {
+        return !t.locationId || t.locationId === profile.locationId;
+      }
+      return true;
     }
     return true;
   });
@@ -293,7 +312,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
         <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 rounded-t-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
             <CardTitle className="text-lg font-bold text-slate-800">Expense History Ledger</CardTitle>
-            <CardDescription className="text-xs">Verified logs of outgoing cash and expense entries.</CardDescription>
+            <CardDescription className="text-xs">
+              {isAdmin ? "Verified logs of outgoing cash and expense entries across all staff." : "Verified logs of your submitted outgoing cash and expense entries."}
+            </CardDescription>
           </div>
           <div className="relative w-full sm:w-64">
             <Input
