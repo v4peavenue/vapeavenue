@@ -933,6 +933,40 @@ export const SalesHistory: React.FC = () => {
     return list;
   }, [sales, paymentOptions, getPaymentMethodName, getUnifiedMethodId, financeCashId, financeCashAccount]);
 
+  const isMethodMatch = React.useCallback((
+    mId?: string | null,
+    mName?: string | null,
+    filterId?: string,
+    filterNameStr?: string
+  ) => {
+    if (!filterId || filterId === 'all') return true;
+    if (!mId && !mName) return false;
+
+    const filterUnified = getUnifiedMethodId(filterId);
+    const filterNameLower = (filterNameStr || '').toLowerCase().trim();
+    const isCashFilter = filterId === financeCashId || filterId === 'cash' || filterNameLower === 'cash';
+
+    const mUnified = mId ? getUnifiedMethodId(mId) : '';
+    const mNameLower = (mName || '').toLowerCase().trim();
+    const mIdLower = (mId || '').toLowerCase().trim();
+
+    if (isCashFilter) {
+      // Must be a cash method/account, and NOT gcash or e-wallet or card
+      if (mNameLower.includes('gcash') || mIdLower.includes('gcash')) return false;
+      if (mId === financeCashId || mIdLower === 'cash' || mUnified === financeCashId) return true;
+      if (mNameLower === 'cash' || mNameLower === 'petty cash' || mNameLower === 'cash on hand' || mNameLower === 'cash account' || mNameLower === 'cash drawer') return true;
+      const words = mNameLower.split(/[\s_-]+/);
+      if (words.includes('cash') && !mNameLower.includes('gcash')) return true;
+      return false;
+    }
+
+    // Non-cash filter matching
+    if (mId && (mId === filterId || mUnified === filterUnified)) return true;
+    if (mNameLower && filterNameLower && mNameLower === filterNameLower) return true;
+
+    return false;
+  }, [financeCashId, getUnifiedMethodId]);
+
   const filteredSales = sales.filter(s => {
     // Search filter
     const searchLower = searchTerm.toLowerCase();
@@ -966,24 +1000,15 @@ export const SalesHistory: React.FC = () => {
       } else if (paymentFilter === 'pending') {
         matchesPayment = s.paymentMethod === 'pending' || s.status === 'pending';
       } else {
-        const filterUnified = getUnifiedMethodId(paymentFilter);
-        const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === filterUnified);
+        const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === getUnifiedMethodId(paymentFilter));
         const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase().trim();
 
-        const saleUnified = getUnifiedMethodId(s.paymentMethod || '');
-        const saleName = getPaymentMethodName(s.paymentMethod, s.paymentSplits).toLowerCase().trim();
-
-        const matchesMain = (!!s.paymentMethod && s.paymentMethod === paymentFilter) ||
-                            (!!saleUnified && !!filterUnified && saleUnified === filterUnified) ||
-                            (filterName !== '' && saleName === filterName);
+        const saleName = getPaymentMethodName(s.paymentMethod || '', s.paymentSplits);
+        const matchesMain = isMethodMatch(s.paymentMethod, saleName, paymentFilter, filterName);
 
         const matchesSplit = s.paymentSplits?.some(split => {
-          if (!split.methodId) return false;
-          const splitUnified = getUnifiedMethodId(split.methodId);
-          const splitName = getPaymentMethodName(split.methodId, s.paymentSplits).toLowerCase().trim();
-          return split.methodId === paymentFilter ||
-                 (!!splitUnified && !!filterUnified && splitUnified === filterUnified) ||
-                 (filterName !== '' && splitName === filterName);
+          const splitName = getPaymentMethodName(split.methodId || '', s.paymentSplits);
+          return isMethodMatch(split.methodId, splitName || split.methodName, paymentFilter, filterName);
         }) === true;
 
         matchesPayment = matchesMain || matchesSplit;
@@ -1085,35 +1110,15 @@ export const SalesHistory: React.FC = () => {
 
     let matchesPayment = true;
     if (paymentFilter !== 'all') {
-      const filterUnified = getUnifiedMethodId(paymentFilter);
-      const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === filterUnified);
+      const selectedOption = dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === getUnifiedMethodId(paymentFilter));
       const filterName = (selectedOption ? selectedOption.name : getPaymentMethodName(paymentFilter)).toLowerCase().trim();
 
-      const accUnified = getUnifiedMethodId(t.accountId || '');
-      const toAccUnified = getUnifiedMethodId(t.toAccountId || '');
-      const accName = (t.accountName || '').toLowerCase().trim();
-      const toAccName = (t.toAccountName || '').toLowerCase().trim();
-
-      const isCashFilter = paymentFilter === financeCashId || filterName === 'cash';
-
-      const matchesAccount = (!!t.accountId && (t.accountId === paymentFilter || (!!accUnified && !!filterUnified && accUnified === filterUnified))) ||
-                             (filterName !== '' && accName === filterName) ||
-                             (isCashFilter && (accName.includes('cash') || accUnified === financeCashId));
-
-      const matchesToAccount = (!!t.toAccountId && (t.toAccountId === paymentFilter || (!!toAccUnified && !!filterUnified && toAccUnified === filterUnified))) ||
-                               (filterName !== '' && toAccName === filterName) ||
-                               (isCashFilter && (toAccName.includes('cash') || toAccUnified === financeCashId));
+      const matchesAccount = isMethodMatch(t.accountId, t.accountName, paymentFilter, filterName);
+      const matchesToAccount = isMethodMatch(t.toAccountId, t.toAccountName, paymentFilter, filterName);
 
       let matchesSplit = false;
       if (t.paymentSplits && Array.isArray(t.paymentSplits)) {
-        matchesSplit = t.paymentSplits.some((s: any) => {
-          const sUnified = getUnifiedMethodId(s.methodId || '');
-          const sName = (s.methodName || '').toLowerCase().trim();
-          return s.methodId === paymentFilter || 
-                 (!!sUnified && !!filterUnified && sUnified === filterUnified) || 
-                 (filterName !== '' && sName === filterName) ||
-                 (isCashFilter && (sName.includes('cash') || sUnified === financeCashId));
-        });
+        matchesSplit = t.paymentSplits.some((s: any) => isMethodMatch(s.methodId, s.methodName, paymentFilter, filterName));
       }
 
       matchesPayment = matchesAccount || matchesToAccount || matchesSplit;
@@ -1124,27 +1129,17 @@ export const SalesHistory: React.FC = () => {
 
   const clearFiltersForTab = (_tab = activeTab) => {
     setDateRange(getTodayDateRange());
-    if (_tab === 'ledger') {
-      setPaymentFilter(financeCashId || 'cash');
-    } else {
-      setPaymentFilter('all');
-    }
+    setPaymentFilter('all');
     setSearchTerm('');
   };
 
   const clearFilters = () => clearFiltersForTab(activeTab);
 
   useEffect(() => {
-    if (activeTab === 'ledger') {
-      if (paymentFilter === 'all' || paymentFilter === 'cash') {
-        if (financeCashId) {
-          setPaymentFilter(financeCashId);
-        }
-      }
-    } else if (paymentFilter === 'cash' && financeCashId !== 'cash') {
+    if (paymentFilter === 'cash' && financeCashId !== 'cash') {
       setPaymentFilter(financeCashId);
     }
-  }, [financeCashId, activeTab]);
+  }, [financeCashId, paymentFilter]);
 
   const accountTotals = (() => {
     const totals: { [accountId: string]: { name: string; amount: number; type: string } } = {};
