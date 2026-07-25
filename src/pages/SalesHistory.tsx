@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   History, 
@@ -105,6 +105,18 @@ export const SalesHistory: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
 
+  const parseTimestampDate = (ts: any): Date => {
+    if (!ts) return new Date(0);
+    if (typeof ts.toDate === 'function') return ts.toDate();
+    if (ts.seconds !== undefined && ts.seconds !== null) return new Date(ts.seconds * 1000);
+    if (ts instanceof Date) return ts;
+    if (typeof ts === 'string' || typeof ts === 'number') {
+      const parsed = new Date(ts);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date(0);
+  };
+
   const getTodayDateRange = () => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     return { start: todayStr, end: todayStr };
@@ -118,7 +130,7 @@ export const SalesHistory: React.FC = () => {
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
   const [activeTab, setActiveTab] = useState<'sales' | 'returns' | 'pending' | 'ledger'>('sales');
-  const [ledgerTransactions, setLedgerTransactions] = useState<any[]>([]);
+  const [rawFinancialTransactions, setRawFinancialTransactions] = useState<any[]>([]);
   const [pendingSales, setPendingSales] = useState<Sale[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<any[]>([]);
   const [selectedReturn, setSelectedReturn] = useState<any | null>(null);
@@ -171,7 +183,7 @@ export const SalesHistory: React.FC = () => {
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(100));
+    const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let salesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
       
@@ -203,8 +215,8 @@ export const SalesHistory: React.FC = () => {
         list = list.filter(s => s.locationId === selectedLocationId);
       }
       list.sort((a, b) => {
-        const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
-        const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+        const timeA = parseTimestampDate(a.timestamp).getTime();
+        const timeB = parseTimestampDate(b.timestamp).getTime();
         return timeB - timeA;
       });
       setPendingSales(list);
@@ -217,7 +229,7 @@ export const SalesHistory: React.FC = () => {
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'), limit(100));
+    const q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let returnsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -244,30 +256,70 @@ export const SalesHistory: React.FC = () => {
         list = list.filter((t: any) => t.locationId === selectedLocationId);
       }
       
-      // Deduplicate transactions by saleId/reference + accountId + type + amount
-      const deduplicated: any[] = [];
-      const seenKeys = new Set<string>();
-
-      for (const t of list as any[]) {
-        const refKey = (t.saleId || t.reference || t.description?.match(/#([a-zA-Z0-9]{8})/)?.[1] || '').substring(0, 8);
-        const timeMin = t.timestamp?.seconds ? Math.floor(t.timestamp.seconds / 300) : 0;
-        
-        const key = refKey 
-          ? `${refKey}_${t.accountId}_${t.type}_${Number(t.amount || 0).toFixed(2)}`
-          : `${(t.description || '').toLowerCase()}_${t.accountId}_${t.type}_${Number(t.amount || 0).toFixed(2)}_${timeMin}`;
-
-        if (!seenKeys.has(key)) {
-          seenKeys.add(key);
-          deduplicated.push(t);
-        }
-      }
-
-      setLedgerTransactions(deduplicated);
+      setRawFinancialTransactions(list);
     }, (error) => {
       console.warn("Ledger error loading financial transactions:", error);
     });
     return () => unsubscribe();
   }, [selectedLocationId, profile]);
+
+  const ledgerTransactions = useMemo(() => {
+    // 1. Transform active completed/returned sales into Sale Record entries
+    const saleRecordEntries = sales
+      .filter(s => s.status !== 'voided' && s.status !== 'pending' && s.status !== 'pending_promo_approval' && s.status !== 'pending_total_approval')
+      .map(sale => {
+        const sellerName = usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff';
+        const customerName = sale.customerDetails?.name || 'Walk-In';
+
+        let accName = 'Sales Account';
+        if (sale.paymentMethod === 'split') {
+          accName = 'Split Payment';
+          if (sale.paymentSplits && sale.paymentSplits.length > 0) {
+            accName = sale.paymentSplits.map(s => s.methodName || getPaymentMethodName(s.methodId)).filter(Boolean).join(', ');
+          }
+        } else if (sale.paymentMethod) {
+          const matchedAcc = accounts.find(a => a.id === sale.paymentMethod || a.name.toLowerCase() === sale.paymentMethod.toLowerCase());
+          accName = matchedAcc?.name || getPaymentMethodName(sale.paymentMethod);
+        }
+
+        return {
+          id: `salerecord_${sale.id}`,
+          saleId: sale.id,
+          amount: sale.total || 0,
+          type: 'income',
+          category: 'Sales',
+          description: `Sale Record #${sale.id.substring(0, 8)}: ${customerName}`,
+          reference: sale.id,
+          accountId: sale.paymentMethod || 'cash',
+          accountName: accName,
+          paymentSplits: sale.paymentSplits || [],
+          locationId: sale.locationId || null,
+          locationName: locations.find(l => l.id === sale.locationId)?.name || null,
+          timestamp: sale.timestamp,
+          createdBy: sale.staffId || 'anonymous',
+          createdByName: sellerName,
+          isSaleRecord: true
+        };
+      });
+
+    // 2. Filter raw financial transactions to EXCLUDE "Sale Payment" records
+    const nonSaleFinancials = rawFinancialTransactions.filter(t => {
+      const descLower = (t.description || '').toLowerCase();
+      const cat = (t.category || '').toLowerCase();
+      
+      const isSalePayment = descLower.includes('sale payment') || 
+                            descLower.includes('approved sale') || 
+                            (cat === 'sales' && !!t.saleId);
+      return !isSalePayment;
+    });
+
+    // 3. Combine and sort descending by timestamp
+    return [...saleRecordEntries, ...nonSaleFinancials].sort((a, b) => {
+      const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
+      const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+      return timeB - timeA;
+    });
+  }, [sales, rawFinancialTransactions, usersList, accounts, locations]);
 
   const handleOpenVoidDialog = (sale: Sale) => {
     if (!isAdmin) {
@@ -864,13 +916,13 @@ export const SalesHistory: React.FC = () => {
     // Date range filter
     let matchesDate = true;
     if (dateRange.start) {
-      const saleDate = s.timestamp.toDate();
+      const saleDate = parseTimestampDate(s.timestamp);
       const start = new Date(dateRange.start);
       start.setHours(0, 0, 0, 0);
       matchesDate = matchesDate && saleDate >= start;
     }
     if (dateRange.end) {
-      const saleDate = s.timestamp.toDate();
+      const saleDate = parseTimestampDate(s.timestamp);
       const end = new Date(dateRange.end);
       end.setHours(23, 59, 59, 999);
       matchesDate = matchesDate && saleDate <= end;
@@ -926,13 +978,13 @@ export const SalesHistory: React.FC = () => {
 
     let matchesDate = true;
     if (dateRange.start) {
-      const returnDate = r.timestamp.toDate();
+      const returnDate = parseTimestampDate(r.timestamp);
       const start = new Date(dateRange.start);
       start.setHours(0, 0, 0, 0);
       matchesDate = matchesDate && returnDate >= start;
     }
     if (dateRange.end) {
-      const returnDate = r.timestamp.toDate();
+      const returnDate = parseTimestampDate(r.timestamp);
       const end = new Date(dateRange.end);
       end.setHours(23, 59, 59, 999);
       matchesDate = matchesDate && returnDate <= end;
@@ -952,13 +1004,13 @@ export const SalesHistory: React.FC = () => {
 
     let matchesDate = true;
     if (dateRange.start) {
-      const saleDate = s.timestamp.toDate();
+      const saleDate = parseTimestampDate(s.timestamp);
       const start = new Date(dateRange.start);
       start.setHours(0, 0, 0, 0);
       matchesDate = matchesDate && saleDate >= start;
     }
     if (dateRange.end) {
-      const saleDate = s.timestamp.toDate();
+      const saleDate = parseTimestampDate(s.timestamp);
       const end = new Date(dateRange.end);
       end.setHours(23, 59, 59, 999);
       matchesDate = matchesDate && saleDate <= end;
@@ -989,13 +1041,13 @@ export const SalesHistory: React.FC = () => {
 
     let matchesDate = true;
     if (dateRange.start) {
-      const tDate = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
+      const tDate = parseTimestampDate(t.timestamp);
       const start = new Date(dateRange.start);
       start.setHours(0, 0, 0, 0);
       matchesDate = matchesDate && tDate >= start;
     }
     if (dateRange.end) {
-      const tDate = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
+      const tDate = parseTimestampDate(t.timestamp);
       const end = new Date(dateRange.end);
       end.setHours(23, 59, 59, 999);
       matchesDate = matchesDate && tDate <= end;
@@ -1020,14 +1072,25 @@ export const SalesHistory: React.FC = () => {
                                (!!toAccUnified && !!filterUnified && toAccUnified === filterUnified) ||
                                (filterName !== '' && toAccName === filterName);
 
-      matchesPayment = matchesAccount || matchesToAccount;
+      let matchesSplit = false;
+      if (t.paymentSplits && Array.isArray(t.paymentSplits)) {
+        matchesSplit = t.paymentSplits.some((s: any) => {
+          const sUnified = getUnifiedMethodId(s.methodId || '');
+          const sName = (s.methodName || '').toLowerCase().trim();
+          return s.methodId === paymentFilter || 
+                 (!!sUnified && !!filterUnified && sUnified === filterUnified) || 
+                 (filterName !== '' && sName === filterName);
+        });
+      }
+
+      matchesPayment = matchesAccount || matchesToAccount || matchesSplit;
     }
 
     return matchesSearch && matchesDate && matchesPayment;
   });
 
   const clearFiltersForTab = (_tab = activeTab) => {
-    setDateRange(getTodayDateRange());
+    setDateRange({ start: '', end: '' });
     setPaymentFilter('all');
     setSearchTerm('');
   };
