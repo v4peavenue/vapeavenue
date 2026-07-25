@@ -11,7 +11,6 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore with settings
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
 // Enable Offline Persistence (Disabled in development/iframe mode to prevent IndexedDB lock assertion crashes)
