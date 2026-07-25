@@ -180,7 +180,7 @@ export const Finance: React.FC = () => {
           }
         }
 
-        setTransactions(deduplicated.slice(0, 100));
+        setTransactions(deduplicated);
         if (!isManagerUser) {
           setLoading(false);
         }

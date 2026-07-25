@@ -123,7 +123,7 @@ export const SalesHistory: React.FC = () => {
   };
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => getTodayDateRange());
-  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('cash');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [voidAccountId, setVoidAccountId] = useState('');
@@ -1129,7 +1129,7 @@ export const SalesHistory: React.FC = () => {
 
   const clearFiltersForTab = (_tab = activeTab) => {
     setDateRange(getTodayDateRange());
-    setPaymentFilter('all');
+    setPaymentFilter(financeCashId || 'cash');
     setSearchTerm('');
   };
 
