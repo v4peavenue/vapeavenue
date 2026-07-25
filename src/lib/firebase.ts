@@ -10,6 +10,7 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with settings
 export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
   experimentalAutoDetectLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
