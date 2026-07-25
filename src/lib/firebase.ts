@@ -9,7 +9,9 @@ console.log("Firebase: Initializing with config for project:", firebaseConfig.pr
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with settings
-export const db = initializeFirestore(app, {}, firebaseConfig.firestoreDatabaseId || '(default)');
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId || '(default)');
 
 // Enable Offline Persistence (Disabled in development/iframe mode to prevent IndexedDB lock assertion crashes)
 /*
