@@ -129,7 +129,7 @@ export const SalesHistory: React.FC = () => {
   const [voidAccountId, setVoidAccountId] = useState('');
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'sales' | 'returns' | 'pending' | 'ledger'>('sales');
+  const [activeTab, setActiveTab] = useState<'sales' | 'returns' | 'pending' | 'ledger'>('ledger');
   const [rawFinancialTransactions, setRawFinancialTransactions] = useState<any[]>([]);
   const [pendingSales, setPendingSales] = useState<Sale[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<any[]>([]);
@@ -263,63 +263,152 @@ export const SalesHistory: React.FC = () => {
     return () => unsubscribe();
   }, [selectedLocationId, profile]);
 
+  const getPaymentMethodName = React.useCallback((id: string, splits?: any[]) => {
+    if (!id) return '';
+    const idLower = id.toLowerCase().trim();
+    if (idLower === 'cash') return 'Cash';
+    if (idLower === 'card') return 'Card';
+    if (idLower === 'digital') return 'Digital Payment';
+    if (idLower === 'pending') return 'Pending/Unpaid';
+    if (idLower === 'split') return 'Split Payment';
+
+    const acc = accounts.find(a => a.id === id || a.name.toLowerCase() === idLower);
+    if (acc) return acc.name;
+
+    const opt = paymentOptions.find(o => o.id === id || o.name.toLowerCase() === idLower);
+    if (opt) return opt.name;
+
+    if (splits && splits.length > 0) {
+      const matchingSplit = splits.find(split => split.methodId === id || split.methodName?.toLowerCase() === idLower);
+      if (matchingSplit && matchingSplit.methodName) {
+        return matchingSplit.methodName;
+      }
+    }
+    return id.charAt(0).toUpperCase() + id.slice(1);
+  }, [accounts, paymentOptions]);
+
+  const financeCashAccount = React.useMemo(() => {
+    return accounts.find(a => a.name?.trim().toLowerCase() === 'cash') ||
+           paymentOptions.find(o => o.name?.trim().toLowerCase() === 'cash') ||
+           accounts.find(a => a.type === 'cash' && !a.name?.toLowerCase().includes('gcash')) ||
+           paymentOptions.find(o => o.type === 'cash' && !o.name?.toLowerCase().includes('gcash'));
+  }, [accounts, paymentOptions]);
+
+  const financeCashId = financeCashAccount ? financeCashAccount.id : 'cash';
+
+  const getUnifiedMethodId = React.useCallback((id: string) => {
+    if (!id) return '';
+    const idLower = id.toLowerCase().trim();
+    if (id === financeCashId || idLower === 'cash') return financeCashId;
+    
+    // Find in paymentOptions
+    const opt = paymentOptions.find(o => o.id === id || o.name?.toLowerCase().trim() === idLower);
+    if (opt) {
+      if (opt.id === financeCashId || opt.name?.toLowerCase().trim() === 'cash') {
+        return financeCashId;
+      }
+      return opt.id;
+    }
+
+    // Find in accounts
+    const acc = accounts.find(a => a.id === id || a.name?.toLowerCase().trim() === idLower);
+    if (acc) {
+      if (acc.id === financeCashId || acc.name?.toLowerCase().trim() === 'cash') {
+        return financeCashId;
+      }
+      return acc.id;
+    }
+
+    return id;
+  }, [paymentOptions, accounts, financeCashId]);
+
   const ledgerTransactions = useMemo(() => {
+    // Set of all sale IDs to identify sale-related financial transactions
+    const saleIdSet = new Set(sales.map(s => s.id));
+
     // 1. Transform active completed/returned sales into Sale Record entries
-    const saleRecordEntries = sales
+    const saleRecordEntries: any[] = [];
+    sales
       .filter(s => s.status !== 'voided' && s.status !== 'pending' && s.status !== 'pending_promo_approval' && s.status !== 'pending_total_approval')
-      .map(sale => {
+      .forEach(sale => {
         const sellerName = usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff';
         const customerName = sale.customerDetails?.name || 'Walk-In';
 
-        let accName = 'Sales Account';
-        if (sale.paymentMethod === 'split') {
-          accName = 'Split Payment';
-          if (sale.paymentSplits && sale.paymentSplits.length > 0) {
-            accName = sale.paymentSplits.map(s => s.methodName || getPaymentMethodName(s.methodId)).filter(Boolean).join(', ');
-          }
-        } else if (sale.paymentMethod) {
-          const matchedAcc = accounts.find(a => a.id === sale.paymentMethod || a.name.toLowerCase() === sale.paymentMethod.toLowerCase());
-          accName = matchedAcc?.name || getPaymentMethodName(sale.paymentMethod);
-        }
+        if (sale.paymentSplits && sale.paymentSplits.length > 0) {
+          sale.paymentSplits.forEach((split, idx) => {
+            const rawId = split.methodId || 'cash';
+            const matchedAcc = accounts.find(a => a.id === rawId || a.name.toLowerCase() === rawId.toLowerCase());
+            const accName = matchedAcc?.name || split.methodName || getPaymentMethodName(rawId);
 
-        return {
-          id: `salerecord_${sale.id}`,
-          saleId: sale.id,
-          amount: sale.total || 0,
-          type: 'income',
-          category: 'Sales',
-          description: `Sale Record #${sale.id.substring(0, 8)}: ${customerName}`,
-          reference: sale.id,
-          accountId: sale.paymentMethod || 'cash',
-          accountName: accName,
-          paymentSplits: sale.paymentSplits || [],
-          locationId: sale.locationId || null,
-          locationName: locations.find(l => l.id === sale.locationId)?.name || null,
-          timestamp: sale.timestamp,
-          createdBy: sale.staffId || 'anonymous',
-          createdByName: sellerName,
-          isSaleRecord: true
-        };
+            saleRecordEntries.push({
+              id: `salerecord_${sale.id}_${idx}`,
+              saleId: sale.id,
+              amount: split.amount || 0,
+              type: 'income',
+              category: 'Sales',
+              description: `Sale Record #${sale.id.substring(0, 8)}: ${customerName} (${split.methodName || 'Split'})`,
+              reference: split.reference || sale.id,
+              accountId: rawId,
+              accountName: accName,
+              locationId: sale.locationId || null,
+              locationName: locations.find(l => l.id === sale.locationId)?.name || null,
+              timestamp: sale.timestamp,
+              createdBy: sale.staffId || 'anonymous',
+              createdByName: sellerName,
+              isSaleRecord: true
+            });
+          });
+        } else {
+          let accName = 'Sales Account';
+          if (sale.paymentMethod) {
+            const matchedAcc = accounts.find(a => a.id === sale.paymentMethod || a.name.toLowerCase() === sale.paymentMethod.toLowerCase());
+            accName = matchedAcc?.name || getPaymentMethodName(sale.paymentMethod);
+          }
+
+          saleRecordEntries.push({
+            id: `salerecord_${sale.id}`,
+            saleId: sale.id,
+            amount: sale.total || 0,
+            type: 'income',
+            category: 'Sales',
+            description: `Sale Record #${sale.id.substring(0, 8)}: ${customerName}`,
+            reference: sale.id,
+            accountId: sale.paymentMethod || 'cash',
+            accountName: accName,
+            locationId: sale.locationId || null,
+            locationName: locations.find(l => l.id === sale.locationId)?.name || null,
+            timestamp: sale.timestamp,
+            createdBy: sale.staffId || 'anonymous',
+            createdByName: sellerName,
+            isSaleRecord: true
+          });
+        }
       });
 
-    // 2. Filter raw financial transactions to EXCLUDE "Sale Payment" records
+    // 2. Filter raw financial transactions to EXCLUDE all transactions associated with sales
     const nonSaleFinancials = rawFinancialTransactions.filter(t => {
       const descLower = (t.description || '').toLowerCase();
-      const cat = (t.category || '').toLowerCase();
+      const catLower = (t.category || '').toLowerCase();
       
-      const isSalePayment = descLower.includes('sale payment') || 
-                            descLower.includes('approved sale') || 
-                            (cat === 'sales' && !!t.saleId);
-      return !isSalePayment;
+      const hasSaleId = !!t.saleId || (!!t.reference && saleIdSet.has(t.reference));
+      const isSalesCategory = catLower === 'sales' || catLower === 'sale' || catLower === 'pos sales' || catLower === 'pos' || catLower === 'pos sale';
+      const isSaleDesc = descLower.includes('sale payment') || 
+                         descLower.includes('approved sale') || 
+                         descLower.includes('sale record') || 
+                         descLower.includes('payment for sale') ||
+                         descLower.includes('sale #');
+
+      const isSaleRelated = hasSaleId || (isSalesCategory && t.type === 'income') || isSaleDesc;
+      return !isSaleRelated;
     });
 
     // 3. Combine and sort descending by timestamp
     return [...saleRecordEntries, ...nonSaleFinancials].sort((a, b) => {
-      const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-      const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+      const timeA = parseTimestampDate(a.timestamp).getTime();
+      const timeB = parseTimestampDate(b.timestamp).getTime();
       return timeB - timeA;
     });
-  }, [sales, rawFinancialTransactions, usersList, accounts, locations]);
+  }, [sales, rawFinancialTransactions, usersList, accounts, locations, getPaymentMethodName]);
 
   const handleOpenVoidDialog = (sale: Sale) => {
     if (!isAdmin) {
@@ -804,65 +893,6 @@ export const SalesHistory: React.FC = () => {
     }
   };
 
-  const getPaymentMethodName = React.useCallback((id: string, splits?: any[]) => {
-    if (!id) return '';
-    const idLower = id.toLowerCase().trim();
-    if (idLower === 'cash') return 'Cash';
-    if (idLower === 'card') return 'Card';
-    if (idLower === 'digital') return 'Digital Payment';
-    if (idLower === 'pending') return 'Pending/Unpaid';
-    if (idLower === 'split') return 'Split Payment';
-
-    const acc = accounts.find(a => a.id === id || a.name.toLowerCase() === idLower);
-    if (acc) return acc.name;
-
-    const opt = paymentOptions.find(o => o.id === id || o.name.toLowerCase() === idLower);
-    if (opt) return opt.name;
-
-    if (splits && splits.length > 0) {
-      const matchingSplit = splits.find(split => split.methodId === id || split.methodName?.toLowerCase() === idLower);
-      if (matchingSplit && matchingSplit.methodName) {
-        return matchingSplit.methodName;
-      }
-    }
-    return id.charAt(0).toUpperCase() + id.slice(1);
-  }, [accounts, paymentOptions]);
-
-  const financeCashAccount = React.useMemo(() => {
-    return accounts.find(a => a.name?.trim().toLowerCase() === 'cash') ||
-           paymentOptions.find(o => o.name?.trim().toLowerCase() === 'cash') ||
-           accounts.find(a => a.type === 'cash' && !a.name?.toLowerCase().includes('gcash')) ||
-           paymentOptions.find(o => o.type === 'cash' && !o.name?.toLowerCase().includes('gcash'));
-  }, [accounts, paymentOptions]);
-
-  const financeCashId = financeCashAccount ? financeCashAccount.id : 'cash';
-
-  const getUnifiedMethodId = React.useCallback((id: string) => {
-    if (!id) return '';
-    const idLower = id.toLowerCase().trim();
-    if (id === financeCashId || idLower === 'cash') return financeCashId;
-    
-    // Find in paymentOptions
-    const opt = paymentOptions.find(o => o.id === id || o.name?.toLowerCase().trim() === idLower);
-    if (opt) {
-      if (opt.id === financeCashId || opt.name?.toLowerCase().trim() === 'cash') {
-        return financeCashId;
-      }
-      return opt.id;
-    }
-
-    // Find in accounts
-    const acc = accounts.find(a => a.id === id || a.name?.toLowerCase().trim() === idLower);
-    if (acc) {
-      if (acc.id === financeCashId || acc.name?.toLowerCase().trim() === 'cash') {
-        return financeCashId;
-      }
-      return acc.id;
-    }
-
-    return id;
-  }, [paymentOptions, accounts, financeCashId]);
-
   const dynamicPaymentOptions = React.useMemo(() => {
     const unifiedMethodsInUse = new Set<string>();
     unifiedMethodsInUse.add(financeCashId);
@@ -1064,13 +1094,15 @@ export const SalesHistory: React.FC = () => {
       const accName = (t.accountName || '').toLowerCase().trim();
       const toAccName = (t.toAccountName || '').toLowerCase().trim();
 
-      const matchesAccount = (!!t.accountId && t.accountId === paymentFilter) ||
-                             (!!accUnified && !!filterUnified && accUnified === filterUnified) ||
-                             (filterName !== '' && accName === filterName);
+      const isCashFilter = paymentFilter === financeCashId || filterName === 'cash';
 
-      const matchesToAccount = (!!t.toAccountId && t.toAccountId === paymentFilter) ||
-                               (!!toAccUnified && !!filterUnified && toAccUnified === filterUnified) ||
-                               (filterName !== '' && toAccName === filterName);
+      const matchesAccount = (!!t.accountId && (t.accountId === paymentFilter || (!!accUnified && !!filterUnified && accUnified === filterUnified))) ||
+                             (filterName !== '' && accName === filterName) ||
+                             (isCashFilter && (accName.includes('cash') || accUnified === financeCashId));
+
+      const matchesToAccount = (!!t.toAccountId && (t.toAccountId === paymentFilter || (!!toAccUnified && !!filterUnified && toAccUnified === filterUnified))) ||
+                               (filterName !== '' && toAccName === filterName) ||
+                               (isCashFilter && (toAccName.includes('cash') || toAccUnified === financeCashId));
 
       let matchesSplit = false;
       if (t.paymentSplits && Array.isArray(t.paymentSplits)) {
@@ -1079,7 +1111,8 @@ export const SalesHistory: React.FC = () => {
           const sName = (s.methodName || '').toLowerCase().trim();
           return s.methodId === paymentFilter || 
                  (!!sUnified && !!filterUnified && sUnified === filterUnified) || 
-                 (filterName !== '' && sName === filterName);
+                 (filterName !== '' && sName === filterName) ||
+                 (isCashFilter && (sName.includes('cash') || sUnified === financeCashId));
         });
       }
 
@@ -1090,18 +1123,28 @@ export const SalesHistory: React.FC = () => {
   });
 
   const clearFiltersForTab = (_tab = activeTab) => {
-    setDateRange({ start: '', end: '' });
-    setPaymentFilter('all');
+    setDateRange(getTodayDateRange());
+    if (_tab === 'ledger') {
+      setPaymentFilter(financeCashId || 'cash');
+    } else {
+      setPaymentFilter('all');
+    }
     setSearchTerm('');
   };
 
   const clearFilters = () => clearFiltersForTab(activeTab);
 
   useEffect(() => {
-    if (paymentFilter === 'cash' && financeCashId !== 'cash') {
+    if (activeTab === 'ledger') {
+      if (paymentFilter === 'all' || paymentFilter === 'cash') {
+        if (financeCashId) {
+          setPaymentFilter(financeCashId);
+        }
+      }
+    } else if (paymentFilter === 'cash' && financeCashId !== 'cash') {
       setPaymentFilter(financeCashId);
     }
-  }, [financeCashId, paymentFilter]);
+  }, [financeCashId, activeTab]);
 
   const accountTotals = (() => {
     const totals: { [accountId: string]: { name: string; amount: number; type: string } } = {};
@@ -1442,7 +1485,7 @@ export const SalesHistory: React.FC = () => {
               : "border-transparent text-slate-500 hover:text-slate-800"
           )}
         >
-          Unified Ledger
+          Unified Ledger (New)
         </button>
       </div>
 
@@ -1629,49 +1672,52 @@ export const SalesHistory: React.FC = () => {
             <>
               <TableHeader className="bg-slate-50">
                 <TableRow>
-                  <TableHead className="w-[12%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Date & Time</TableHead>
-                  <TableHead className="w-[9%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Trans ID</TableHead>
-                  <TableHead className="w-[10%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Category</TableHead>
-                  <TableHead className="w-[22%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Description</TableHead>
-                  <TableHead className="w-[15%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Account (Flow)</TableHead>
-                  <TableHead className="w-[10%] px-2 py-2.5 text-right text-[11px] font-bold text-slate-700">Inflow (+)</TableHead>
-                  <TableHead className="w-[10%] px-2 py-2.5 text-right text-[11px] font-bold text-slate-700">Outflow (-)</TableHead>
-                  <TableHead className="w-[12%] px-2 py-2.5 text-right text-[11px] font-bold text-slate-700">Balance</TableHead>
-                  <TableHead className="w-[10%] px-2 py-2.5 text-[11px] font-bold text-slate-700">Staff</TableHead>
+                  <TableHead className="w-[14%] px-3 py-3 text-xs font-bold text-slate-700">Date & Time</TableHead>
+                  <TableHead className="w-[12%] px-3 py-3 text-xs font-bold text-slate-700">Transaction ID</TableHead>
+                  <TableHead className="w-[11%] px-3 py-3 text-xs font-bold text-slate-700">Category</TableHead>
+                  <TableHead className="w-[25%] px-3 py-3 text-xs font-bold text-slate-700">Description</TableHead>
+                  <TableHead className="w-[14%] px-3 py-3 text-xs font-bold text-slate-700">Account</TableHead>
+                  <TableHead className="w-[12%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money In (+)</TableHead>
+                  <TableHead className="w-[12%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money Out (-)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center">Loading ledger transactions...</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">Loading transactions...</TableCell>
                   </TableRow>
                 ) : filteredLedger.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-slate-500">No ledger transactions found.</TableCell>
+                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                      No transactions found for the selected period and payment mode.
+                    </TableCell>
                   </TableRow>
                 ) : (
                   filteredLedger.map((t) => {
                     const isIncome = t.type === 'income';
                     const isExpense = t.type === 'expense';
                     const isTransfer = t.type === 'transfer';
-                    const date = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
+                    const date = parseTimestampDate(t.timestamp);
 
                     return (
                       <TableRow key={t.id} className="hover:bg-slate-50/50">
-                        <TableCell className="px-2 py-2 text-xs overflow-hidden">
-                          <div className="font-medium text-slate-900 truncate">
+                        <TableCell className="px-3 py-2.5 text-xs overflow-hidden whitespace-nowrap">
+                          <div className="font-semibold text-slate-900">
                             {format(date, 'MMM dd, yyyy')}
                           </div>
                           <div className="text-[10px] text-slate-500">
                             {format(date, 'HH:mm:ss')}
                           </div>
                         </TableCell>
-                        <TableCell className="font-mono text-[11px] text-slate-500 px-2 py-2 truncate" title={t.id}>
-                          {t.id.substring(0, 8)}...
+                        <TableCell className="font-mono text-xs text-slate-500 px-3 py-2.5 truncate" title={t.id}>
+                          <div>{t.id.substring(0, 10)}...</div>
+                          {t.reference && t.reference !== t.id && (
+                            <div className="text-[10px] text-indigo-600 truncate" title={t.reference}>Ref: {t.reference}</div>
+                          )}
                         </TableCell>
-                        <TableCell className="px-2 py-2 overflow-hidden">
+                        <TableCell className="px-3 py-2.5 overflow-hidden">
                           <Badge variant="outline" className={cn(
-                            "capitalize font-semibold text-[10px] px-1.5 py-0.5 truncate max-w-full",
+                            "capitalize font-bold text-[10px] px-2 py-0.5 truncate max-w-full",
                             isIncome ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                             isExpense ? "bg-rose-50 text-rose-700 border-rose-200" :
                             "bg-blue-50 text-blue-700 border-blue-200"
@@ -1679,47 +1725,27 @@ export const SalesHistory: React.FC = () => {
                             {t.category || t.type}
                           </Badge>
                         </TableCell>
-                        <TableCell className="px-2 py-2 text-slate-700 text-xs font-medium overflow-hidden">
-                          <div className="truncate" title={t.description || 'No description'}>{t.description || 'No description'}</div>
-                          {t.reference && (
-                            <span className="inline-block mt-0.5 text-[9px] font-mono text-indigo-600 bg-indigo-50 border border-indigo-100/50 px-1 py-0.2 rounded truncate max-w-full" title={t.reference}>
-                              Ref: {t.reference}
-                            </span>
-                          )}
+                        <TableCell className="px-3 py-2.5 text-slate-800 text-xs font-medium overflow-hidden">
+                          <div className="line-clamp-2" title={t.description || 'No description'}>
+                            {t.description || 'No description'}
+                          </div>
                         </TableCell>
-                        <TableCell className="px-2 py-2 text-xs overflow-hidden">
+                        <TableCell className="px-3 py-2.5 text-xs font-semibold text-slate-700 overflow-hidden">
                           {isTransfer ? (
-                            <div className="flex items-center gap-1 text-blue-600 font-semibold truncate">
+                            <div className="flex items-center gap-1 text-blue-600">
                               <span className="truncate">{t.accountName || 'Unknown'}</span>
                               <ArrowLeftRight className="w-3 h-3 shrink-0" />
                               <span className="truncate">{t.toAccountName || 'Unknown'}</span>
                             </div>
                           ) : (
-                            <span className="font-semibold text-slate-600 truncate block">
-                              {t.accountName || 'Unknown'}
-                            </span>
+                            <span className="truncate block">{t.accountName || 'Cash'}</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-emerald-600 text-xs px-2 py-2 whitespace-nowrap">
-                          {isIncome ? `+${settings.currency}${t.amount.toFixed(2)}` : '—'}
+                        <TableCell className="text-right font-bold text-emerald-600 text-xs px-3 py-2.5 whitespace-nowrap">
+                          {isIncome ? `+${settings.currency}${(t.amount || 0).toFixed(2)}` : '—'}
                         </TableCell>
-                        <TableCell className="text-right font-bold text-rose-600 text-xs px-2 py-2 whitespace-nowrap">
-                          {isExpense ? `-${settings.currency}${t.amount.toFixed(2)}` : '—'}
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-slate-900 text-xs px-2 py-2 whitespace-nowrap">
-                          {t.accountBalance !== undefined ? (
-                            <span>
-                              {settings.currency}{t.accountBalance.toFixed(2)}
-                              {isTransfer && t.destAccountBalance !== undefined && (
-                                <span className="block text-[10px] text-slate-400 font-normal">
-                                  Dest: {settings.currency}{t.destAccountBalance.toFixed(2)}
-                                </span>
-                              )}
-                            </span>
-                          ) : '—'}
-                        </TableCell>
-                        <TableCell className="px-2 py-2 text-xs text-slate-600 font-medium overflow-hidden">
-                          <span className="truncate block">{t.createdByName || 'Staff'}</span>
+                        <TableCell className="text-right font-bold text-rose-600 text-xs px-3 py-2.5 whitespace-nowrap">
+                          {isExpense ? `-${settings.currency}${(t.amount || 0).toFixed(2)}` : '—'}
                         </TableCell>
                       </TableRow>
                     );
