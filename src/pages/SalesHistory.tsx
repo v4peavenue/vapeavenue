@@ -326,10 +326,10 @@ export const SalesHistory: React.FC = () => {
     // Set of all sale IDs to identify sale-related financial transactions
     const saleIdSet = new Set(sales.map(s => s.id));
 
-    // 1. Transform active completed/returned sales into Sale Record entries
+    // 1. Transform active completed/returned/voided sales into Sale Record entries (representing the original income sale)
     const saleRecordEntries: any[] = [];
     sales
-      .filter(s => s.status !== 'voided' && s.status !== 'pending' && s.status !== 'pending_promo_approval' && s.status !== 'pending_total_approval')
+      .filter(s => s.status !== 'pending' && s.status !== 'pending_promo_approval' && s.status !== 'pending_total_approval')
       .forEach(sale => {
         const sellerName = usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff';
         const customerName = sale.customerDetails?.name || 'Walk-In';
@@ -342,6 +342,7 @@ export const SalesHistory: React.FC = () => {
 
             saleRecordEntries.push({
               id: `salerecord_${sale.id}_${idx}`,
+              displayId: sale.id,
               saleId: sale.id,
               amount: split.amount || 0,
               type: 'income',
@@ -367,6 +368,7 @@ export const SalesHistory: React.FC = () => {
 
           saleRecordEntries.push({
             id: `salerecord_${sale.id}`,
+            displayId: sale.id,
             saleId: sale.id,
             amount: sale.total || 0,
             type: 'income',
@@ -385,11 +387,15 @@ export const SalesHistory: React.FC = () => {
         }
       });
 
-    // 2. Filter raw financial transactions to EXCLUDE all transactions associated with sales
+    // 2. Filter raw financial transactions to EXCLUDE regular sale income logs, but KEEP void transactions
     const nonSaleFinancials = rawFinancialTransactions.filter(t => {
       const descLower = (t.description || '').toLowerCase();
       const catLower = (t.category || '').toLowerCase();
-      
+
+      // Always include void transactions in the ledger
+      const isVoidTx = descLower.includes('void') || catLower === 'returns' || catLower === 'voided sale' || t.isVoidTransaction;
+      if (isVoidTx) return true;
+
       const hasSaleId = !!t.saleId || (!!t.reference && saleIdSet.has(t.reference));
       const isSalesCategory = catLower === 'sales' || catLower === 'sale' || catLower === 'pos sales' || catLower === 'pos' || catLower === 'pos sale';
       const isSaleDesc = descLower.includes('sale payment') || 
@@ -402,8 +408,44 @@ export const SalesHistory: React.FC = () => {
       return !isSaleRelated;
     });
 
-    // 3. Combine and sort descending by timestamp
-    return [...saleRecordEntries, ...nonSaleFinancials].sort((a, b) => {
+    // 3. For any sale marked as voided, ensure there is a void transaction in the ledger
+    const fallbackVoidEntries: any[] = [];
+    sales.filter(s => s.status === 'voided').forEach(sale => {
+      const existingVoid = rawFinancialTransactions.some(t => 
+        (t.isVoidTransaction || (t.description || '').toLowerCase().includes('void')) &&
+        (t.saleId === sale.id || t.reference === sale.id || (t.description || '').includes(sale.id))
+      );
+
+      if (!existingVoid) {
+        let accName = 'Sales Account';
+        if (sale.paymentMethod) {
+          const matchedAcc = accounts.find(a => a.id === sale.paymentMethod || a.name.toLowerCase() === sale.paymentMethod.toLowerCase());
+          accName = matchedAcc?.name || getPaymentMethodName(sale.paymentMethod);
+        }
+
+        fallbackVoidEntries.push({
+          id: `void_${sale.id}`,
+          displayId: `VOID-${sale.id.substring(0, 8)}`,
+          saleId: sale.id,
+          amount: sale.total || 0,
+          type: 'expense',
+          category: 'Voided Sale',
+          description: `Voided Sale: #${sale.id.substring(0, 8)}`,
+          reference: sale.id,
+          accountId: sale.paymentMethod || 'cash',
+          accountName: accName,
+          locationId: sale.locationId || null,
+          locationName: locations.find(l => l.id === sale.locationId)?.name || null,
+          timestamp: sale.updatedAt || sale.timestamp,
+          createdBy: sale.staffId || 'anonymous',
+          createdByName: sale.staffName || 'Staff',
+          isVoidTransaction: true
+        });
+      }
+    });
+
+    // 4. Combine and sort descending by timestamp
+    return [...saleRecordEntries, ...nonSaleFinancials, ...fallbackVoidEntries].sort((a, b) => {
       const timeA = parseTimestampDate(a.timestamp).getTime();
       const timeB = parseTimestampDate(b.timestamp).getTime();
       return timeB - timeA;
@@ -623,12 +665,15 @@ export const SalesHistory: React.FC = () => {
         accountName: account.name,
         locationId: saleToVoid.locationId || null,
         locationName: locations.find(l => l.id === saleToVoid.locationId)?.name || null,
-        category: 'Returns',
-        description: `Voided Sale: ${saleToVoid.id}`,
-        timestamp: saleToVoid.timestamp, // Backdated to original sale's timestamp
+        category: 'Voided Sale',
+        description: `Voided Sale: #${saleToVoid.id.substring(0, 8)}`,
+        timestamp: Timestamp.now(),
         createdBy: profile?.id || 'anonymous',
         createdByName: profile?.name || 'Staff',
-        accountBalance: newBalance
+        accountBalance: newBalance,
+        reference: saleToVoid.id,
+        saleId: saleToVoid.id,
+        isVoidTransaction: true
       });
 
       await batch.commit();
@@ -1084,8 +1129,10 @@ export const SalesHistory: React.FC = () => {
     const saleIdLower = (t.saleId || '').toLowerCase();
     const refLower = (t.reference || '').toLowerCase();
     const idLower = t.id.toLowerCase();
+    const displayIdLower = (t.displayId || '').toLowerCase();
 
     const matchesSearch = idLower.includes(searchLower) ||
+      displayIdLower.includes(searchLower) ||
       saleIdLower.includes(searchLower) ||
       refLower.includes(searchLower) ||
       descLower.includes(searchLower) ||
@@ -1704,9 +1751,12 @@ export const SalesHistory: React.FC = () => {
                             {format(date, 'HH:mm:ss')}
                           </div>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-slate-500 px-3 py-2.5 truncate" title={t.id}>
-                          <div>{t.id.substring(0, 10)}...</div>
-                          {t.reference && t.reference !== t.id && (
+                        <TableCell className="font-mono text-xs text-slate-500 px-3 py-2.5 truncate" title={t.displayId || t.id}>
+                          <div>{(() => {
+                            const raw = t.displayId || (t.id.startsWith('salerecord_') ? t.id.replace(/^salerecord_/, '') : t.id);
+                            return raw.length > 12 ? `${raw.substring(0, 10)}...` : raw;
+                          })()}</div>
+                          {t.reference && t.reference !== (t.displayId || t.id) && (
                             <div className="text-[10px] text-indigo-600 truncate" title={t.reference}>Ref: {t.reference}</div>
                           )}
                         </TableCell>

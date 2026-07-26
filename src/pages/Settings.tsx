@@ -1228,12 +1228,15 @@ export const Settings: React.FC = () => {
               accountName: account.name,
               locationId: saleToVoid.locationId || null,
               locationName: locations.find(l => l.id === saleToVoid.locationId)?.name || null,
-              category: 'Returns',
+              category: 'Voided Sale',
               description: `Voided Sale via Audit: Sale #${saleToVoid.id.substring(0, 8)}`,
               timestamp: Timestamp.now(),
               createdBy: profile?.id || 'anonymous',
               createdByName: profile?.name || 'Staff',
-              accountBalance: (account.balance || 0) - saleToVoid.total
+              accountBalance: (account.balance || 0) - saleToVoid.total,
+              reference: saleToVoid.id,
+              saleId: saleToVoid.id,
+              isVoidTransaction: true
             });
           }
         }
