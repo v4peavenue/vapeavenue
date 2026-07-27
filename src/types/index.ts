@@ -297,12 +297,28 @@ export interface AttendanceRequest {
   id: string;
   userId: string;
   userName: string;
-  type: 'leave' | 'schedule_change' | 'time_correction';
+  type: 'leave' | 'schedule_change' | 'time_correction' | 'overtime';
   status: 'pending' | 'approved' | 'rejected';
   startDate: string; // YYYY-MM-DD
   endDate?: string | null; // YYYY-MM-DD
   newStartTime?: string | null; // HH:mm
   newEndTime?: string | null; // HH:mm
+  otType?: 'preshift' | 'postshift' | 'both' | 'custom';
+  isPreShiftSelected?: boolean;
+  isPostShiftSelected?: boolean;
+  preShiftOtStart?: string | null; // HH:mm
+  preShiftOtEnd?: string | null; // HH:mm
+  postShiftOtStart?: string | null; // HH:mm
+  postShiftOtEnd?: string | null; // HH:mm
+  maxPreShiftStart?: string | null;
+  maxPreShiftEnd?: string | null;
+  maxPostShiftStart?: string | null;
+  maxPostShiftEnd?: string | null;
+  schedStart?: string | null;
+  schedEnd?: string | null;
+  clockInStr?: string | null;
+  clockOutStr?: string | null;
+  otHours?: number;
   locationId?: string;
   locationName?: string;
   reason: string;

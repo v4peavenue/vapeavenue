@@ -195,9 +195,92 @@ export const Attendance: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   const getTimeInMinutes = (timeStr: string) => {
+    if (!timeStr) return 0;
     const [hours, minutes] = timeStr.split(':').map(Number);
-    return hours * 60 + minutes;
+    return (hours || 0) * 60 + (minutes || 0);
   };
+
+  const extractHHMM = (ts: any, backup?: string): string | null => {
+    if (!ts && !backup) return null;
+    if (ts) {
+      try {
+        if (typeof ts.toDate === 'function') return format(ts.toDate(), 'HH:mm');
+        if (ts.seconds) return format(new Date(ts.seconds * 1000), 'HH:mm');
+        const d = new Date(ts);
+        if (isValid(d)) return format(d, 'HH:mm');
+      } catch {
+        // fallback
+      }
+    }
+    if (backup) {
+      try {
+        const d = new Date(backup);
+        if (isValid(d)) return format(d, 'HH:mm');
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    if (newRequest.type === 'overtime' && newRequest.startDate) {
+      const targetUserId = newRequest.userId || profile?.id;
+      const dayStr = newRequest.startDate;
+
+      const userSchedule = schedules.find(s => s.userId === targetUserId && s.date === dayStr);
+      const userLog = allLogs.find(l => l.userId === targetUserId && l.date === dayStr);
+
+      const schedStart = userSchedule && !userSchedule.isDayOff ? (userSchedule.startTime || '08:00') : '08:00';
+      const schedEnd = userSchedule && !userSchedule.isDayOff ? (userSchedule.endTime || '17:00') : '17:00';
+
+      const clockInStr = extractHHMM(userLog?.timeIn, userLog?.timeInBackup);
+      const clockOutStr = extractHHMM(userLog?.timeOut, userLog?.timeOutBackup);
+
+      // Detect pre-shift window: actual clock in to scheduled start time
+      let maxPreStart: string | null = null;
+      let maxPreEnd: string | null = null;
+      let preAvail = false;
+
+      if (clockInStr && schedStart && getTimeInMinutes(clockInStr) < getTimeInMinutes(schedStart)) {
+        maxPreStart = clockInStr;
+        maxPreEnd = schedStart;
+        preAvail = true;
+      }
+
+      // Detect post-shift window: scheduled end time to actual clock out
+      let maxPostStart: string | null = null;
+      let maxPostEnd: string | null = null;
+      let postAvail = false;
+
+      if (clockOutStr && schedEnd && getTimeInMinutes(clockOutStr) > getTimeInMinutes(schedEnd)) {
+        maxPostStart = schedEnd;
+        maxPostEnd = clockOutStr;
+        postAvail = true;
+      }
+
+      setNewRequest(prev => {
+        if (prev.type !== 'overtime') return prev;
+        return {
+          ...prev,
+          schedStart,
+          schedEnd,
+          clockInStr,
+          clockOutStr,
+          isPreShiftSelected: preAvail,
+          isPostShiftSelected: postAvail,
+          preShiftOtStart: maxPreStart || '',
+          preShiftOtEnd: maxPreEnd || '',
+          postShiftOtStart: maxPostStart || '',
+          postShiftOtEnd: maxPostEnd || '',
+          maxPreShiftStart: maxPreStart,
+          maxPreShiftEnd: maxPreEnd,
+          maxPostShiftStart: maxPostStart,
+          maxPostShiftEnd: maxPostEnd
+        };
+      });
+    }
+  }, [newRequest.type, newRequest.startDate, newRequest.userId, schedules, allLogs, profile?.id]);
 
   const formatSafeDate = (dateStr: string | undefined, formatStr: string = 'MMM dd, yyyy') => {
     if (!dateStr) return '';
@@ -467,10 +550,31 @@ export const Attendance: React.FC = () => {
         }
 
         // Calculate regular vs overtime hours
-        const baseLimit = scheduledHrs > 0 ? scheduledHrs : 8.0; // default to 8 hours limit if no schedule
-        
+        // Overtime MUST be explicitly requested by staff and approved by management!
+        const approvedOtRequests = staffRequests.filter(r => 
+          r.type === 'overtime' && 
+          r.status === 'approved' && 
+          r.startDate === dayStr
+        );
+
+        let approvedOtHrs = 0;
+        approvedOtRequests.forEach(req => {
+          if (typeof req.otHours === 'number' && req.otHours > 0) {
+            approvedOtHrs += req.otHours;
+          } else {
+            let pMins = 0;
+            if (req.isPreShiftSelected && req.preShiftOtStart && req.preShiftOtEnd) {
+              pMins += Math.max(0, getTimeInMinutes(req.preShiftOtEnd) - getTimeInMinutes(req.preShiftOtStart));
+            }
+            if (req.isPostShiftSelected && req.postShiftOtStart && req.postShiftOtEnd) {
+              pMins += Math.max(0, getTimeInMinutes(req.postShiftOtEnd) - getTimeInMinutes(req.postShiftOtStart));
+            }
+            approvedOtHrs += pMins / 60;
+          }
+        });
+
+        const baseLimit = scheduledHrs > 0 ? scheduledHrs : 8.0;
         let calculatedRegHrs = Math.min(actualHrs, baseLimit);
-        let calculatedOtHrs = Math.max(0, actualHrs - baseLimit);
 
         if (isLateDeducted) {
           // Late by 5 mins or more -> 1 hour deduction
@@ -478,7 +582,7 @@ export const Attendance: React.FC = () => {
         }
 
         regHrs = calculatedRegHrs;
-        otHrs = calculatedOtHrs;
+        otHrs = approvedOtHrs;
         totalRegularHours += regHrs;
         totalOtHours += otHrs;
       }
@@ -612,9 +716,79 @@ export const Attendance: React.FC = () => {
       return;
     }
 
+    if (newRequest.type === 'overtime') {
+      if (!newRequest.isPreShiftSelected && !newRequest.isPostShiftSelected) {
+        toast.error('Please select at least one Overtime option (Pre-Shift or Post-Shift)');
+        return;
+      }
+
+      // Validate Pre-Shift OT
+      if (newRequest.isPreShiftSelected) {
+        const pStart = newRequest.preShiftOtStart || '';
+        const pEnd = newRequest.preShiftOtEnd || '';
+        const maxStart = newRequest.maxPreShiftStart || '00:00';
+        const maxEnd = newRequest.maxPreShiftEnd || '23:59';
+
+        if (!pStart || !pEnd) {
+          toast.error('Please specify both Start and End time for Pre-Shift OT');
+          return;
+        }
+        if (getTimeInMinutes(pStart) >= getTimeInMinutes(pEnd)) {
+          toast.error('Pre-Shift OT Start time must be before End time');
+          return;
+        }
+        if (getTimeInMinutes(pStart) < getTimeInMinutes(maxStart)) {
+          toast.error(`Pre-shift OT start time (${pStart}) cannot be earlier than actual login time (${maxStart})`);
+          return;
+        }
+        if (getTimeInMinutes(pEnd) > getTimeInMinutes(maxEnd)) {
+          toast.error(`Pre-shift OT end time (${pEnd}) cannot exceed shift start time (${maxEnd})`);
+          return;
+        }
+      }
+
+      // Validate Post-Shift OT
+      if (newRequest.isPostShiftSelected) {
+        const pStart = newRequest.postShiftOtStart || '';
+        const pEnd = newRequest.postShiftOtEnd || '';
+        const maxStart = newRequest.maxPostShiftStart || '00:00';
+        const maxEnd = newRequest.maxPostShiftEnd || '23:59';
+
+        if (!pStart || !pEnd) {
+          toast.error('Please specify both Start and End time for Post-Shift OT');
+          return;
+        }
+        if (getTimeInMinutes(pStart) >= getTimeInMinutes(pEnd)) {
+          toast.error('Post-Shift OT Start time must be before End time');
+          return;
+        }
+        if (getTimeInMinutes(pStart) < getTimeInMinutes(maxStart)) {
+          toast.error(`Post-shift OT start time (${pStart}) cannot be earlier than shift end time (${maxStart})`);
+          return;
+        }
+        if (getTimeInMinutes(pEnd) > getTimeInMinutes(maxEnd)) {
+          toast.error(`Post-shift OT end time (${pEnd}) cannot exceed actual logout time (${maxEnd})`);
+          return;
+        }
+      }
+    }
+
     try {
+      let otHours = 0;
+      if (newRequest.type === 'overtime') {
+        let totalOtMins = 0;
+        if (newRequest.isPreShiftSelected && newRequest.preShiftOtStart && newRequest.preShiftOtEnd) {
+          totalOtMins += getTimeInMinutes(newRequest.preShiftOtEnd) - getTimeInMinutes(newRequest.preShiftOtStart);
+        }
+        if (newRequest.isPostShiftSelected && newRequest.postShiftOtStart && newRequest.postShiftOtEnd) {
+          totalOtMins += getTimeInMinutes(newRequest.postShiftOtEnd) - getTimeInMinutes(newRequest.postShiftOtStart);
+        }
+        otHours = Math.max(0, totalOtMins / 60);
+      }
+
       const requestData = {
         ...newRequest,
+        otHours: newRequest.type === 'overtime' ? otHours : null,
         userId: profile.id,
         userName: profile.name || profile.email,
         createdAt: serverTimestamp()
@@ -1330,9 +1504,15 @@ export const Attendance: React.FC = () => {
                           <div className="flex items-center gap-4">
                             <div className={cn(
                               "w-12 h-12 rounded-2xl flex items-center justify-center",
-                              req.type === 'leave' ? "bg-rose-50 text-rose-500" : req.type === 'time_correction' ? "bg-amber-50 text-amber-600" : "bg-[#1A2B4B]/5 text-[#1A2B4B]"
+                              req.type === 'leave' ? "bg-rose-50 text-rose-500" : 
+                              req.type === 'time_correction' ? "bg-amber-50 text-amber-600" : 
+                              req.type === 'overtime' ? "bg-purple-50 text-purple-600" : 
+                              "bg-[#1A2B4B]/5 text-[#1A2B4B]"
                             )}>
-                              {req.type === 'leave' ? <CalendarOff className="w-6 h-6" /> : req.type === 'time_correction' ? <Clock className="w-6 h-6" /> : <ArrowRightLeft className="w-6 h-6" />}
+                              {req.type === 'leave' ? <CalendarOff className="w-6 h-6" /> : 
+                               req.type === 'time_correction' ? <Clock className="w-6 h-6" /> : 
+                               req.type === 'overtime' ? <Clock className="w-6 h-6" /> : 
+                               <ArrowRightLeft className="w-6 h-6" />}
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
@@ -1347,7 +1527,10 @@ export const Attendance: React.FC = () => {
                                 </Badge>
                               </div>
                               <p className="text-xs text-slate-500 font-medium">
-                                {req.type === 'leave' ? 'Leave Request' : req.type === 'time_correction' ? 'Actual Time Correction' : 'Schedule Change'} • {formatSafeDate(req.startDate)}
+                                {req.type === 'leave' ? 'Leave Request' : 
+                                 req.type === 'time_correction' ? 'Actual Time Correction' : 
+                                 req.type === 'overtime' ? 'Overtime Request' : 
+                                 'Schedule Change'} • {formatSafeDate(req.startDate)}
                                 {req.endDate && ` to ${formatSafeDate(req.endDate)}`}
                               </p>
                             </div>
@@ -1362,6 +1545,24 @@ export const Attendance: React.FC = () => {
                               <div className="mt-2 flex items-center gap-2 text-[10px] font-bold text-indigo-600">
                                 <Clock className="w-3 h-3" />
                                 Proposed: {req.newStartTime} - {req.newEndTime}
+                              </div>
+                            )}
+                            {req.type === 'overtime' && (
+                              <div className="mt-2 space-y-1">
+                                <div className="flex items-center gap-2 text-[10px] font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded w-fit">
+                                  <Clock className="w-3 h-3" />
+                                  Total OT Requested: {req.otHours ? `${req.otHours.toFixed(1)} hrs` : 'Custom'}
+                                </div>
+                                {req.isPreShiftSelected && (
+                                  <p className="text-[10px] text-slate-600 font-medium">
+                                    • <span className="font-bold text-slate-800">Pre-Shift OT:</span> {req.preShiftOtStart} - {req.preShiftOtEnd} (Max: {req.maxPreShiftStart || '07:30'}-{req.maxPreShiftEnd || '08:00'})
+                                  </p>
+                                )}
+                                {req.isPostShiftSelected && (
+                                  <p className="text-[10px] text-slate-600 font-medium">
+                                    • <span className="font-bold text-slate-800">Post-Shift OT:</span> {req.postShiftOtStart} - {req.postShiftOtEnd} (Max: {req.maxPostShiftStart || '17:00'}-{req.maxPostShiftEnd || '18:00'})
+                                  </p>
+                                )}
                               </div>
                             )}
                             {req.type === 'time_correction' && (
@@ -2497,6 +2698,7 @@ export const Attendance: React.FC = () => {
                     <SelectItem value="leave">Leave of Absence</SelectItem>
                     <SelectItem value="schedule_change">Schedule Change</SelectItem>
                     <SelectItem value="time_correction">Actual Time IN/OUT Change</SelectItem>
+                    <SelectItem value="overtime">Overtime Request (Pre/Post Shift)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -2592,6 +2794,170 @@ export const Attendance: React.FC = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+            )}
+
+            {newRequest.type === 'overtime' && (
+              <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-[#1A2B4B]">Overtime Hours Options</h4>
+                  <span className="text-[10px] font-bold text-slate-400">Based on Schedule & Actual Logins</span>
+                </div>
+
+                {/* Schedule vs Actual Logins Info Card */}
+                <div className="grid grid-cols-2 gap-2 p-3 bg-white rounded-xl border border-slate-200/80 text-xs">
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Scheduled Shift</span>
+                    <span className="font-bold text-slate-800">
+                      {newRequest.schedStart && newRequest.schedEnd ? `${newRequest.schedStart} - ${newRequest.schedEnd}` : '08:00 - 17:00'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Actual Attendance</span>
+                    <span className="font-bold text-[#1A2B4B]">
+                      {newRequest.clockInStr ? newRequest.clockInStr : 'No In'} - {newRequest.clockOutStr ? newRequest.clockOutStr : 'No Out'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Pre-Shift OT Section */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-slate-300 text-[#1A2B4B] focus:ring-[#1A2B4B] w-4 h-4 cursor-pointer"
+                        checked={!!newRequest.isPreShiftSelected}
+                        disabled={!newRequest.maxPreShiftStart}
+                        onChange={(e) => setNewRequest(prev => ({ ...prev, isPreShiftSelected: e.target.checked }))}
+                      />
+                      <span className={cn("text-xs font-black", !newRequest.maxPreShiftStart ? "text-slate-400" : "text-slate-800")}>
+                        Pre-Shift Overtime
+                      </span>
+                    </label>
+                    {newRequest.maxPreShiftStart ? (
+                      <span className="text-[10px] font-bold text-[#1A2B4B] bg-[#1A2B4B]/10 px-2 py-0.5 rounded-full">
+                        Eligible: {newRequest.maxPreShiftStart} - {newRequest.maxPreShiftEnd}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                        Not Applicable
+                      </span>
+                    )}
+                  </div>
+
+                  {newRequest.isPreShiftSelected && newRequest.maxPreShiftStart && (
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-[9px] font-black uppercase text-slate-400">OT Start Time</Label>
+                          <Input 
+                            type="time" 
+                            className="bg-slate-50 border border-slate-200 h-10 rounded-lg text-xs font-bold"
+                            value={newRequest.preShiftOtStart || ''}
+                            onChange={(e) => setNewRequest(prev => ({ ...prev, preShiftOtStart: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[9px] font-black uppercase text-slate-400">OT End Time</Label>
+                          <Input 
+                            type="time" 
+                            className="bg-slate-50 border border-slate-200 h-10 rounded-lg text-xs font-bold"
+                            value={newRequest.preShiftOtEnd || ''}
+                            onChange={(e) => setNewRequest(prev => ({ ...prev, preShiftOtEnd: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg font-medium">
+                        Bounded: You can edit times between actual clock-in (<span className="font-bold">{newRequest.maxPreShiftStart}</span>) and shift start (<span className="font-bold">{newRequest.maxPreShiftEnd}</span>).
+                      </p>
+                    </div>
+                  )}
+
+                  {!newRequest.maxPreShiftStart && (
+                    <p className="text-[10px] text-slate-400 font-medium italic">
+                      No pre-shift overtime window detected (actual clock-in is not earlier than scheduled start time).
+                    </p>
+                  )}
+                </div>
+
+                {/* Post-Shift OT Section */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-slate-300 text-[#1A2B4B] focus:ring-[#1A2B4B] w-4 h-4 cursor-pointer"
+                        checked={!!newRequest.isPostShiftSelected}
+                        disabled={!newRequest.maxPostShiftStart}
+                        onChange={(e) => setNewRequest(prev => ({ ...prev, isPostShiftSelected: e.target.checked }))}
+                      />
+                      <span className={cn("text-xs font-black", !newRequest.maxPostShiftStart ? "text-slate-400" : "text-slate-800")}>
+                        Post-Shift Overtime
+                      </span>
+                    </label>
+                    {newRequest.maxPostShiftStart ? (
+                      <span className="text-[10px] font-bold text-[#1A2B4B] bg-[#1A2B4B]/10 px-2 py-0.5 rounded-full">
+                        Eligible: {newRequest.maxPostShiftStart} - {newRequest.maxPostShiftEnd}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                        Not Applicable
+                      </span>
+                    )}
+                  </div>
+
+                  {newRequest.isPostShiftSelected && newRequest.maxPostShiftStart && (
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-[9px] font-black uppercase text-slate-400">OT Start Time</Label>
+                          <Input 
+                            type="time" 
+                            className="bg-slate-50 border border-slate-200 h-10 rounded-lg text-xs font-bold"
+                            value={newRequest.postShiftOtStart || ''}
+                            onChange={(e) => setNewRequest(prev => ({ ...prev, postShiftOtStart: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[9px] font-black uppercase text-slate-400">OT End Time</Label>
+                          <Input 
+                            type="time" 
+                            className="bg-slate-50 border border-slate-200 h-10 rounded-lg text-xs font-bold"
+                            value={newRequest.postShiftOtEnd || ''}
+                            onChange={(e) => setNewRequest(prev => ({ ...prev, postShiftOtEnd: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg font-medium">
+                        Bounded: You can edit times between shift end (<span className="font-bold">{newRequest.maxPostShiftStart}</span>) and actual clock-out (<span className="font-bold">{newRequest.maxPostShiftEnd}</span>).
+                      </p>
+                    </div>
+                  )}
+
+                  {!newRequest.maxPostShiftStart && (
+                    <p className="text-[10px] text-slate-400 font-medium italic">
+                      No post-shift overtime window detected (actual clock-out is not later than scheduled end time).
+                    </p>
+                  )}
+                </div>
+
+                {/* Total OT Requested Summary */}
+                <div className="flex items-center justify-between p-3 bg-[#1A2B4B]/5 rounded-xl text-xs font-bold text-[#1A2B4B]">
+                  <span>Total Overtime Requested:</span>
+                  <span className="text-sm font-black">
+                    {(() => {
+                      let mins = 0;
+                      if (newRequest.isPreShiftSelected && newRequest.preShiftOtStart && newRequest.preShiftOtEnd) {
+                        mins += Math.max(0, getTimeInMinutes(newRequest.preShiftOtEnd) - getTimeInMinutes(newRequest.preShiftOtStart));
+                      }
+                      if (newRequest.isPostShiftSelected && newRequest.postShiftOtStart && newRequest.postShiftOtEnd) {
+                        mins += Math.max(0, getTimeInMinutes(newRequest.postShiftOtEnd) - getTimeInMinutes(newRequest.postShiftOtStart));
+                      }
+                      return `${(mins / 60).toFixed(1)} hrs`;
+                    })()}
+                  </span>
                 </div>
               </div>
             )}
