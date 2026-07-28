@@ -101,6 +101,7 @@ export const Attendance: React.FC = () => {
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [scheduleSearch, setScheduleSearch] = useState('');
   const [compareUserFilter, setCompareUserFilter] = useState('all');
+  const [compareDateFilter, setCompareDateFilter] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const staffAndManagers = useMemo(() => {
     return allUsers.filter(u => u.role === 'staff' || u.role === 'manager');
@@ -1984,10 +1985,13 @@ export const Attendance: React.FC = () => {
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       <div>
                         <CardTitle className="text-lg font-bold">Daily Comparison Report</CardTitle>
-                        <CardDescription>Comparing scheduled vs actual attendance for today.</CardDescription>
+                        <CardDescription>
+                          Comparing scheduled vs actual attendance for {compareDateFilter ? formatSafeDate(compareDateFilter, 'MMMM dd, yyyy') : 'selected date'}.
+                        </CardDescription>
                       </div>
                       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                        <div className="w-56 sm:w-64">
+                        {/* User Select */}
+                        <div className="w-56 sm:w-60">
                           <Select value={compareUserFilter} onValueChange={setCompareUserFilter}>
                             <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200/80 rounded-xl focus:ring-1 focus:ring-[#1A2B4B]">
                               <SelectValue placeholder="All Staff & Managers" />
@@ -2002,10 +2006,32 @@ export const Attendance: React.FC = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex items-center gap-3 justify-end">
-                          <Badge className="bg-[#D4AF37]/10 text-[#D4AF37] border-[#D4AF37]/20">Today</Badge>
-                          <div className="h-4 w-px bg-slate-200" />
-                          <p className="text-xs font-bold text-slate-400">{format(new Date(), 'MMM dd, yyyy')}</p>
+
+                        {/* Date Filter Input */}
+                        <div className="flex items-center gap-2 bg-white border border-slate-200/80 rounded-xl px-3 py-1 shadow-sm">
+                          <Calendar className="w-4 h-4 text-[#1A2B4B] shrink-0" />
+                          <Input
+                            type="date"
+                            value={compareDateFilter}
+                            onChange={(e) => setCompareDateFilter(e.target.value)}
+                            className="h-7 text-xs border-none p-0 focus-visible:ring-0 w-32 font-bold text-slate-700 bg-transparent"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button
+                            variant={compareDateFilter === format(new Date(), 'yyyy-MM-dd') ? "default" : "outline"}
+                            size="sm"
+                            className={cn(
+                              "h-8 text-xs font-bold rounded-xl",
+                              compareDateFilter === format(new Date(), 'yyyy-MM-dd') 
+                                ? "bg-[#1A2B4B] text-white" 
+                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                            )}
+                            onClick={() => setCompareDateFilter(format(new Date(), 'yyyy-MM-dd'))}
+                          >
+                            Today
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -2032,12 +2058,15 @@ export const Attendance: React.FC = () => {
                             </tr>
                           ) : (
                             filteredCompareUsers.map((user) => {
-                              const todayStr = format(new Date(), 'yyyy-MM-dd');
-                              const schedule = getDateSchedule(user.id, todayStr);
-                              const attendance = allLogs.find(l => l.userId === user.id && l.date === todayStr);
+                              const targetDateStr = compareDateFilter || format(new Date(), 'yyyy-MM-dd');
+                              const schedule = getDateSchedule(user.id, targetDateStr);
+                              const attendance = allLogs.find(l => l.userId === user.id && l.date === targetDateStr);
 
-                              const isInLate = schedule && !schedule.isDayOff && attendance && attendance.timeIn && (
-                                format(attendance.timeIn.toDate(), 'HH:mm') > (schedule.startTime || '00:00')
+                              const actualInStr = extractHHMM(attendance?.timeIn, attendance?.timeInBackup);
+                              const actualOutStr = extractHHMM(attendance?.timeOut, attendance?.timeOutBackup);
+
+                              const isInLate = schedule && !schedule.isDayOff && actualInStr && (
+                                actualInStr > (schedule.startTime || '00:00')
                               );
 
                               return (
@@ -2047,13 +2076,13 @@ export const Attendance: React.FC = () => {
                                     {schedule?.isDayOff ? 'DAY OFF' : schedule?.startTime || '--:--'}
                                   </td>
                                   <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
-                                    {attendance?.timeIn ? format(attendance.timeIn.toDate(), 'HH:mm') : '--:--'}
+                                    {actualInStr || '--:--'}
                                   </td>
                                   <td className="px-6 py-4 text-xs font-medium text-slate-400 tabular-nums">
                                     {schedule?.isDayOff ? 'DAY OFF' : schedule?.endTime || '--:--'}
                                   </td>
                                   <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
-                                    {attendance?.timeOut ? format(attendance.timeOut.toDate(), 'HH:mm') : '--:--'}
+                                    {actualOutStr || '--:--'}
                                   </td>
                                   <td className="px-6 py-4">
                                     {schedule?.isDayOff ? (
