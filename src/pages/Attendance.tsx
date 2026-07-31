@@ -472,14 +472,14 @@ export const Attendance: React.FC = () => {
   // Calculate Payslip breakdown
   const payslipData = useMemo(() => {
     if (!selectedPayslipUser || !payslipStartDate || !payslipEndDate) {
-      return { days: [], totalScheduledHours: 0, totalActualHours: 0, totalRegularHours: 0, totalOtHours: 0, lateDeductionsCount: 0, totalLateMinutes: 0 };
+      return { days: [], totalScheduledHours: 0, totalActualHours: 0, totalRegularHours: 0, totalOtHours: 0, lateDeductionsCount: 0, totalLateDeductedHours: 0, totalLateMinutes: 0 };
     }
 
     const start = startOfDay(new Date(payslipStartDate));
     const end = endOfDay(new Date(payslipEndDate));
 
     if (!isValid(start) || !isValid(end)) {
-      return { days: [], totalScheduledHours: 0, totalActualHours: 0, totalRegularHours: 0, totalOtHours: 0, lateDeductionsCount: 0, totalLateMinutes: 0 };
+      return { days: [], totalScheduledHours: 0, totalActualHours: 0, totalRegularHours: 0, totalOtHours: 0, lateDeductionsCount: 0, totalLateDeductedHours: 0, totalLateMinutes: 0 };
     }
 
     const daysInterval = eachDayOfInterval({ start, end });
@@ -492,6 +492,7 @@ export const Attendance: React.FC = () => {
     let totalRegularHours = 0;
     let totalOtHours = 0;
     let lateDeductionsCount = 0;
+    let totalLateDeductedHours = 0;
     let totalLateMinutes = 0;
 
     const daysBreakdown = daysInterval.map(day => {
@@ -507,6 +508,7 @@ export const Attendance: React.FC = () => {
       let regHrs = 0;
       let otHrs = 0;
       let lateMins = 0;
+      let lateDeductionHrs = 0;
       let isLateDeducted = false;
 
       // Calculate scheduled hours
@@ -534,8 +536,14 @@ export const Attendance: React.FC = () => {
           totalActualHours += actualHrs;
         }
 
-        // Calculate late minutes
+        // Calculate late minutes and tardiness penalty hours
+        // Policy:
+        // - 0-5 mins late: 0-5 mins late (0 hr penalty)
+        // - > 5 mins to 60 mins: Automatic 1 hour penalty
+        // - > 60 mins: Penalty equals exact hours late (e.g. 75m = 1.25 hrs)
         const effectiveStartTime = schChange?.newStartTime || schedule?.startTime;
+        const effectiveEndTime = schChange?.newEndTime || schedule?.endTime;
+
         if (effectiveStartTime && log.timeIn) {
           const sMin = getTimeInMinutes(effectiveStartTime);
           const timeInObj = log.timeIn.toDate();
@@ -543,9 +551,16 @@ export const Attendance: React.FC = () => {
           if (actualInMin > sMin) {
             lateMins = actualInMin - sMin;
             totalLateMinutes += lateMins;
-            if (lateMins >= 5) {
+            if (lateMins > 5 && lateMins <= 60) {
+              lateDeductionHrs = 1.0;
               isLateDeducted = true;
               lateDeductionsCount++;
+              totalLateDeductedHours += 1.0;
+            } else if (lateMins > 60) {
+              lateDeductionHrs = lateMins / 60;
+              isLateDeducted = true;
+              lateDeductionsCount++;
+              totalLateDeductedHours += lateDeductionHrs;
             }
           }
         }
@@ -574,15 +589,21 @@ export const Attendance: React.FC = () => {
           }
         });
 
-        const baseLimit = scheduledHrs > 0 ? scheduledHrs : 8.0;
-        let calculatedRegHrs = Math.min(actualHrs, baseLimit);
-
-        if (isLateDeducted) {
-          // Late by 5 mins or more -> 1 hour deduction
-          calculatedRegHrs = Math.max(0, calculatedRegHrs - 1.0);
+        // Base shift regular hours calculation (from scheduled start to actual/scheduled end)
+        let baseRegHrs = 0;
+        if (effectiveStartTime && log.timeOut && effectiveEndTime) {
+          const sMin = getTimeInMinutes(effectiveStartTime);
+          const eMin = getTimeInMinutes(effectiveEndTime);
+          const timeOutObj = log.timeOut.toDate();
+          const actualOutMin = timeOutObj.getHours() * 60 + timeOutObj.getMinutes();
+          const effectiveOutMin = Math.min(eMin, actualOutMin);
+          const baseShiftHrs = Math.max(0, (effectiveOutMin - sMin) / 60);
+          baseRegHrs = scheduledHrs > 0 ? Math.min(baseShiftHrs, scheduledHrs) : actualHrs;
+        } else {
+          baseRegHrs = scheduledHrs > 0 ? Math.min(actualHrs, scheduledHrs) : actualHrs;
         }
 
-        regHrs = calculatedRegHrs;
+        regHrs = Math.max(0, baseRegHrs - lateDeductionHrs);
         otHrs = approvedOtHrs;
         totalRegularHours += regHrs;
         totalOtHours += otHrs;
@@ -597,6 +618,7 @@ export const Attendance: React.FC = () => {
         regHrs,
         otHrs,
         lateMins,
+        lateDeductionHrs,
         isLateDeducted,
         timeInStr: log?.timeIn ? format(log.timeIn.toDate(), 'HH:mm') : null,
         timeOutStr: log?.timeOut ? format(log.timeOut.toDate(), 'HH:mm') : null,
@@ -612,6 +634,7 @@ export const Attendance: React.FC = () => {
       totalRegularHours,
       totalOtHours,
       lateDeductionsCount,
+      totalLateDeductedHours,
       totalLateMinutes
     };
   }, [selectedPayslipUser, payslipStartDate, payslipEndDate, schedules, allLogs, requests]);
@@ -2438,8 +2461,8 @@ export const Attendance: React.FC = () => {
                                         {day.otHrs > 0 ? `${day.otHrs.toFixed(1)} hrs` : '—'}
                                       </td>
                                       <td className="py-2 px-4 text-right">
-                                        {day.isLateDeducted ? (
-                                          <span className="text-rose-600 font-black text-[10px]">-1.0 hr</span>
+                                        {day.lateDeductionHrs > 0 ? (
+                                          <span className="text-rose-600 font-black text-[10px]">-{(day.lateDeductionHrs % 1 === 0 ? day.lateDeductionHrs : day.lateDeductionHrs.toFixed(2))} hr</span>
                                         ) : '—'}
                                       </td>
                                       <td className="py-2 px-4 text-right font-bold text-slate-800">
@@ -2507,11 +2530,11 @@ export const Attendance: React.FC = () => {
                               {/* Late deductions */}
                               <div className="flex justify-between items-center text-xs text-slate-600">
                                 <div className="space-y-0.5">
-                                  <p className="font-semibold">Late Penalties (Late &gt;= 5m)</p>
-                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} = {payslipData.lateDeductionsCount} hr{payslipData.lateDeductionsCount !== 1 ? 's' : ''} deducted)</p>
+                                  <p className="font-semibold">Late Penalties (Tardiness &gt; 5m)</p>
+                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} = {payslipData.totalLateDeductedHours % 1 === 0 ? payslipData.totalLateDeductedHours : payslipData.totalLateDeductedHours.toFixed(2)} hr{payslipData.totalLateDeductedHours !== 1 ? 's' : ''} deducted)</p>
                                 </div>
                                 <span className="font-bold text-rose-600">
-                                  -{settings.currency}{(payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  -{settings.currency}{(payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                               </div>
 
@@ -2545,10 +2568,9 @@ export const Attendance: React.FC = () => {
                               <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Gross Earnings</span>
                               <p className="text-lg font-extrabold text-slate-800 mt-0.5">
                                 {settings.currency}{(
-                                  (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
+                                  ((payslipData.totalRegularHours + payslipData.totalLateDeductedHours) * (parseFloat(payslipHourlyRate) || 0)) + 
                                   (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
-                                  (parseFloat(payslipIncentiveAmount) || 0) +
-                                  (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0))
+                                  (parseFloat(payslipIncentiveAmount) || 0)
                                 ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
@@ -2557,7 +2579,7 @@ export const Attendance: React.FC = () => {
                               <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Total Deductions</span>
                               <p className="text-lg font-extrabold text-rose-600 mt-0.5">
                                 {settings.currency}{(
-                                  (payslipData.lateDeductionsCount * (parseFloat(payslipHourlyRate) || 0)) +
+                                  (payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)) +
                                   (parseFloat(payslipDeductionAmount) || 0)
                                 ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
@@ -2666,9 +2688,9 @@ export const Attendance: React.FC = () => {
                                       {day.otHrs > 0 ? `${day.otHrs.toFixed(1)} hr` : '—'}
                                     </td>
                                     <td className="px-5 py-3.5">
-                                      {day.isLateDeducted ? (
+                                      {day.lateDeductionHrs > 0 ? (
                                         <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-100 text-[10px] font-bold">
-                                          Late {day.lateMins}m (-1h)
+                                          Late {day.lateMins}m (-{(day.lateDeductionHrs % 1 === 0 ? day.lateDeductionHrs : day.lateDeductionHrs.toFixed(2))}h)
                                         </Badge>
                                       ) : day.lateMins > 0 ? (
                                         <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-100 text-[10px] font-bold">
