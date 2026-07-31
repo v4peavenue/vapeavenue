@@ -27,8 +27,11 @@ import {
   Search,
   Calendar,
   RotateCcw,
-  Filter
+  Filter,
+  Gift,
+  RefreshCw
 } from 'lucide-react';
+import { migrateCustomerLoyaltyCounts, MigrationResult } from '@/lib/loyalty-migrations';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit, getDocs, writeBatch, Timestamp, setDoc, deleteField, getDoc, increment, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Category, Supplier, UserProfile, Location, Invite, AuditLog, Customer, Product, PromoCode, PaymentOption, Sale } from '@/types';
@@ -59,7 +62,7 @@ import { cn } from '@/lib/utils';
 
 export const Settings: React.FC = () => {
   const { profile, isAdmin, isManager, updateProfile } = useAuth();
-  const { settings, updateCurrency } = useSettings();
+  const { settings, updateCurrency, updateLoyaltySettings } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -67,6 +70,54 @@ export const Settings: React.FC = () => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
+  
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(settings.loyaltyEnabled ?? true);
+  const [loyaltyTier1, setLoyaltyTier1] = useState(settings.loyaltyTier1Discount ?? 50);
+  const [loyaltyTier2, setLoyaltyTier2] = useState(settings.loyaltyTier2Discount ?? 100);
+  const [isMigratingLoyalty, setIsMigratingLoyalty] = useState(false);
+  const [migrationSummary, setMigrationSummary] = useState<MigrationResult | null>(null);
+
+  useEffect(() => {
+    if (settings) {
+      setLoyaltyEnabled(settings.loyaltyEnabled ?? true);
+      setLoyaltyTier1(settings.loyaltyTier1Discount ?? 50);
+      setLoyaltyTier2(settings.loyaltyTier2Discount ?? 100);
+    }
+  }, [settings]);
+
+  const handleSaveLoyalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) {
+      toast.error('Only administrators can update loyalty settings');
+      return;
+    }
+    try {
+      await updateLoyaltySettings(loyaltyEnabled, Number(loyaltyTier1), Number(loyaltyTier2));
+      toast.success('Loyalty discount settings updated successfully!');
+      await logAction(profile, 'UPDATE_SETTINGS', `Updated loyalty rules: Tier1=₱${loyaltyTier1}, Tier2=₱${loyaltyTier2}`, 'settings/global', 'setting');
+    } catch (error) {
+      toast.error('Failed to update loyalty settings');
+    }
+  };
+
+  const handleRunLoyaltyMigration = async () => {
+    if (!isAdmin) {
+      toast.error('Only administrators can run database migrations');
+      return;
+    }
+    setIsMigratingLoyalty(true);
+    try {
+      const result = await migrateCustomerLoyaltyCounts();
+      setMigrationSummary(result);
+      toast.success(`Migration completed successfully! ${result.updatedCustomersCount} customer records updated.`);
+      await logAction(profile, 'DATABASE_MIGRATION', `Migrated customer loyalty counts across ${result.totalCustomers} customers (${result.totalItemsMigrated} total items).`, 'customers', 'customer');
+    } catch (error) {
+      console.error('Migration error:', error);
+      toast.error('Failed to run customer loyalty migration');
+    } finally {
+      setIsMigratingLoyalty(false);
+    }
+  };
   
   const [newInvite, setNewInvite] = useState({ 
     email: '', 
@@ -1930,6 +1981,130 @@ export const Settings: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Loyalty Discount Feature Card */}
+            <Card className="border-none shadow-sm bg-gradient-to-br from-amber-50/60 to-orange-50/60 backdrop-blur-sm md:col-span-2 border border-amber-200/60">
+              <CardHeader>
+                <CardTitle className="font-heading text-2xl flex items-center gap-2 text-amber-900">
+                  <Gift className="w-6 h-6 text-amber-600" />
+                  Loyalty Discount Program
+                </CardTitle>
+                <CardDescription className="text-amber-800">
+                  Automatically reward returning customers with [Pesos] discounts on their 5th and 10th item purchases in each 10-item cycle.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <form onSubmit={handleSaveLoyalty} className="space-y-4 p-5 bg-white/80 rounded-2xl border border-amber-200 shadow-sm">
+                  <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+                    <div>
+                      <Label className="font-bold text-slate-800 text-sm">Enable Loyalty Program</Label>
+                      <p className="text-xs text-slate-500">Automatically calculate and apply milestone discounts during checkout.</p>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                      checked={loyaltyEnabled}
+                      onChange={(e) => setLoyaltyEnabled(e.target.checked)}
+                    />
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6 pt-2">
+                    <div className="space-y-2 p-3 bg-amber-50/60 rounded-xl border border-amber-200/50">
+                      <div className="flex justify-between items-center">
+                        <Label className="font-bold text-amber-900">Tier 1 Discount (5th Item Milestone)</Label>
+                        <Badge variant="outline" className="bg-amber-100 border-amber-300 text-amber-800 text-[10px]">5th Item</Badge>
+                      </div>
+                      <p className="text-[11px] text-amber-700 leading-snug">Fixed peso discount automatically deducted when customer purchases their 5th item.</p>
+                      <div className="relative pt-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">{settings.currency}</span>
+                        <Input 
+                          type="number" 
+                          min="0"
+                          step="1"
+                          className="pl-7 bg-white border-amber-200 font-bold text-slate-800"
+                          value={loyaltyTier1} 
+                          onChange={(e) => setLoyaltyTier1(Number(e.target.value))} 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 p-3 bg-orange-50/60 rounded-xl border border-orange-200/50">
+                      <div className="flex justify-between items-center">
+                        <Label className="font-bold text-orange-900">Tier 2 Discount (10th Item Milestone)</Label>
+                        <Badge variant="outline" className="bg-orange-100 border-orange-300 text-orange-800 text-[10px]">10th Item & Cycle Reset</Badge>
+                      </div>
+                      <p className="text-[11px] text-orange-700 leading-snug">Fixed peso discount automatically deducted on 10th item. Cycle resets back to 0 after 10th item.</p>
+                      <div className="relative pt-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">{settings.currency}</span>
+                        <Input 
+                          type="number" 
+                          min="0"
+                          step="1"
+                          className="pl-7 bg-white border-orange-200 font-bold text-slate-800"
+                          value={loyaltyTier2} 
+                          onChange={(e) => setLoyaltyTier2(Number(e.target.value))} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {isAdmin && (
+                    <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-11 rounded-xl shadow-md">
+                      Save Loyalty Settings
+                    </Button>
+                  )}
+                </form>
+
+                <div className="p-5 bg-white/80 rounded-2xl border border-amber-200 shadow-sm space-y-4">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4 text-amber-600" />
+                        Loyalty Database Migration Tool
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Scans all historical completed sales and safely initializes or updates customer item counts (<code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">totalItemsPurchased</code> and <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">loyaltyItemCount</code>).
+                      </p>
+                    </div>
+                    {isAdmin && (
+                      <Button 
+                        onClick={handleRunLoyaltyMigration}
+                        disabled={isMigratingLoyalty}
+                        className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 shrink-0 rounded-xl"
+                      >
+                        {isMigratingLoyalty ? (
+                          <span className="flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4 animate-spin" /> Running Migration...
+                          </span>
+                        ) : (
+                          'Run Loyalty Migration'
+                        )}
+                      </Button>
+                    )}
+                  </div>
+
+                  {migrationSummary && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2 text-xs text-emerald-900">
+                      <div className="flex items-center justify-between font-bold text-emerald-800">
+                        <span>✅ Migration Report Summary</span>
+                        <span>{migrationSummary.updatedCustomersCount} / {migrationSummary.totalCustomers} Customers Updated</span>
+                      </div>
+                      <p>Total Items Backfilled from Historical Sales: <strong>{migrationSummary.totalItemsMigrated} items</strong></p>
+                      {migrationSummary.details.length > 0 && (
+                        <div className="max-h-36 overflow-y-auto pt-2 border-t border-emerald-200 space-y-1">
+                          {migrationSummary.details.map((d, i) => (
+                            <div key={i} className="flex justify-between text-[11px] font-mono text-emerald-700">
+                              <span>{d.customerName}</span>
+                              <span>Total: {d.newTotalItems} items | Cycle Count: {d.newLoyaltyCount}/10</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

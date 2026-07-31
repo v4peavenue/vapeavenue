@@ -22,7 +22,22 @@ export interface Customer {
   email?: string;
   phone?: string;
   priceTierId?: string;
+  loyaltyCardNumber?: string;
+  loyaltyCardQr?: string;
+  totalItemsPurchased?: number;
+  loyaltyItemCount?: number;
   createdAt: Timestamp;
+}
+
+export interface LoyaltyCard {
+  id: string;
+  cardNumber: string;
+  qrCode?: string;
+  customerId?: string;
+  customerName?: string;
+  issuedAt?: string;
+  status: 'active' | 'inactive';
+  notes?: string;
 }
 
 export interface PriceTier {
@@ -116,6 +131,9 @@ export interface Sale {
   totalApprovedBy?: string;
   totalApprovedById?: string;
   totalApprovedAt?: Timestamp;
+  loyaltyDiscount?: number;
+  loyaltyTier1Earned?: number;
+  loyaltyTier2Earned?: number;
 }
 
 export interface Supplier {

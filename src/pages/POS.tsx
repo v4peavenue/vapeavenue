@@ -18,12 +18,14 @@ import {
   Scan,
   Lock,
   ShieldAlert,
-  KeyRound
+  KeyRound,
+  Gift
 } from 'lucide-react';
+import { calculateLoyaltyDiscount, processCustomerLoyaltyCheckout } from '@/lib/loyalty';
 
 import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Product, Sale, SaleItem, Location, Customer, PromoCode, PaymentOption, PriceTier, PaymentSplit } from '@/types';
+import { Product, Sale, SaleItem, Location, Customer, PromoCode, PaymentOption, PaymentSplit } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,11 +77,9 @@ export const POS: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
-  const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('walk-in');
-  const [selectedTierId, setSelectedTierId] = useState<string>('');
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [isPromoApprovalOpen, setIsPromoApprovalOpen] = useState(false);
@@ -188,12 +188,7 @@ export const POS: React.FC = () => {
       return;
     }
 
-    // Lookup customer's price tier
     let salePrice = product.price;
-
-    if (selectedTierId && product.tierPrices?.[selectedTierId]) {
-      salePrice = product.tierPrices[selectedTierId];
-    }
 
     setCart(prev => {
       const existing = prev.find(item => item.productId === product.id);
@@ -223,10 +218,6 @@ export const POS: React.FC = () => {
         subtotal: quantityToUse * salePrice,
         originalPrice: product.price
       };
-      
-      if (selectedTierId) {
-        newItem.tierId = selectedTierId;
-      }
       
       return [...prev, newItem];
     });
@@ -308,7 +299,6 @@ export const POS: React.FC = () => {
     const location = locations.find(l => l.id === activeLocationId);
 
     if (id === 'walk-in') {
-      setSelectedTierId('');
       setCustomerDetails({
         name: 'Walk-In Customer',
         billingAddress: location?.addressLine1 || '',
@@ -319,7 +309,6 @@ export const POS: React.FC = () => {
         zip: ''
       });
     } else if (id === 'new') {
-      setSelectedTierId('');
       setCustomerDetails({
         name: '',
         billingAddress: location?.addressLine1 || '',
@@ -332,7 +321,6 @@ export const POS: React.FC = () => {
     } else {
       const customer = customers.find(c => c.id === id);
       if (customer) {
-        setSelectedTierId(customer.priceTierId || '');
         setCustomerDetails({
           name: customer.name,
           billingAddress: customer.billingAddress,
@@ -387,12 +375,6 @@ export const POS: React.FC = () => {
       });
     }
 
-    const unsubscribeTiers = onSnapshot(collection(db, 'priceTiers'), (snapshot) => {
-      setPriceTiers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PriceTier)));
-    }, (error) => {
-      console.warn("POS: Error listening to priceTiers collection:", error);
-    });
-
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
@@ -404,7 +386,6 @@ export const POS: React.FC = () => {
       unsubscribeCustomers();
       unsubscribePromos();
       unsubscribePayments();
-      unsubscribeTiers();
       unsubscribeUsers();
       if (unsubscribeAccounts) unsubscribeAccounts();
     };
@@ -432,26 +413,6 @@ export const POS: React.FC = () => {
       }
     }
   }, [selectedLocationId, checkoutLocationId, locations, selectedCustomerId]);
-
-  useEffect(() => {
-    // If selectedTierId changes, update all existing items in the cart to reflect new tier pricing
-    setCart(prev => prev.map(item => {
-      const product = products.find(p => p.id === item.productId);
-      if (!product) return item;
-      
-      let price = product.price;
-      if (selectedTierId && product.tierPrices?.[selectedTierId]) {
-        price = product.tierPrices[selectedTierId];
-      }
-      
-      return {
-        ...item,
-        price,
-        subtotal: item.quantity * price,
-        tierId: selectedTierId || undefined
-      };
-    }));
-  }, [selectedTierId, products]);
 
   const updateQuantity = (productId: string, delta: number) => {
     setCart(prev => {
@@ -483,8 +444,24 @@ export const POS: React.FC = () => {
     setCart(prev => prev.filter(item => item.productId !== productId));
   };
 
+  const totalCartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+  const customerLoyaltyCount = selectedCustomer 
+    ? (selectedCustomer.loyaltyItemCount ?? ((selectedCustomer.totalItemsPurchased ?? 0) % 10))
+    : 0;
+
+  const loyaltyResult = calculateLoyaltyDiscount(
+    selectedCustomerId !== 'walk-in' && selectedCustomerId !== 'new' ? customerLoyaltyCount : 0,
+    totalCartItemCount,
+    settings.loyaltyTier1Discount ?? 50,
+    settings.loyaltyTier2Discount ?? 100,
+    settings.loyaltyEnabled ?? true
+  );
+
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const discount = appliedPromo ? appliedPromo.amount : 0;
+  const promoDiscount = appliedPromo ? appliedPromo.amount : 0;
+  const loyaltyDiscount = loyaltyResult.discountAmount;
+  const discount = promoDiscount + loyaltyDiscount;
   const deliveryFeeNum = saleType === 'online' ? (parseFloat(deliveryFee) || 0) : 0;
   const total = Math.max(0, subtotal - discount + deliveryFeeNum);
   const tax = total * (12/112); // 12% VAT portion included in the price
@@ -761,6 +738,9 @@ export const POS: React.FC = () => {
         changeAmount: checkoutChangeAmount,
         saleType,
         deliveryFee: deliveryFeeNum,
+        loyaltyDiscount,
+        loyaltyTier1Earned: loyaltyResult.tier1Triggers,
+        loyaltyTier2Earned: loyaltyResult.tier2Triggers,
         timestamp: Timestamp.now()
       };
 
@@ -829,6 +809,11 @@ export const POS: React.FC = () => {
         });
       }
 
+      // 3. Update customer loyalty purchase count if applicable
+      if (finalCustomerId && finalCustomerId !== 'walk-in' && finalCustomerId !== 'new') {
+        await processCustomerLoyaltyCheckout(finalCustomerId, totalCartItemCount);
+      }
+
       const itemSummary = cart.map(i => `${i.name}${i.quantity > 1 ? ` (x${i.quantity})` : ''}`).join(', ');
       await logAction(profile, isPending ? 'CREATE_PENDING_SALE' : 'CREATE_SALE', `Processed ${isPending ? 'pending ' : ''}sale: Total ${(total ?? 0).toFixed(2)} [${itemSummary}]`, saleRef.id, 'sale');
 
@@ -849,7 +834,6 @@ export const POS: React.FC = () => {
       
       // Reset customer to walk-in
       setSelectedCustomerId('walk-in');
-      setSelectedTierId('');
       const activeLocationId = selectedLocationId === 'all' ? checkoutLocationId : selectedLocationId;
       const location = locations.find(l => l.id === activeLocationId);
       setCustomerDetails({
@@ -1312,13 +1296,6 @@ export const POS: React.FC = () => {
                       <h4 className="font-bold text-[#1A2B4B] truncate text-sm">{item.name}</h4>
                       <div className="flex items-center gap-2">
                         <p className="text-[10px] text-slate-500 font-medium">{settings.currency}{(item.price ?? 0).toFixed(2)} per unit</p>
-                        {item.tierId ? (
-                          <Badge variant="outline" className="text-[8px] h-3 px-1 border-[#D4AF37] text-[#D4AF37] bg-[#D4AF37]/5 font-bold uppercase">
-                            {priceTiers.find(t => t.id === item.tierId)?.name || 'Tier Price'}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[8px] h-3 px-1 border-slate-200 text-slate-400 font-bold uppercase">Retail</Badge>
-                        )}
                       </div>
                     </div>
                     <Button 
@@ -1405,6 +1382,17 @@ export const POS: React.FC = () => {
                 <span>-{settings.currency}{(appliedPromo.amount ?? 0).toFixed(2)}</span>
               </div>
             )}
+            {loyaltyDiscount > 0 && (
+              <div className="flex flex-col gap-1 p-2 bg-amber-50/80 border border-amber-200/60 rounded-xl">
+                <div className="flex justify-between text-sm font-bold text-amber-700">
+                  <span className="flex items-center gap-1.5"><Gift className="w-4 h-4 text-amber-600" /> Loyalty Discount</span>
+                  <span>-{settings.currency}{loyaltyDiscount.toFixed(2)}</span>
+                </div>
+                {loyaltyResult.breakdown.map((item, idx) => (
+                  <p key={idx} className="text-[10px] text-amber-600 font-medium pl-5">• {item}</p>
+                ))}
+              </div>
+            )}
             <div className="flex justify-between text-xs font-medium text-slate-400 italic">
               <span>VAT Portion (12% Incl.)</span>
               <span>{settings.currency}{(tax ?? 0).toFixed(2)}</span>
@@ -1476,12 +1464,56 @@ export const POS: React.FC = () => {
                   <SelectContent>
                     <SelectItem value="walk-in">🚶 Walk-In Customer</SelectItem>
                     <SelectItem value="new">+ New Customer</SelectItem>
-                    {customers.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
+                    {customers.map(c => {
+                      const count = c.loyaltyItemCount ?? ((c.totalItemsPurchased ?? 0) % 10);
+                      const cardInfo = c.loyaltyCardNumber ? ` [💳 ${c.loyaltyCardNumber}]` : '';
+                      return (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}{cardInfo} ({count}/10 items)
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
+
+              {selectedCustomerId !== 'walk-in' && selectedCustomerId !== 'new' && selectedCustomer && (
+                <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/80 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                      <Gift className="w-4 h-4 text-amber-600" /> Customer Loyalty Status
+                    </span>
+                    <Badge variant="outline" className="border-amber-300 bg-amber-100/60 text-amber-800 text-[10px] font-bold">
+                      {customerLoyaltyCount}/10 in Cycle
+                    </Badge>
+                  </div>
+                  {selectedCustomer.loyaltyCardNumber && (
+                    <div className="flex items-center gap-2 bg-amber-100/70 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-xl text-xs font-mono font-bold">
+                      <CreditCard className="w-3.5 h-3.5 text-amber-700" />
+                      Card #: {selectedCustomer.loyaltyCardNumber}
+                      {selectedCustomer.loyaltyCardQr && selectedCustomer.loyaltyCardQr !== selectedCustomer.loyaltyCardNumber && (
+                        <span className="text-[10px] text-amber-700 font-normal"> (QR: {selectedCustomer.loyaltyCardQr})</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="w-full bg-amber-200/50 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="bg-amber-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(customerLoyaltyCount / 10) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[11px] text-amber-800 font-medium">
+                    <span>Total Bought: <strong>{selectedCustomer.totalItemsPurchased ?? 0} items</strong></span>
+                    <span>Next Reward: {5 - (customerLoyaltyCount % 5)} items away</span>
+                  </div>
+                  {loyaltyResult.discountAmount > 0 && (
+                    <div className="mt-1 pt-1.5 border-t border-amber-200 text-xs font-bold text-emerald-700 flex items-center justify-between">
+                      <span>🎉 Loyalty Discount Earned:</span>
+                      <span>-{settings.currency}{loyaltyResult.discountAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="cust-name">Customer Name</Label>
@@ -1612,28 +1644,6 @@ export const POS: React.FC = () => {
                     placeholder="Zip"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Applied Price Tier</Label>
-                <Select value={selectedTierId || 'none'} onValueChange={(v) => setSelectedTierId(v === 'none' ? '' : v)}>
-                  <SelectTrigger className="bg-[#FDFCF8] border-[#D4AF37]/20">
-                    <SelectValue placeholder="Price Tier">
-                      {selectedTierId 
-                        ? (priceTiers.find(t => t.id === selectedTierId)?.name || 'Price Tier') 
-                        : 'Standard Retail Price'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Standard Retail Price</SelectItem>
-                    {priceTiers.map(tier => (
-                      <SelectItem key={tier.id} value={tier.id}>{tier.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[10px] text-muted-foreground italic">
-                  Automatic tier based on customer selection, but can be manually overridden.
-                </p>
               </div>
 
               <div className="space-y-2">

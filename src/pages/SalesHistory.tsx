@@ -129,7 +129,7 @@ export const SalesHistory: React.FC = () => {
   const [voidAccountId, setVoidAccountId] = useState('');
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'sales' | 'returns' | 'pending' | 'ledger'>('ledger');
+  const [activeTab, setActiveTab] = useState<'sales' | 'voids' | 'pending' | 'ledger'>('ledger');
   const [rawFinancialTransactions, setRawFinancialTransactions] = useState<any[]>([]);
   const [pendingSales, setPendingSales] = useState<Sale[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<any[]>([]);
@@ -809,26 +809,66 @@ export const SalesHistory: React.FC = () => {
   };
 
   const handleExportCSV = () => {
-    const data = filteredSales.map(s => ({
-      ID: s.id,
-      Date: format(s.timestamp.toDate(), 'yyyy-MM-dd HH:mm:ss'),
-      Customer: s.customerDetails?.name || 'Walk-In',
-      Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
-      Items: s.items.map(i => `${i.name} (x${i.quantity})`).join('; '),
-      Subtotal: (s.subtotal ?? 0).toFixed(2),
-      Discount: (s.discount ?? 0).toFixed(2),
-      Tax: (s.tax ?? 0).toFixed(2),
-      Total: (s.total ?? 0).toFixed(2),
-      Status: s.status || 'completed'
-    }));
+    let exportData: any[] = [];
+    let filename = 'Sales_History';
 
-    if (data.length === 0) {
-      toast.error('No sales data available to export.');
+    if (activeTab === 'sales') {
+      exportData = filteredSales.map(s => ({
+        ID: s.id,
+        Date: format(parseTimestampDate(s.timestamp), 'yyyy-MM-dd HH:mm:ss'),
+        Customer: s.customerDetails?.name || 'Walk-In',
+        Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
+        Items: s.items.map(i => `${i.name} (x${i.quantity})`).join('; '),
+        Subtotal: (s.subtotal ?? 0).toFixed(2),
+        Discount: (s.discount ?? 0).toFixed(2),
+        Tax: (s.tax ?? 0).toFixed(2),
+        Total: (s.total ?? 0).toFixed(2),
+        Status: s.status || 'completed'
+      }));
+      filename = 'Sales_Transactions';
+    } else if (activeTab === 'voids') {
+      exportData = filteredVoids.map(s => ({
+        ID: s.id,
+        Date: format(parseTimestampDate(s.timestamp), 'yyyy-MM-dd HH:mm:ss'),
+        Customer: s.customerDetails?.name || 'Walk-In',
+        Staff: usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff',
+        Location: locations.find(l => l.id === s.locationId)?.name || s.locationName || 'Main',
+        Items: s.items.map(i => `${i.name} (x${i.quantity})`).join('; '),
+        Total_Voided: (s.total ?? 0).toFixed(2),
+        Status: 'Voided'
+      }));
+      filename = 'Void_History';
+    } else if (activeTab === 'pending') {
+      exportData = filteredPendingSales.map(s => ({
+        ID: s.id,
+        Date: format(parseTimestampDate(s.timestamp), 'yyyy-MM-dd HH:mm:ss'),
+        Customer: s.customerDetails?.name || 'Walk-In',
+        Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
+        Items: s.items.map(i => `${i.name} (x${i.quantity})`).join('; '),
+        Total: (s.total ?? 0).toFixed(2),
+        Status: s.status || 'pending'
+      }));
+      filename = 'Pending_Payments';
+    } else if (activeTab === 'ledger') {
+      exportData = filteredLedger.map(t => ({
+        ID: t.displayId || t.id,
+        Date: format(parseTimestampDate(t.timestamp), 'yyyy-MM-dd HH:mm:ss'),
+        Category: t.category || '',
+        Description: t.description || '',
+        Account: t.accountName || '',
+        Amount: (t.amount ?? 0).toFixed(2),
+        Type: t.type || ''
+      }));
+      filename = 'Unified_Ledger';
+    }
+
+    if (exportData.length === 0) {
+      toast.error('No data available to export.');
       return;
     }
 
-    exportToCSV(data, 'Sales_History');
-    toast.success('Sales history exported');
+    exportToCSV(exportData, filename);
+    toast.success(`${filename.replace('_', ' ')} exported`);
   };
 
   const handlePrintReceipt = (sale: Sale) => {
@@ -1063,31 +1103,28 @@ export const SalesHistory: React.FC = () => {
     return matchesSearch && matchesDate && matchesPayment;
   });
 
-  const filteredReturns = returnTransactions.filter(r => {
+  const filteredVoids = sales.filter(s => {
+    if (s.status !== 'voided') return false;
     const searchLower = searchTerm.toLowerCase();
-    const returnSellerName = (usersList.find(u => u.id === r.staffId)?.name || r.staffName || 'Staff').toLowerCase();
-    // Resolve original sale to search by customer name too
-    const originalSale = sales.find(s => s.id === r.originalSaleId);
-    const customerName = (originalSale?.customerDetails?.name || '').toLowerCase();
-    const matchesSearch = r.id.toLowerCase().includes(searchLower) ||
-      r.originalSaleId.toLowerCase().includes(searchLower) ||
-      (r.items && r.items.some((item: any) => item.name.toLowerCase().includes(searchLower))) ||
-      returnSellerName.includes(searchLower) ||
-      (r.reason && r.reason.toLowerCase().includes(searchLower)) ||
-      customerName.includes(searchLower);
+    const sellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
+    const customerName = (s.customerDetails?.name || '').toLowerCase();
+    const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
+      customerName.includes(searchLower) ||
+      (s.items && s.items.some(item => item.name.toLowerCase().includes(searchLower))) ||
+      sellerName.includes(searchLower);
 
     let matchesDate = true;
     if (dateRange.start) {
-      const returnDate = parseTimestampDate(r.timestamp);
+      const saleDate = parseTimestampDate(s.timestamp);
       const start = new Date(dateRange.start);
       start.setHours(0, 0, 0, 0);
-      matchesDate = matchesDate && returnDate >= start;
+      matchesDate = matchesDate && saleDate >= start;
     }
     if (dateRange.end) {
-      const returnDate = parseTimestampDate(r.timestamp);
+      const saleDate = parseTimestampDate(s.timestamp);
       const end = new Date(dateRange.end);
       end.setHours(23, 59, 59, 999);
-      matchesDate = matchesDate && returnDate <= end;
+      matchesDate = matchesDate && saleDate <= end;
     }
 
     return matchesSearch && matchesDate;
@@ -1245,8 +1282,8 @@ export const SalesHistory: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Sales & Returns History</h1>
-          <p className="text-slate-500">View and manage past sales, returns, and replacements.</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Sales & Void History</h1>
+          <p className="text-slate-500">View and manage past sales, voided transactions, and account ledgers.</p>
         </div>
         <Button variant="outline" className="gap-2 bg-white" onClick={handleExportCSV}>
           <Download className="w-4 h-4" />
@@ -1261,7 +1298,7 @@ export const SalesHistory: React.FC = () => {
             className="pl-10 bg-white" 
             placeholder={
               activeTab === 'sales' ? "Search by Sale ID, Customer, or Product..." : 
-              activeTab === 'returns' ? "Search by Return ID, Sale ID, Customer, or Reason..." : 
+              activeTab === 'voids' ? "Search by Sale ID, Customer, Staff, or Product..." : 
               activeTab === 'ledger' ? "Search ledger by description, account, category..." :
               "Search pending payments by Customer or ID..."
             } 
@@ -1484,17 +1521,17 @@ export const SalesHistory: React.FC = () => {
         </button>
         <button
           onClick={() => {
-            setActiveTab('returns');
-            clearFiltersForTab('returns');
+            setActiveTab('voids');
+            clearFiltersForTab('voids');
           }}
           className={cn(
             "pb-3 pt-1 px-4 text-sm font-bold border-b-2 transition-all relative",
-            activeTab === 'returns'
+            activeTab === 'voids'
               ? "border-indigo-600 text-indigo-600 font-extrabold"
               : "border-transparent text-slate-500 hover:text-slate-800"
           )}
         >
-          Returns History
+          Void History
         </button>
         {(isAdmin || isManager) && (
           <button
@@ -1641,68 +1678,68 @@ export const SalesHistory: React.FC = () => {
             )}
           </TableBody>
           </>
-          ) : activeTab === 'returns' ? (
+          ) : activeTab === 'voids' ? (
             <>
               <TableHeader className="bg-slate-50">
                 <TableRow>
                   <TableHead>Date & Time</TableHead>
-                  <TableHead>Return ID</TableHead>
-                  <TableHead>Orig. Sale ID</TableHead>
+                  <TableHead>Sale / Void ID</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Returned Items</TableHead>
-                  <TableHead>Refund Account</TableHead>
-                  <TableHead>Value & Status</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Staff</TableHead>
+                  <TableHead>Voided Items</TableHead>
+                  <TableHead>Voided Amount</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">Loading return records...</TableCell>
+                    <TableCell colSpan={8} className="h-24 text-center">Loading void history...</TableCell>
                   </TableRow>
-                ) : filteredReturns.length === 0 ? (
+                ) : filteredVoids.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-slate-500">No return records found.</TableCell>
+                    <TableCell colSpan={8} className="h-24 text-center text-slate-500">No voided transactions found.</TableCell>
                   </TableRow>
                 ) : (
-                  filteredReturns.map((ret) => (
-                    <TableRow key={ret.id} className="hover:bg-slate-50/50">
+                  filteredVoids.map((sale) => (
+                    <TableRow key={sale.id} className="hover:bg-slate-50/50">
                       <TableCell className="whitespace-nowrap">
                         <div className="font-medium text-slate-900">
-                          {format(ret.timestamp.toDate(), 'MMM dd, yyyy')}
+                          {format(parseTimestampDate(sale.timestamp), 'MMM dd, yyyy')}
                         </div>
                         <div className="text-xs text-slate-500">
-                          {format(ret.timestamp.toDate(), 'HH:mm:ss')}
+                          {format(parseTimestampDate(sale.timestamp), 'HH:mm:ss')}
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-500">{ret.id.substring(0, 8)}...</TableCell>
-                      <TableCell className="font-mono text-xs text-slate-500">{ret.originalSaleId.substring(0, 8)}...</TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-[#1A2B4B]">
+                        #{sale.id.substring(0, 8)}
+                      </TableCell>
                       <TableCell className="text-xs">
                         <Badge variant="secondary" className="bg-indigo-50 text-[#1A2B4B] hover:bg-slate-100 border-none">
-                          {locations.find(l => l.id === ret.locationId)?.name || 'Unknown'}
+                          {locations.find(l => l.id === sale.locationId)?.name || sale.locationName || 'Unknown'}
                         </Badge>
                       </TableCell>
+                      <TableCell className="font-medium text-slate-800">
+                        {sale.customerDetails?.name || 'Walk-in Customer'}
+                      </TableCell>
+                      <TableCell className="text-slate-600 text-xs font-medium">
+                        {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
+                      </TableCell>
                       <TableCell>
-                        <div className="text-sm text-slate-900 max-w-[200px] truncate">
-                          {ret.items?.map((i: any) => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}
+                        <div className="text-sm text-slate-900 max-w-[200px] truncate" title={sale.items?.map(i => `${i.name} (x${i.quantity})`).join(', ')}>
+                          {sale.items?.map(i => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}
                         </div>
-                        <div className="text-xs font-semibold text-amber-600 truncate max-w-[200px]">{ret.reason}</div>
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-600 font-medium">
-                        {accounts.find(a => a.id === ret.refundAccountId)?.name || ret.refundMethod || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        <div className="font-bold text-slate-900 mb-1">{settings.currency}{(ret.totalRefund ?? 0).toFixed(2)}</div>
-                        <Badge variant="outline" className={cn(
-                          "capitalize border-slate-200 font-medium text-[10px] py-0 px-1.5",
-                          ret.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-blue-50 text-blue-600 border-blue-200"
-                        )}>
-                          {ret.status === 'voided' ? 'Voided' : 'Completed'}
+                        <div className="font-bold text-rose-600 mb-1">{settings.currency}{(sale.total ?? 0).toFixed(2)}</div>
+                        <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-200 capitalize font-medium text-[10px] py-0 px-1.5">
+                          Voided
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => setSelectedReturn(ret)}>
-                          <Eye className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" title="View Details" onClick={() => setSelectedSale(sale)}>
+                          <Eye className="w-4 h-4 text-slate-500 hover:text-indigo-600" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -1993,19 +2030,19 @@ export const SalesHistory: React.FC = () => {
               </motion.div>
             ))
           )
-        ) : activeTab === 'returns' ? (
+        ) : activeTab === 'voids' ? (
           loading ? (
             <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
-              Loading returns history...
+              Loading void history...
             </div>
-          ) : filteredReturns.length === 0 ? (
+          ) : filteredVoids.length === 0 ? (
             <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
-              No return records found.
+              No voided transactions found.
             </div>
           ) : (
-            filteredReturns.map((ret, index) => (
+            filteredVoids.map((sale, index) => (
               <motion.div
-                key={ret.id}
+                key={sale.id}
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: Math.min(index * 0.01, 0.15) }}
@@ -2014,68 +2051,59 @@ export const SalesHistory: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-slate-900">
-                      {format(ret.timestamp.toDate(), 'MMM dd, yyyy')}
+                      {format(parseTimestampDate(sale.timestamp), 'MMM dd, yyyy')}
                     </span>
                     <span className="text-[10px] text-slate-400 font-medium">
-                      {format(ret.timestamp.toDate(), 'HH:mm:ss')}
+                      {format(parseTimestampDate(sale.timestamp), 'HH:mm:ss')}
                     </span>
                   </div>
                   <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                    #{ret.id.substring(0, 8)}
+                    #{sale.id.substring(0, 8)}
                   </span>
                 </div>
 
                 <div className="space-y-1.5 py-1 text-xs">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Original Sale ID</span>
-                    <span className="font-mono text-xs font-semibold text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded">
-                      #{ret.originalSaleId.substring(0, 8)}
-                    </span>
+                    <span className="text-slate-400">Customer</span>
+                    <span className="font-semibold text-slate-700">{sale.customerDetails?.name || 'Walk-in'}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Branch Name</span>
+                    <span className="text-slate-400">Branch</span>
                     <Badge variant="secondary" className="bg-[#1A2B4B]/5 text-[#1A2B4B] py-0 px-1.5 border-none font-bold text-[10px]">
-                      {locations.find(l => l.id === ret.locationId)?.name || 'Unknown'}
+                      {locations.find(l => l.id === sale.locationId)?.name || sale.locationName || 'Unknown'}
                     </Badge>
                   </div>
                   <div className="flex justify-between items-start">
-                    <span className="text-slate-400 shrink-0">Items Refunded</span>
-                    <span className="text-slate-700 font-bold text-right max-w-[170px] truncate block" title={ret.items?.map((i: any) => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}>
-                      {ret.items?.map((i: any) => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}
+                    <span className="text-slate-400 shrink-0">Voided Items</span>
+                    <span className="text-slate-700 font-bold text-right max-w-[170px] truncate block" title={sale.items?.map(i => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}>
+                      {sale.items?.map(i => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Return Reason</span>
-                    <span className="text-amber-600 font-semibold italic">{ret.reason}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Refund Account</span>
-                    <span className="text-slate-600 font-medium">{accounts.find(a => a.id === ret.refundAccountId)?.name || ret.refundMethod || 'N/A'}</span>
+                    <span className="text-slate-400">Staff</span>
+                    <span className="text-slate-600 font-medium">{usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}</span>
                   </div>
                   <div className="flex justify-between items-center border-t border-slate-50 pt-1.5 mt-1 align-middle">
-                    <span className="text-slate-400 font-semibold">Refund Value</span>
+                    <span className="text-slate-400 font-semibold">Voided Amount</span>
                     <span className="font-black text-rose-600 text-sm">
-                      {settings.currency}{(ret.totalRefund ?? 0).toFixed(2)}
+                      {settings.currency}{(sale.total ?? 0).toFixed(2)}
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                  <Badge variant="outline" className={cn(
-                    "capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5",
-                    ret.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-blue-50 text-blue-600 border-blue-200"
-                  )}>
-                    {ret.status === 'voided' ? 'Voided' : 'Completed'}
+                  <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-200 font-bold text-[10px] py-0 px-1.5">
+                    Voided
                   </Badge>
 
                   <Button 
                     variant="outline" 
                     size="sm" 
                     className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
-                    onClick={() => setSelectedReturn(ret)}
+                    onClick={() => setSelectedSale(sale)}
                   >
                     <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                    Inspect Returns
+                    Inspect Void
                   </Button>
                 </div>
               </motion.div>

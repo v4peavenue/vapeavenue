@@ -68,9 +68,28 @@
         "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
         "priceTierId": { "type": "string", "description": "Assigned price tier ID" },
+        "loyaltyCardNumber": { "type": "string", "description": "Unique assigned loyalty card number or barcode" },
+        "loyaltyCardQr": { "type": "string", "description": "Loyalty QR code payload string" },
+        "totalItemsPurchased": { "type": "number", "description": "Total items purchased by customer over time" },
+        "loyaltyItemCount": { "type": "number", "description": "Current item count in the 10-item loyalty cycle (0-9)" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "billingAddress", "shippingAddress", "municipality", "city", "country", "zip", "createdAt"]
+    },
+    "LoyaltyCard": {
+      "title": "LoyaltyCard",
+      "description": "Physical or digital loyalty card with number/QR code assigned to a customer",
+      "type": "object",
+      "properties": {
+        "cardNumber": { "type": "string" },
+        "qrCode": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "issuedAt": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["cardNumber", "status"]
     },
     "PriceTier": {
       "title": "PriceTier",
