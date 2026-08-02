@@ -206,34 +206,34 @@ export const Inventory: React.FC = () => {
           <p className="text-slate-500">Manage your products and stock levels.</p>
         </div>
         {isManager && (
-          <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-            <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5" onClick={() => setIsTransferOpen(true)}>
-              <ArrowRightLeft className="w-4 h-4" />
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap lg:flex-nowrap gap-2 w-full sm:w-auto">
+            <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5 text-xs sm:text-sm h-9 sm:h-8" onClick={() => setIsTransferOpen(true)}>
+              <ArrowRightLeft className="w-3.5 h-3.5" />
               Transfer Stock
             </Button>
-            <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5" onClick={() => {
+            <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5 text-xs sm:text-sm h-9 sm:h-8" onClick={() => {
               setAdjustingProductId(undefined);
               setIsAdjustmentOpen(true);
             }}>
-              <ArrowUpDown className="w-4 h-4" />
+              <ArrowUpDown className="w-3.5 h-3.5" />
               Adjust Stock
             </Button>
-            <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5" onClick={() => navigate('/purchasing')}>
-              <ShoppingCart className="w-4 h-4" />
+            <Button variant="outline" className="gap-2 border-[#D4AF37]/20 hover:bg-[#D4AF37]/5 text-xs sm:text-sm h-9 sm:h-8" onClick={() => navigate('/purchasing')}>
+              <ShoppingCart className="w-3.5 h-3.5" />
               Purchase Stock
             </Button>
-            <Button className="gap-2 bg-[#1A2B4B] hover:bg-[#2C3E50] text-white" onClick={() => {
+            <Button className="gap-2 bg-[#1A2B4B] hover:bg-[#2C3E50] text-white text-xs sm:text-sm h-9 sm:h-8" onClick={() => {
               setEditingProduct(null);
               setIsFormOpen(true);
             }}>
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5" />
               Add Product
             </Button>
           </div>
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
@@ -243,9 +243,9 @@ export const Inventory: React.FC = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[160px] bg-white/50 border-slate-200">
+            <SelectTrigger className="w-full sm:w-[160px] bg-white/50 border-slate-200">
               <SelectValue placeholder="Category">
                 {categoryFilter === 'all' ? 'All Categories' : categoryFilter}
               </SelectValue>
@@ -258,7 +258,7 @@ export const Inventory: React.FC = () => {
             </SelectContent>
           </Select>
           <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="w-[160px] bg-white/50 border-slate-200">
+            <SelectTrigger className="w-full sm:w-[160px] bg-white/50 border-slate-200">
               <SelectValue placeholder="Brand">
                 {brandFilter === 'all' ? 'All Brands' : brandFilter}
               </SelectValue>

@@ -1046,12 +1046,12 @@ export const POS: React.FC = () => {
               <p className="font-bold">Viewing all locations. You will need to select a specific branch at checkout.</p>
             </div>
           )}
-          <div className="relative flex-1 w-full flex flex-wrap md:flex-nowrap items-center gap-3">
+          <div className="relative flex-1 w-full flex flex-wrap items-center gap-2 sm:gap-3">
             <div className="relative flex-1 flex gap-2 min-w-[200px]">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                 <Input 
-                  className="pl-12 h-12 text-base bg-white/50 border-slate-200 shadow-sm rounded-xl focus-visible:ring-[#D4AF37] backdrop-blur-sm" 
+                  className="pl-10 sm:pl-12 h-10 sm:h-12 text-sm sm:text-base bg-white/50 border-slate-200 shadow-sm rounded-xl focus-visible:ring-[#D4AF37] backdrop-blur-sm" 
                   placeholder="Search by name, SKU, or Barcode..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -1061,15 +1061,15 @@ export const POS: React.FC = () => {
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 w-12 border-slate-200 bg-white/50 rounded-xl hover:bg-[#D4AF37]/10 flex items-center justify-center group active:scale-95 shadow-sm shrink-0"
+                className="h-10 sm:h-12 w-10 sm:w-12 border-slate-200 bg-white/50 rounded-xl hover:bg-[#D4AF37]/10 flex items-center justify-center group active:scale-95 shadow-sm shrink-0"
                 onClick={() => setIsScannerOpen(true)}
                 title="Scan Barcode with Camera"
               >
-                <Scan className="w-5 h-5 text-[#1A2B4B] group-hover:text-[#D4AF37] transition-colors" />
+                <Scan className="w-4 h-4 sm:w-5 sm:h-5 text-[#1A2B4B] group-hover:text-[#D4AF37] transition-colors" />
               </Button>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
               {/* Add Qty Selector */}
               <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-12 select-none">
                 <span className="text-[10px] font-black uppercase text-[#1A2B4B] tracking-wider pl-2 pr-1">Add Qty:</span>
@@ -1396,21 +1396,21 @@ export const POS: React.FC = () => {
 
       {/* Cart Area */}
       <Card className={cn(
-        "w-full lg:w-[420px] flex flex-col shadow-2xl border-slate-200 bg-white/80 backdrop-blur-md rounded-3xl overflow-hidden",
+        "w-full lg:w-[420px] flex flex-col shadow-2xl border-2 border-[#D4AF37]/50 ring-4 ring-[#D4AF37]/10 bg-white rounded-3xl overflow-hidden",
         activeTab !== 'cart' && "hidden lg:flex"
       )}>
-        <CardHeader className="border-b bg-[#1A2B4B]/5 p-6">
+        <CardHeader className="border-b border-[#D4AF37]/30 bg-gradient-to-r from-[#1A2B4B] via-[#2C3E50] to-[#1A2B4B] text-white p-4 sm:p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#1A2B4B] rounded-xl flex items-center justify-center shadow-lg shadow-[#1A2B4B]/20">
-                <ShoppingCart className="w-5 h-5 text-white" />
+              <div className="w-9 h-9 bg-[#D4AF37] rounded-xl flex items-center justify-center shadow-md">
+                <ShoppingCart className="w-5 h-5 text-[#1A2B4B]" />
               </div>
               <div>
-                <CardTitle className="text-lg font-heading text-[#1A2B4B]">Current Order</CardTitle>
+                <CardTitle className="text-base sm:text-lg font-heading text-white">Current Order</CardTitle>
                 <CardDescription className="text-[10px] uppercase font-bold tracking-widest text-[#D4AF37]">Checkout Session</CardDescription>
               </div>
             </div>
-            <Badge variant="secondary" className="bg-white border border-slate-200 text-slate-700 px-3 py-1">
+            <Badge variant="secondary" className="bg-white/10 text-white border border-white/20 px-2.5 py-0.5 text-xs font-semibold backdrop-blur-sm">
               {cart.reduce((sum, i) => sum + i.quantity, 0)} items
             </Badge>
           </div>
@@ -1418,147 +1418,143 @@ export const POS: React.FC = () => {
         
         <CardContent className="flex-1 overflow-y-auto p-0 custom-scrollbar">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 p-12 text-center">
-              <div className="w-20 h-20 bg-[#1A2B4B]/5 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                <ShoppingCart className="w-10 h-10 text-[#1A2B4B]/20" />
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 p-8 text-center">
+              <div className="w-16 h-16 bg-[#1A2B4B]/5 rounded-full flex items-center justify-center mb-4 animate-pulse">
+                <ShoppingCart className="w-8 h-8 text-[#1A2B4B]/20" />
               </div>
-              <p className="text-base font-bold text-[#1A2B4B]">Your cart is empty</p>
-              <p className="text-xs mt-2 max-w-[200px] mx-auto">Add products from the inventory to start building an order.</p>
+              <p className="text-sm font-bold text-[#1A2B4B]">Your cart is empty</p>
+              <p className="text-xs mt-1 max-w-[200px] mx-auto">Add products from the inventory to start building an order.</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {cart.map((item) => (
-                <div key={item.productId} className="p-5 hover:bg-[#FDFCF8] transition-colors group">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-[#1A2B4B] truncate text-sm">{item.name}</h4>
-                      <div className="flex items-center gap-2">
-                        <p className="text-[10px] text-slate-500 font-medium">{settings.currency}{(item.price ?? 0).toFixed(2)} per unit</p>
-                      </div>
-                    </div>
+                <div key={item.productId} className="px-3 py-2 sm:px-4 sm:py-2.5 hover:bg-[#FDFCF8] transition-colors group flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0 pr-1">
+                    <h4 className="font-bold text-[#1A2B4B] truncate text-xs sm:text-sm leading-tight" title={item.name}>{item.name}</h4>
+                    <p className="text-[10px] text-slate-400 font-medium truncate">{settings.currency}{(item.price ?? 0).toFixed(2)}/ea</p>
+                  </div>
+                  <div className="flex items-center gap-0.5 bg-slate-50 border border-slate-200 rounded-md p-0.5 shrink-0">
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFromCart(item.productId);
-                      }}
+                      className="h-5 w-5 sm:h-5.5 sm:w-5.5 hover:bg-white rounded text-slate-600 p-0"
+                      onClick={() => updateQuantity(item.productId, -1)}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Minus className="w-2.5 h-2.5" />
+                    </Button>
+                    <Input
+                      type="number"
+                      className="w-6 sm:w-7 h-5 sm:h-5.5 text-center font-bold text-[11px] sm:text-xs border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
+                      min={1}
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val) && val >= 1) {
+                          const diff = val - item.quantity;
+                          updateQuantity(item.productId, diff);
+                        }
+                      }}
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-5 w-5 sm:h-5.5 sm:w-5.5 hover:bg-white rounded text-slate-600 p-0"
+                      onClick={() => updateQuantity(item.productId, 1)}
+                    >
+                      <Plus className="w-2.5 h-2.5" />
                     </Button>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 hover:bg-slate-50 rounded-lg"
-                        onChange={(e) => { e.preventDefault(); }}
-                        onClick={() => updateQuantity(item.productId, -1)}
-                      >
-                        <Minus className="w-3 h-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        className="w-11 h-8 text-center font-black text-sm border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
-                        min={1}
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val) && val >= 1) {
-                            const diff = val - item.quantity;
-                            updateQuantity(item.productId, diff);
-                          }
-                        }}
-                      />
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-8 w-8 hover:bg-slate-50 rounded-lg"
-                        onChange={(e) => { e.preventDefault(); }}
-                        onClick={() => updateQuantity(item.productId, 1)}
-                      >
-                        <Plus className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <span className="font-black text-[#1A2B4B] text-base">{settings.currency}{(item.subtotal ?? 0).toFixed(2)}</span>
+                  <div className="text-right shrink-0 min-w-[50px] sm:min-w-[60px]">
+                    <span className="font-black text-[#1A2B4B] text-xs sm:text-sm">{settings.currency}{(item.subtotal ?? 0).toFixed(2)}</span>
                   </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 sm:h-7 sm:w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFromCart(item.productId);
+                    }}
+                    title="Remove item"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
 
-        <CardFooter className="flex-col gap-6 border-t p-8 bg-[#FDFCF8]/80">
-          <div className="w-full space-y-3">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="relative flex-1">
-                <Ticket className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#D4AF37]" />
+        <CardFooter className="flex-col gap-2.5 border-t border-slate-200/80 p-3.5 sm:p-4 bg-[#FDFCF8]/95">
+          <div className="w-full space-y-1.5 text-xs">
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="relative flex-1 max-w-[170px] sm:max-w-[200px]">
+                <Ticket className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#D4AF37]" />
                 <Input 
                   placeholder="Promo Code" 
-                  className="pl-9 h-10 bg-white border-[#D4AF37]/20 uppercase focus-visible:ring-[#D4AF37]"
+                  className="pl-6.5 pr-2 h-7 text-[11px] bg-white border-[#D4AF37]/30 uppercase focus-visible:ring-[#D4AF37] rounded-md"
                   value={promoCodeInput}
                   onChange={(e) => setPromoCodeInput(e.target.value)}
                 />
               </div>
               <Button 
                 variant="outline" 
-                className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white"
+                size="sm"
+                className="h-7 px-2 text-[11px] font-bold border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white rounded-md shrink-0"
                 onClick={applyPromo}
               >
                 Apply
               </Button>
             </div>
-            <div className="flex justify-between text-sm font-medium text-slate-500">
+            <div className="flex justify-between text-xs font-medium text-slate-500">
               <span>Subtotal</span>
-              <span className="text-[#1A2B4B]">{settings.currency}{(subtotal ?? 0).toFixed(2)}</span>
+              <span className="text-[#1A2B4B] font-semibold">{settings.currency}{(subtotal ?? 0).toFixed(2)}</span>
             </div>
             {appliedPromo && (
-              <div className="flex justify-between text-sm font-bold text-emerald-600">
+              <div className="flex justify-between text-xs font-bold text-emerald-600">
                 <span className="flex items-center gap-1"><Ticket className="w-3 h-3" /> Promo: {appliedPromo.code}</span>
                 <span>-{settings.currency}{(appliedPromo.amount ?? 0).toFixed(2)}</span>
               </div>
             )}
             {isRegisteredCustomer && hasAssignedLoyaltyCard && (settings.loyaltyEnabled ?? true) && loyaltyResult.discountAmount > 0 && (
-              <div className="flex flex-col gap-1.5 p-2.5 bg-amber-50/90 border border-amber-200/80 rounded-xl">
+              <div className="flex flex-col gap-1 p-2 bg-amber-50/90 border border-amber-200/80 rounded-lg">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <input
                       type="checkbox"
                       id="apply-loyalty-sidebar-toggle"
-                      className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                      className="w-3.5 h-3.5 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
                       checked={applyLoyaltyDiscount}
                       onChange={(e) => setApplyLoyaltyDiscount(e.target.checked)}
                     />
-                    <label htmlFor="apply-loyalty-sidebar-toggle" className="text-xs font-bold text-amber-900 cursor-pointer flex items-center gap-1">
-                      <Gift className="w-3.5 h-3.5 text-amber-600" /> Apply Loyalty Discount
+                    <label htmlFor="apply-loyalty-sidebar-toggle" className="text-[11px] font-bold text-amber-900 cursor-pointer flex items-center gap-1">
+                      <Gift className="w-3 h-3 text-amber-600" /> Apply Loyalty Discount
                     </label>
                   </div>
                   <span className="text-xs font-bold text-emerald-700">-{settings.currency}{loyaltyResult.discountAmount.toFixed(2)}</span>
                 </div>
                 {applyLoyaltyDiscount && loyaltyResult.breakdown.map((item, idx) => (
-                  <p key={idx} className="text-[10px] text-amber-600 font-medium pl-6">• {item}</p>
+                  <p key={idx} className="text-[9px] text-amber-600 font-medium pl-5">• {item}</p>
                 ))}
               </div>
             )}
-            <div className="flex justify-between text-xs font-medium text-slate-400 italic">
+            <div className="flex justify-between text-[11px] font-medium text-slate-400 italic">
               <span>VAT Portion (12% Incl.)</span>
               <span>{settings.currency}{(tax ?? 0).toFixed(2)}</span>
             </div>
-            <div className="pt-3 border-t border-slate-200 flex justify-between items-end">
+            <div className="pt-1.5 border-t border-slate-200 flex justify-between items-center">
               <div>
-                <p className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-widest mb-1">Total Amount</p>
-                <span className="text-3xl font-black text-[#1A2B4B]">{settings.currency}{(total ?? 0).toFixed(2)}</span>
+                <p className="text-[9px] font-bold text-[#D4AF37] uppercase tracking-wider">Total Amount</p>
+                <span className="text-xl font-black text-[#1A2B4B]">{settings.currency}{(total ?? 0).toFixed(2)}</span>
               </div>
               <div className="text-right">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Items</p>
-                <span className="text-lg font-bold text-[#1A2B4B]">{cart.reduce((sum, i) => sum + i.quantity, 0)}</span>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Items</p>
+                <span className="text-sm font-bold text-[#1A2B4B]">{cart.reduce((sum, i) => sum + i.quantity, 0)}</span>
               </div>
             </div>
           </div>
           <Button 
-            className="w-full h-16 text-lg font-black bg-[#1A2B4B] hover:bg-[#2C3E50] text-white shadow-xl shadow-[#1A2B4B]/10 rounded-2xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="w-full h-11 text-sm font-bold bg-[#1A2B4B] hover:bg-[#2C3E50] text-white shadow-lg shadow-[#1A2B4B]/10 rounded-xl transition-all active:scale-[0.99]"
             disabled={cart.length === 0}
             onClick={() => {
               setAmountReceived('');
