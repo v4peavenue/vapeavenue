@@ -36,7 +36,9 @@ export interface LoyaltyCard {
   customerId?: string;
   customerName?: string;
   issuedAt?: string;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'expired';
+  consumedAt?: string;
+  expiredAt?: string;
   notes?: string;
 }
 

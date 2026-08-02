@@ -278,6 +278,11 @@ export const Directory: React.FC = () => {
 
   const handleAddLoyaltyCard = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newLoyaltyCard.customerId || newLoyaltyCard.customerId === 'none') {
+      toast.error('Loyalty card must be assigned to a registered customer.');
+      return;
+    }
+
     const cardNumber = newLoyaltyCard.cardNumber.trim() || generateCardNumber();
 
     if (loyaltyCards.some(c => c.cardNumber.toLowerCase() === cardNumber.toLowerCase())) {
@@ -287,26 +292,28 @@ export const Directory: React.FC = () => {
 
     try {
       const assignedCust = customers.find(c => c.id === newLoyaltyCard.customerId);
+      if (!assignedCust) {
+        toast.error('Selected registered customer not found');
+        return;
+      }
 
       const cardRef = await addDoc(collection(db, 'loyaltyCards'), {
         cardNumber,
         qrCode: newLoyaltyCard.qrCode.trim() || cardNumber,
-        customerId: newLoyaltyCard.customerId || '',
-        customerName: assignedCust?.name || '',
+        customerId: assignedCust.id,
+        customerName: assignedCust.name,
         issuedAt: new Date().toISOString(),
         status: newLoyaltyCard.status,
         notes: newLoyaltyCard.notes.trim()
       });
 
       // Update customer with this card number if linked
-      if (newLoyaltyCard.customerId) {
-        await updateDoc(doc(db, 'customers', newLoyaltyCard.customerId), {
-          loyaltyCardNumber: cardNumber,
-          loyaltyCardQr: newLoyaltyCard.qrCode.trim() || cardNumber
-        });
-      }
+      await updateDoc(doc(db, 'customers', assignedCust.id), {
+        loyaltyCardNumber: cardNumber,
+        loyaltyCardQr: newLoyaltyCard.qrCode.trim() || cardNumber
+      });
 
-      await logAction(profile, 'CREATE_LOYALTY_CARD', `Issued loyalty card: ${cardNumber}`, cardRef.id, 'loyaltyCard');
+      await logAction(profile, 'CREATE_LOYALTY_CARD', `Issued loyalty card: ${cardNumber} to ${assignedCust.name}`, cardRef.id, 'loyaltyCard');
       setNewLoyaltyCard({
         cardNumber: '',
         qrCode: '',
@@ -314,7 +321,7 @@ export const Directory: React.FC = () => {
         notes: '',
         status: 'active'
       });
-      toast.success('Loyalty card issued successfully!');
+      toast.success(`Loyalty card issued to ${assignedCust.name}!`);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'loyaltyCards');
     }
@@ -323,22 +330,30 @@ export const Directory: React.FC = () => {
   const handleUpdateLoyaltyCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLoyaltyCard || !editingLoyaltyCard.cardNumber.trim()) return;
+    if (!editingLoyaltyCard.customerId || editingLoyaltyCard.customerId === 'none') {
+      toast.error('Loyalty card must be assigned to a registered customer.');
+      return;
+    }
     try {
       const { id, ...data } = editingLoyaltyCard;
       const assignedCust = customers.find(c => c.id === data.customerId);
+      if (!assignedCust) {
+        toast.error('Assigned customer not found');
+        return;
+      }
+
       const updateData = {
         ...data,
-        customerName: assignedCust?.name || ''
+        customerId: assignedCust.id,
+        customerName: assignedCust.name
       };
 
       await updateDoc(doc(db, 'loyaltyCards', id), updateData);
 
-      if (data.customerId) {
-        await updateDoc(doc(db, 'customers', data.customerId), {
-          loyaltyCardNumber: data.cardNumber,
-          loyaltyCardQr: data.qrCode || data.cardNumber
-        });
-      }
+      await updateDoc(doc(db, 'customers', assignedCust.id), {
+        loyaltyCardNumber: data.cardNumber,
+        loyaltyCardQr: data.qrCode || data.cardNumber
+      });
 
       await logAction(profile, 'UPDATE_LOYALTY_CARD', `Updated loyalty card: ${data.cardNumber}`, id, 'loyaltyCard');
       setEditingLoyaltyCard(null);
@@ -1091,20 +1106,19 @@ export const Directory: React.FC = () => {
               <CardContent>
                 <form onSubmit={handleAddLoyaltyCard} className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-amber-950 font-bold">Assign to Customer</Label>
+                    <Label className="text-amber-950 font-bold">Assign to Registered Customer <span className="text-rose-600">*</span></Label>
                     <Select 
-                      value={newLoyaltyCard.customerId || 'none'}
-                      onValueChange={(v) => setNewLoyaltyCard({ ...newLoyaltyCard, customerId: v === 'none' ? '' : v })}
+                      value={newLoyaltyCard.customerId}
+                      onValueChange={(v) => setNewLoyaltyCard({ ...newLoyaltyCard, customerId: v })}
                     >
                       <SelectTrigger className="bg-white border-amber-200">
-                        <SelectValue placeholder="Select Customer">
+                        <SelectValue placeholder="Select Registered Customer">
                           {newLoyaltyCard.customerId 
-                            ? (customers.find(c => c.id === newLoyaltyCard.customerId)?.name || 'Select Customer')
-                            : '-- Unassigned Card --'}
+                            ? (customers.find(c => c.id === newLoyaltyCard.customerId)?.name || 'Select Registered Customer')
+                            : 'Select Registered Customer *'}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">-- Unassigned Card --</SelectItem>
                         {customers.map(c => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.name} {c.loyaltyCardNumber ? `(Current: ${c.loyaltyCardNumber})` : ''}
@@ -1112,6 +1126,9 @@ export const Directory: React.FC = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-[11px] text-amber-800">
+                      Loyalty cards are strictly issued to registered customers in the app.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -1485,20 +1502,19 @@ export const Directory: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label>Assign to Customer</Label>
+              <Label>Assign to Registered Customer <span className="text-rose-600">*</span></Label>
               <Select 
-                value={editingLoyaltyCard?.customerId || 'none'}
-                onValueChange={(v) => setEditingLoyaltyCard(prev => prev ? { ...prev, customerId: v === 'none' ? '' : v } : null)}
+                value={editingLoyaltyCard?.customerId || ''}
+                onValueChange={(v) => setEditingLoyaltyCard(prev => prev ? { ...prev, customerId: v } : null)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select Customer">
+                  <SelectValue placeholder="Select Registered Customer">
                     {editingLoyaltyCard?.customerId 
-                      ? (customers.find(c => c.id === editingLoyaltyCard.customerId)?.name || 'Select Customer')
-                      : '-- Unassigned Card --'}
+                      ? (customers.find(c => c.id === editingLoyaltyCard.customerId)?.name || 'Select Registered Customer')
+                      : 'Select Registered Customer *'}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">-- Unassigned Card --</SelectItem>
                   {customers.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}

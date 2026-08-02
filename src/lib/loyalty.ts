@@ -1,6 +1,6 @@
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
-import { Customer } from '@/types';
+import { Customer, LoyaltyCard } from '@/types';
 import { handleFirestoreError, OperationType } from './firestore-utils';
 
 export interface LoyaltyCalculationResult {
@@ -87,11 +87,22 @@ export function calculateLoyaltyDiscount(
 /**
  * Backend checkout function to safely update customer's purchase count and loyalty cycle state.
  * Resets loyaltyItemCount back to (previous + added) % 10 after hitting/passing the 10th item.
+ * 
+ * Expire/consume loyalty card if discount was redeemed or cycle completed.
  */
 export async function processCustomerLoyaltyCheckout(
   customerId: string,
-  itemsPurchasedCount: number
-): Promise<{ success: boolean; newTotalItems?: number; newLoyaltyCount?: number }> {
+  itemsPurchasedCount: number,
+  wasDiscountRedeemed: boolean = false,
+  tier2EarnedCount: number = 0
+): Promise<{ 
+  success: boolean; 
+  newTotalItems?: number; 
+  newLoyaltyCount?: number;
+  cardExpired?: boolean;
+  expiredCardNumber?: string;
+  customerName?: string;
+}> {
   if (!customerId || customerId === 'walk-in' || customerId === 'new') {
     return { success: false };
   }
@@ -109,15 +120,54 @@ export async function processCustomerLoyaltyCheckout(
     const newTotalItems = currentTotal + itemsPurchasedCount;
     const newLoyaltyCount = newTotalItems % 10;
 
-    await updateDoc(customerRef, {
-      totalItemsPurchased: newTotalItems,
-      loyaltyItemCount: newLoyaltyCount
-    });
+    // Check if loyalty card should be consumed/expired
+    // A card is consumed when a discount was redeemed or a full 10-item cycle was completed (tier2EarnedCount > 0 or cycle wrap)
+    const cycleCompleted = Math.floor(newTotalItems / 10) > Math.floor(currentTotal / 10) || tier2EarnedCount > 0;
+    const shouldExpireCard = (wasDiscountRedeemed || cycleCompleted) && !!customerData.loyaltyCardNumber;
+
+    let expiredCardNumber = '';
+    let cardExpired = false;
+
+    if (shouldExpireCard) {
+      expiredCardNumber = customerData.loyaltyCardNumber || '';
+      cardExpired = true;
+
+      // Mark card as expired in loyaltyCards collection
+      const cardsQuery = query(collection(db, 'loyaltyCards'), where('customerId', '==', customerId));
+      const cardsSnap = await getDocs(cardsQuery);
+
+      for (const cardDoc of cardsSnap.docs) {
+        if (cardDoc.data().status === 'active') {
+          await updateDoc(doc(db, 'loyaltyCards', cardDoc.id), {
+            status: 'expired',
+            expiredAt: new Date().toISOString(),
+            consumedAt: new Date().toISOString(),
+            notes: `Consumed during POS checkout on ${new Date().toLocaleDateString()}`
+          });
+        }
+      }
+
+      // Clear assigned card from customer record so user must assign a new card
+      await updateDoc(customerRef, {
+        totalItemsPurchased: newTotalItems,
+        loyaltyItemCount: newLoyaltyCount,
+        loyaltyCardNumber: '',
+        loyaltyCardQr: ''
+      });
+    } else {
+      await updateDoc(customerRef, {
+        totalItemsPurchased: newTotalItems,
+        loyaltyItemCount: newLoyaltyCount
+      });
+    }
 
     return {
       success: true,
       newTotalItems,
-      newLoyaltyCount
+      newLoyaltyCount,
+      cardExpired,
+      expiredCardNumber,
+      customerName: customerData.name
     };
   } catch (error) {
     console.error(`Error updating loyalty for customer ${customerId}:`, error);

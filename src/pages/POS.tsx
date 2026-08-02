@@ -19,13 +19,16 @@ import {
   Lock,
   ShieldAlert,
   KeyRound,
-  Gift
+  Gift,
+  AlertTriangle,
+  Sparkles,
+  QrCode
 } from 'lucide-react';
 import { calculateLoyaltyDiscount, processCustomerLoyaltyCheckout } from '@/lib/loyalty';
 
 import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Product, Sale, SaleItem, Location, Customer, PromoCode, PaymentOption, PaymentSplit } from '@/types';
+import { Product, Sale, SaleItem, Location, Customer, PromoCode, PaymentOption, PaymentSplit, LoyaltyCard } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,6 +78,7 @@ export const POS: React.FC = () => {
   const [isPendingCheckout, setIsPendingCheckout] = useState(false);
   const [checkoutLocationId, setCheckoutLocationId] = useState<string>('');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loyaltyCards, setLoyaltyCards] = useState<LoyaltyCard[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -96,6 +100,11 @@ export const POS: React.FC = () => {
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [saleType, setSaleType] = useState<'in-store' | 'online'>('in-store');
   const [deliveryFee, setDeliveryFee] = useState<string>('0');
+  const [applyLoyaltyDiscount, setApplyLoyaltyDiscount] = useState<boolean>(false);
+  const [assignCardCustomer, setAssignCardCustomer] = useState<Customer | null>(null);
+  const [quickCardNumber, setQuickCardNumber] = useState<string>('');
+  const [quickCardQr, setQuickCardQr] = useState<string>('');
+  const [expiredCardNotice, setExpiredCardNotice] = useState<{ customerId: string; customerName: string; cardNumber: string } | null>(null);
   const [customerDetails, setCustomerDetails] = useState({
     name: '',
     billingAddress: '',
@@ -223,6 +232,35 @@ export const POS: React.FC = () => {
     });
   };
 
+  const findCustomerByLoyaltyCode = (scanned: string): { customer: Customer | null; isLoyaltyCode: boolean } => {
+    const term = scanned.trim().toLowerCase();
+    if (!term) return { customer: null, isLoyaltyCode: false };
+
+    // 1. Direct match on customer record
+    const directMatch = customers.find(c => 
+      c.loyaltyCardNumber?.toLowerCase() === term ||
+      c.loyaltyCardQr?.toLowerCase() === term
+    );
+    if (directMatch) {
+      return { customer: directMatch, isLoyaltyCode: true };
+    }
+
+    // 2. Match via loyaltyCards collection
+    const cardDoc = loyaltyCards.find(l => 
+      l.cardNumber?.toLowerCase() === term ||
+      l.qrCode?.toLowerCase() === term
+    );
+    if (cardDoc) {
+      if (cardDoc.customerId) {
+        const cust = customers.find(c => c.id === cardDoc.customerId);
+        return { customer: cust || null, isLoyaltyCode: true };
+      }
+      return { customer: null, isLoyaltyCode: true };
+    }
+
+    return { customer: null, isLoyaltyCode: false };
+  };
+
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       const term = searchTerm.trim().toLowerCase();
@@ -238,14 +276,28 @@ export const POS: React.FC = () => {
         addToCart(matched, addQtyMulti);
         setSearchTerm('');
         toast.success(`Scanned and added ${matched.name} to cart`);
+        return;
+      }
+
+      // Check if term matches a registered customer loyalty card
+      const loyaltyMatch = findCustomerByLoyaltyCode(term);
+      if (loyaltyMatch.customer) {
+        handleCustomerSelect(loyaltyMatch.customer.id);
+        setSearchTerm('');
+        toast.success(`💳 Loyalty Card Scanned: Selected customer ${loyaltyMatch.customer.name}`);
+        return;
+      } else if (loyaltyMatch.isLoyaltyCode) {
+        toast.error('Loyalty cards apply only to registered customers in the app.');
+        setSearchTerm('');
+        return;
+      }
+
+      if (filteredProducts.length === 1) {
+        addToCart(filteredProducts[0], addQtyMulti);
+        setSearchTerm('');
+        toast.success(`Scanned and added ${filteredProducts[0].name} to cart`);
       } else {
-        if (filteredProducts.length === 1) {
-          addToCart(filteredProducts[0], addQtyMulti);
-          setSearchTerm('');
-          toast.success(`Scanned and added ${filteredProducts[0].name} to cart`);
-        } else {
-          toast.error(`No unique product found matching "${searchTerm}"`);
-        }
+        toast.error(`No unique product or registered customer loyalty card found matching "${searchTerm}"`);
       }
     }
   };
@@ -279,6 +331,16 @@ export const POS: React.FC = () => {
             addToCart(matched, addQtyMulti);
             toast.success(`Scanned hardware: ${matched.name} added to cart`);
             e.preventDefault();
+          } else {
+            const loyaltyMatch = findCustomerByLoyaltyCode(buffer);
+            if (loyaltyMatch.customer) {
+              handleCustomerSelect(loyaltyMatch.customer.id);
+              toast.success(`💳 Hardware Scanned Loyalty Card: Selected customer ${loyaltyMatch.customer.name}`);
+              e.preventDefault();
+            } else if (loyaltyMatch.isLoyaltyCode) {
+              toast.error('Loyalty cards apply only to registered customers in the app.');
+              e.preventDefault();
+            }
           }
           buffer = '';
         }
@@ -291,10 +353,11 @@ export const POS: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [visibleProducts, selectedLocationId, addQtyMulti]);
+  }, [visibleProducts, selectedLocationId, addQtyMulti, customers, loyaltyCards]);
 
   const handleCustomerSelect = (id: string) => {
     setSelectedCustomerId(id);
+    setApplyLoyaltyDiscount(false);
     const activeLocationId = selectedLocationId === 'all' ? checkoutLocationId : selectedLocationId;
     const location = locations.find(l => l.id === activeLocationId);
 
@@ -350,6 +413,12 @@ export const POS: React.FC = () => {
       console.warn("POS: Error listening to customers collection:", error);
     });
 
+    const unsubscribeCards = onSnapshot(collection(db, 'loyaltyCards'), (snapshot) => {
+      setLoyaltyCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoyaltyCard)));
+    }, (error) => {
+      console.warn("POS: Error listening to loyaltyCards collection:", error);
+    });
+
     const unsubscribePromos = onSnapshot(collection(db, 'promos'), (snapshot) => {
       setPromos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PromoCode)));
     }, (error) => {
@@ -384,6 +453,7 @@ export const POS: React.FC = () => {
     return () => {
       unsubscribe();
       unsubscribeCustomers();
+      unsubscribeCards();
       unsubscribePromos();
       unsubscribePayments();
       unsubscribeUsers();
@@ -446,21 +516,37 @@ export const POS: React.FC = () => {
 
   const totalCartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+  const isRegisteredCustomer = !!selectedCustomer && selectedCustomerId !== 'walk-in' && selectedCustomerId !== 'new';
+
+  // Find active assigned loyalty card for registered customer
+  const activeAssignedCard = isRegisteredCustomer
+    ? loyaltyCards.find(l => 
+        (l.customerId === selectedCustomer.id || (l.cardNumber && l.cardNumber === selectedCustomer.loyaltyCardNumber)) && 
+        l.status === 'active'
+      )
+    : null;
+  const hasAssignedLoyaltyCard = isRegisteredCustomer && !!activeAssignedCard && !!selectedCustomer.loyaltyCardNumber;
+
   const customerLoyaltyCount = selectedCustomer 
     ? (selectedCustomer.loyaltyItemCount ?? ((selectedCustomer.totalItemsPurchased ?? 0) % 10))
     : 0;
 
   const loyaltyResult = calculateLoyaltyDiscount(
-    selectedCustomerId !== 'walk-in' && selectedCustomerId !== 'new' ? customerLoyaltyCount : 0,
+    hasAssignedLoyaltyCard ? customerLoyaltyCount : 0,
     totalCartItemCount,
     settings.loyaltyTier1Discount ?? 50,
     settings.loyaltyTier2Discount ?? 100,
-    settings.loyaltyEnabled ?? true
+    (settings.loyaltyEnabled ?? true) && hasAssignedLoyaltyCard
   );
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
   const promoDiscount = appliedPromo ? appliedPromo.amount : 0;
-  const loyaltyDiscount = loyaltyResult.discountAmount;
+  
+  // Loyalty card discount is NOT automatic:
+  // Requires: Registered customer + active assigned card + global Admin toggle ON + manual checkbox checked
+  const loyaltyDiscount = (hasAssignedLoyaltyCard && (settings.loyaltyEnabled ?? true) && applyLoyaltyDiscount)
+    ? loyaltyResult.discountAmount
+    : 0;
   const discount = promoDiscount + loyaltyDiscount;
   const deliveryFeeNum = saleType === 'online' ? (parseFloat(deliveryFee) || 0) : 0;
   const total = Math.max(0, subtotal - discount + deliveryFeeNum);
@@ -551,6 +637,45 @@ export const POS: React.FC = () => {
     setTimeout(() => {
       handleCheckout(pendingCheckoutType ?? false);
     }, 150);
+  };
+
+  const handleQuickAssignLoyaltyCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignCardCustomer) return;
+
+    const cardNum = quickCardNumber.trim() || ('LC-' + Math.floor(100000 + Math.random() * 900000));
+    const cardQr = quickCardQr.trim() || cardNum;
+
+    try {
+      const cardRef = await addDoc(collection(db, 'loyaltyCards'), {
+        cardNumber: cardNum,
+        qrCode: cardQr,
+        customerId: assignCardCustomer.id,
+        customerName: assignCardCustomer.name,
+        issuedAt: new Date().toISOString(),
+        status: 'active',
+        notes: 'Issued via POS Quick Assign'
+      });
+
+      await updateDoc(doc(db, 'customers', assignCardCustomer.id), {
+        loyaltyCardNumber: cardNum,
+        loyaltyCardQr: cardQr
+      });
+
+      await logAction(profile, 'CREATE_LOYALTY_CARD', `Issued loyalty card ${cardNum} to ${assignCardCustomer.name}`, cardRef.id, 'loyaltyCard');
+      toast.success(`Loyalty card #${cardNum} assigned to ${assignCardCustomer.name}!`);
+
+      if (selectedCustomerId === assignCardCustomer.id) {
+        setApplyLoyaltyDiscount(true);
+      }
+
+      setAssignCardCustomer(null);
+      setQuickCardNumber('');
+      setQuickCardQr('');
+      setExpiredCardNotice(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'loyaltyCards');
+    }
   };
 
   const handleCheckout = async (isPending: boolean = false) => {
@@ -809,9 +934,22 @@ export const POS: React.FC = () => {
         });
       }
 
-      // 3. Update customer loyalty purchase count if applicable
+      // 3. Update customer loyalty purchase count and check for card expiration/consumption
       if (finalCustomerId && finalCustomerId !== 'walk-in' && finalCustomerId !== 'new') {
-        await processCustomerLoyaltyCheckout(finalCustomerId, totalCartItemCount);
+        const loyaltyRes = await processCustomerLoyaltyCheckout(
+          finalCustomerId,
+          totalCartItemCount,
+          loyaltyDiscount > 0,
+          loyaltyResult.tier2Triggers
+        );
+
+        if (loyaltyRes.cardExpired) {
+          setExpiredCardNotice({
+            customerId: finalCustomerId,
+            customerName: loyaltyRes.customerName || customerDetails.name || 'Customer',
+            cardNumber: loyaltyRes.expiredCardNumber || ''
+          });
+        }
       }
 
       const itemSummary = cart.map(i => `${i.name}${i.quantity > 1 ? ` (x${i.quantity})` : ''}`).join(', ');
@@ -1382,14 +1520,25 @@ export const POS: React.FC = () => {
                 <span>-{settings.currency}{(appliedPromo.amount ?? 0).toFixed(2)}</span>
               </div>
             )}
-            {loyaltyDiscount > 0 && (
-              <div className="flex flex-col gap-1 p-2 bg-amber-50/80 border border-amber-200/60 rounded-xl">
-                <div className="flex justify-between text-sm font-bold text-amber-700">
-                  <span className="flex items-center gap-1.5"><Gift className="w-4 h-4 text-amber-600" /> Loyalty Discount</span>
-                  <span>-{settings.currency}{loyaltyDiscount.toFixed(2)}</span>
+            {isRegisteredCustomer && hasAssignedLoyaltyCard && (settings.loyaltyEnabled ?? true) && loyaltyResult.discountAmount > 0 && (
+              <div className="flex flex-col gap-1.5 p-2.5 bg-amber-50/90 border border-amber-200/80 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="apply-loyalty-sidebar-toggle"
+                      className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                      checked={applyLoyaltyDiscount}
+                      onChange={(e) => setApplyLoyaltyDiscount(e.target.checked)}
+                    />
+                    <label htmlFor="apply-loyalty-sidebar-toggle" className="text-xs font-bold text-amber-900 cursor-pointer flex items-center gap-1">
+                      <Gift className="w-3.5 h-3.5 text-amber-600" /> Apply Loyalty Discount
+                    </label>
+                  </div>
+                  <span className="text-xs font-bold text-emerald-700">-{settings.currency}{loyaltyResult.discountAmount.toFixed(2)}</span>
                 </div>
-                {loyaltyResult.breakdown.map((item, idx) => (
-                  <p key={idx} className="text-[10px] text-amber-600 font-medium pl-5">• {item}</p>
+                {applyLoyaltyDiscount && loyaltyResult.breakdown.map((item, idx) => (
+                  <p key={idx} className="text-[10px] text-amber-600 font-medium pl-6">• {item}</p>
                 ))}
               </div>
             )}
@@ -1487,30 +1636,81 @@ export const POS: React.FC = () => {
                       {customerLoyaltyCount}/10 in Cycle
                     </Badge>
                   </div>
-                  {selectedCustomer.loyaltyCardNumber && (
-                    <div className="flex items-center gap-2 bg-amber-100/70 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-xl text-xs font-mono font-bold">
-                      <CreditCard className="w-3.5 h-3.5 text-amber-700" />
-                      Card #: {selectedCustomer.loyaltyCardNumber}
-                      {selectedCustomer.loyaltyCardQr && selectedCustomer.loyaltyCardQr !== selectedCustomer.loyaltyCardNumber && (
-                        <span className="text-[10px] text-amber-700 font-normal"> (QR: {selectedCustomer.loyaltyCardQr})</span>
+
+                  {!(settings.loyaltyEnabled ?? true) ? (
+                    <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 font-medium flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-slate-500 shrink-0" />
+                      <span>Loyalty card discounts are currently disabled globally by Admin in Settings.</span>
+                    </div>
+                  ) : !hasAssignedLoyaltyCard ? (
+                    <div className="p-2.5 bg-amber-100/70 border border-amber-300/80 rounded-xl space-y-2">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                        <div className="text-xs text-amber-900">
+                          <p className="font-bold">No Active Loyalty Card Assigned</p>
+                          <p className="text-[11px] text-amber-800">
+                            Loyalty discounts apply only to registered customers with an active assigned loyalty card.
+                          </p>
+                        </div>
+                      </div>
+                      <Button 
+                        type="button"
+                        size="sm"
+                        className="w-full h-8 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-sm"
+                        onClick={() => {
+                          setAssignCardCustomer(selectedCustomer);
+                          setQuickCardNumber('LC-' + Math.floor(100000 + Math.random() * 900000));
+                        }}
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" /> Assign Loyalty Card to Customer
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      {selectedCustomer.loyaltyCardNumber && (
+                        <div className="flex items-center justify-between bg-amber-100/70 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-xl text-xs font-mono font-bold">
+                          <div className="flex items-center gap-2">
+                            <CreditCard className="w-3.5 h-3.5 text-amber-700" />
+                            Card #: {selectedCustomer.loyaltyCardNumber}
+                          </div>
+                          <Badge className="bg-emerald-600 text-white text-[9px] h-4">Active</Badge>
+                        </div>
                       )}
-                    </div>
-                  )}
-                  <div className="w-full bg-amber-200/50 rounded-full h-2 overflow-hidden">
-                    <div 
-                      className="bg-amber-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${(customerLoyaltyCount / 10) * 100}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[11px] text-amber-800 font-medium">
-                    <span>Total Bought: <strong>{selectedCustomer.totalItemsPurchased ?? 0} items</strong></span>
-                    <span>Next Reward: {5 - (customerLoyaltyCount % 5)} items away</span>
-                  </div>
-                  {loyaltyResult.discountAmount > 0 && (
-                    <div className="mt-1 pt-1.5 border-t border-amber-200 text-xs font-bold text-emerald-700 flex items-center justify-between">
-                      <span>🎉 Loyalty Discount Earned:</span>
-                      <span>-{settings.currency}{loyaltyResult.discountAmount.toFixed(2)}</span>
-                    </div>
+                      <div className="w-full bg-amber-200/50 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-amber-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${(customerLoyaltyCount / 10) * 100}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[11px] text-amber-800 font-medium">
+                        <span>Total Bought: <strong>{selectedCustomer.totalItemsPurchased ?? 0} items</strong></span>
+                        <span>Next Reward: {5 - (customerLoyaltyCount % 5)} items away</span>
+                      </div>
+
+                      {/* Manual Checkbox for Loyalty Discount */}
+                      {loyaltyResult.discountAmount > 0 ? (
+                        <div className="mt-2 pt-2 border-t border-amber-200/80 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="apply-loyalty-discount-checkout"
+                              className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500 cursor-pointer"
+                              checked={applyLoyaltyDiscount}
+                              onChange={(e) => setApplyLoyaltyDiscount(e.target.checked)}
+                            />
+                            <label htmlFor="apply-loyalty-discount-checkout" className="text-xs font-bold text-amber-950 cursor-pointer flex-1 flex justify-between items-center">
+                              <span>Apply Loyalty Card Discount</span>
+                              <span className="text-emerald-700 font-black">-{settings.currency}{loyaltyResult.discountAmount.toFixed(2)}</span>
+                            </label>
+                          </div>
+                          <p className="text-[10px] text-amber-700 italic pl-6">
+                            {applyLoyaltyDiscount ? '✅ Loyalty discount will be deducted.' : '☐ Loyalty card discount is optional. Toggle on to redeem for this purchase.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-amber-700 italic">No loyalty discount milestone reached for current cart count.</p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -2103,11 +2303,120 @@ export const POS: React.FC = () => {
           if (matched) {
             addToCart(matched, addQtyMulti);
             toast.success(`Scanned: ${matched.name} added to cart`);
-          } else {
-            toast.error(`No product found with barcode "${scanned}"`);
+            return;
           }
+
+          const loyaltyMatch = findCustomerByLoyaltyCode(scanned);
+          if (loyaltyMatch.customer) {
+            handleCustomerSelect(loyaltyMatch.customer.id);
+            toast.success(`💳 Loyalty Card Scanned: Selected customer ${loyaltyMatch.customer.name}`);
+            return;
+          } else if (loyaltyMatch.isLoyaltyCode) {
+            toast.error('Loyalty cards apply only to registered customers in the app.');
+            return;
+          }
+
+          toast.error(`No product or registered customer loyalty card found with barcode "${scanned}"`);
         }}
       />
+
+      {/* Quick Assign Loyalty Card Dialog */}
+      <Dialog open={!!assignCardCustomer} onOpenChange={(open) => { if (!open) setAssignCardCustomer(null); }}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-amber-900 flex items-center gap-2 font-heading">
+              <CreditCard className="w-5 h-5 text-amber-600" /> Assign Loyalty Card
+            </DialogTitle>
+            <DialogDescription>
+              Assign a new active loyalty card to <strong>{assignCardCustomer?.name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleQuickAssignLoyaltyCard} className="space-y-4 py-2">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label className="font-bold">Card Number</Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const num = 'LC-' + Math.floor(100000 + Math.random() * 900000);
+                    setQuickCardNumber(num);
+                    if (!quickCardQr) setQuickCardQr(num);
+                  }}
+                  className="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1"
+                >
+                  <Sparkles className="w-3 h-3" /> Auto-Generate
+                </button>
+              </div>
+              <Input 
+                required
+                value={quickCardNumber}
+                onChange={(e) => {
+                  setQuickCardNumber(e.target.value);
+                  if (!quickCardQr) setQuickCardQr(e.target.value);
+                }}
+                placeholder="Scan barcode or enter e.g. LC-123456"
+                className="font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-bold">QR Code Payload / Secondary Barcode (Optional)</Label>
+              <Input 
+                value={quickCardQr}
+                onChange={(e) => setQuickCardQr(e.target.value)}
+                placeholder="e.g. QR-123456 (Defaults to card number)"
+                className="font-mono text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setAssignCardCustomer(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white font-bold">
+                <Plus className="w-4 h-4 mr-1" /> Issue & Assign Card
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Consumed / Expired Card Notice Dialog */}
+      <Dialog open={!!expiredCardNotice} onOpenChange={(open) => { if (!open) setExpiredCardNotice(null); }}>
+        <DialogContent className="sm:max-w-[480px] bg-gradient-to-b from-amber-50 to-white border-amber-200">
+          <DialogHeader>
+            <DialogTitle className="text-amber-900 flex items-center gap-2 font-heading text-xl">
+              <AlertTriangle className="w-6 h-6 text-amber-600" /> Loyalty Card Consumed & Expired!
+            </DialogTitle>
+            <DialogDescription className="text-slate-700 text-sm">
+              Loyalty card <strong>#{expiredCardNotice?.cardNumber}</strong> for customer <strong>{expiredCardNotice?.customerName}</strong> has been consumed during this purchase and marked as <strong>Expired</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 bg-amber-100/70 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+            <p className="font-bold">⚠️ Assign a new card to continue rewards!</p>
+            <p>Please assign a new active loyalty card to <strong>{expiredCardNotice?.customerName}</strong> so they do not miss out on future rewards.</p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" onClick={() => setExpiredCardNotice(null)}>
+              Dismiss
+            </Button>
+            <Button 
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+              onClick={() => {
+                const cust = customers.find(c => c.id === expiredCardNotice?.customerId);
+                const custObj = cust || ({ id: expiredCardNotice?.customerId || '', name: expiredCardNotice?.customerName || 'Customer' } as Customer);
+                setAssignCardCustomer(custObj);
+                setQuickCardNumber('LC-' + Math.floor(100000 + Math.random() * 900000));
+                setExpiredCardNotice(null);
+              }}
+            >
+              <CreditCard className="w-4 h-4 mr-1.5" /> Assign New Loyalty Card Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <style dangerouslySetInnerHTML={{ __html: `
 
