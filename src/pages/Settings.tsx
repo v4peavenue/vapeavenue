@@ -62,62 +62,13 @@ import { cn } from '@/lib/utils';
 
 export const Settings: React.FC = () => {
   const { profile, isAdmin, isManager, updateProfile } = useAuth();
-  const { settings, updateCurrency, updateLoyaltySettings } = useSettings();
+  const { settings, updateCurrency } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [locations, setLocations] = useState<Location[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
-  
-  const [loyaltyEnabled, setLoyaltyEnabled] = useState(settings.loyaltyEnabled ?? true);
-  const [loyaltyTier1, setLoyaltyTier1] = useState(settings.loyaltyTier1Discount ?? 50);
-  const [loyaltyTier2, setLoyaltyTier2] = useState(settings.loyaltyTier2Discount ?? 100);
-  const [isMigratingLoyalty, setIsMigratingLoyalty] = useState(false);
-  const [migrationSummary, setMigrationSummary] = useState<MigrationResult | null>(null);
-
-  useEffect(() => {
-    if (settings) {
-      setLoyaltyEnabled(settings.loyaltyEnabled ?? true);
-      setLoyaltyTier1(settings.loyaltyTier1Discount ?? 50);
-      setLoyaltyTier2(settings.loyaltyTier2Discount ?? 100);
-    }
-  }, [settings]);
-
-  const handleSaveLoyalty = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isAdmin) {
-      toast.error('Only administrators can update loyalty settings');
-      return;
-    }
-    try {
-      await updateLoyaltySettings(loyaltyEnabled, Number(loyaltyTier1), Number(loyaltyTier2));
-      toast.success('Loyalty discount settings updated successfully!');
-      await logAction(profile, 'UPDATE_SETTINGS', `Updated loyalty rules: Tier1=₱${loyaltyTier1}, Tier2=₱${loyaltyTier2}`, 'settings/global', 'setting');
-    } catch (error) {
-      toast.error('Failed to update loyalty settings');
-    }
-  };
-
-  const handleRunLoyaltyMigration = async () => {
-    if (!isAdmin) {
-      toast.error('Only administrators can run database migrations');
-      return;
-    }
-    setIsMigratingLoyalty(true);
-    try {
-      const result = await migrateCustomerLoyaltyCounts();
-      setMigrationSummary(result);
-      toast.success(`Migration completed successfully! ${result.updatedCustomersCount} customer records updated.`);
-      await logAction(profile, 'DATABASE_MIGRATION', `Migrated customer loyalty counts across ${result.totalCustomers} customers (${result.totalItemsMigrated} total items).`, 'customers', 'customer');
-    } catch (error) {
-      console.error('Migration error:', error);
-      toast.error('Failed to run customer loyalty migration');
-    } finally {
-      setIsMigratingLoyalty(false);
-    }
-  };
   
   const [newInvite, setNewInvite] = useState({ 
     email: '', 
@@ -165,9 +116,6 @@ export const Settings: React.FC = () => {
   const [isResetting, setIsResetting] = useState(false);
   const [resetStep, setResetStep] = useState('');
 
-  // Reconciliation state
-  const [isReconciling, setIsReconciling] = useState(false);
-
   // Backup / Restore states
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -182,18 +130,6 @@ export const Settings: React.FC = () => {
     // Auto reconcile historical data on load
     reconcileSystemData().catch(err => console.warn("Auto reconciliation notice:", err));
   }, [profile]);
-
-  const handleReconcileSystemData = async () => {
-    setIsReconciling(true);
-    try {
-      const res = await reconcileSystemData();
-      toast.success(res.message);
-    } catch (err: any) {
-      toast.error('Reconciliation error: ' + (err?.message || 'Failed'));
-    } finally {
-      setIsReconciling(false);
-    }
-  };
 
   useEffect(() => {
     if (!profile) return;
@@ -732,38 +668,6 @@ export const Settings: React.FC = () => {
     } finally {
       setIsResetting(false);
       setResetStep('');
-    }
-  };
-
-  const handleSyncStock = async () => {
-    if (!isAdmin) return;
-    setIsSyncing(true);
-    try {
-      const snapshot = await getDocs(collection(db, 'products'));
-      const batch = writeBatch(db);
-      let count = 0;
-
-      snapshot.docs.forEach((docSnap) => {
-        const product = { id: docSnap.id, ...docSnap.data() } as Product;
-        const actualTotal = Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number;
-        
-        if (product.stock !== actualTotal) {
-          batch.update(docSnap.ref, { stock: actualTotal });
-          count++;
-        }
-      });
-
-      if (count > 0) {
-        await batch.commit();
-        await logAction(profile, 'SYNC_STOCK', `Synchronized stock levels for ${count} products`, 'system', 'system');
-        toast.success(`Synchronized ${count} products`);
-      } else {
-        toast.info('All stock levels are already accurate');
-      }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'products');
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -1574,10 +1478,6 @@ export const Settings: React.FC = () => {
               <Users className="w-4 h-4" />
               Users
             </TabsTrigger>
-            <TabsTrigger value="business" className="gap-2 rounded-lg px-6">
-              <Coins className="w-4 h-4" />
-              Store
-            </TabsTrigger>
             <TabsTrigger value="system" className="gap-2 rounded-lg px-6">
               <Shield className="w-4 h-4" />
               Settings
@@ -1802,315 +1702,6 @@ export const Settings: React.FC = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="business">
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl flex items-center gap-2">
-                  <Ticket className="w-6 h-6 text-[#D4AF37]" />
-                  Promo Codes
-                </CardTitle>
-                <CardDescription>Fixed amount (Peso) discounts for checkout.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <form onSubmit={handleAddPromo} className="space-y-4 p-4 bg-secondary/30 rounded-2xl">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Promo Code</Label>
-                      <Input 
-                        value={newPromo.code} 
-                        onChange={(e) => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase() })} 
-                        placeholder="SUMMER50" 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Discount ({settings.currency})</Label>
-                      <Input 
-                        type="number"
-                        value={newPromo.amount} 
-                        onChange={(e) => setNewPromo({ ...newPromo, amount: Number(e.target.value) })} 
-                      />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <Label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 rounded border-slate-300"
-                        checked={newPromo.isPermanent}
-                        onChange={(e) => setNewPromo({ ...newPromo, isPermanent: e.target.checked })}
-                      />
-                      Permanent
-                    </Label>
-                  </div>
-                  {!newPromo.isPermanent && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Start Date</Label>
-                        <Input 
-                          type="date"
-                          value={newPromo.startDate}
-                          onChange={(e) => setNewPromo({ ...newPromo, startDate: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>End Date</Label>
-                        <Input 
-                          type="date"
-                          value={newPromo.endDate}
-                          onChange={(e) => setNewPromo({ ...newPromo, endDate: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <Button type="submit" className="w-full bg-[#D4AF37] hover:bg-[#B89630]">Create Promo</Button>
-                </form>
-
-                <div className="space-y-2">
-                  {promos.map(p => (
-                    <div key={p.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-border shadow-sm">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-primary font-mono">{p.code}</span>
-                          <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-none">
-                            -{settings.currency}{p.amount}
-                          </Badge>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-1">
-                          {p.isPermanent ? 'Permanent' : `Expires ${p.endDate?.toDate().toLocaleDateString()}`}
-                        </p>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingPromo(p)}>
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-rose-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('promos', p.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl flex items-center gap-2">
-                  <CreditCard className="w-6 h-6 text-indigo-600" />
-                  Payment Options
-                </CardTitle>
-                <CardDescription>Custom methods like GCash, Bank Transfer, etc.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <form onSubmit={handleAddPayment} className="space-y-4 p-4 bg-secondary/30 rounded-2xl">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Method Name</Label>
-                      <Input 
-                        value={newPayment.name} 
-                        onChange={(e) => setNewPayment({ ...newPayment, name: e.target.value })} 
-                        placeholder="e.g. GCash, BDO Transfer" 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Initial Balance ({settings.currency})</Label>
-                      <Input 
-                        type="number"
-                        value={newPayment.initialBalance} 
-                        onChange={(e) => setNewPayment({ ...newPayment, initialBalance: Number(e.target.value) })} 
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Method Type</Label>
-                    <Select value={newPayment.type} onValueChange={(v: any) => setNewPayment({ ...newPayment, type: v })}>
-                      <SelectTrigger>
-                        <SelectValue>
-                          {newPayment.type === 'bank' ? 'Bank Transfer' : 
-                           newPayment.type === 'ewallet' ? 'E-Wallet' : 
-                           newPayment.type ? newPayment.type.charAt(0).toUpperCase() + newPayment.type.slice(1) : ''}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bank">Bank Transfer</SelectItem>
-                        <SelectItem value="ewallet">E-Wallet</SelectItem>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="card">Card</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700">Add Method</Button>
-                </form>
-
-                <div className="space-y-2">
-                  {paymentOptions.map(opt => (
-                    <div key={opt.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-border shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-50 rounded-lg">
-                          {opt.type === 'bank' && <Building className="w-4 h-4 text-indigo-600" />}
-                          {opt.type === 'ewallet' && <Wallet className="w-4 h-4 text-indigo-600" />}
-                          {opt.type === 'cash' && <Banknote className="w-4 h-4 text-indigo-600" />}
-                          {opt.type === 'card' && <CreditCard className="w-4 h-4 text-indigo-600" />}
-                        </div>
-                        <div>
-                          <p className="font-bold text-primary">{opt.name}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">{opt.type}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-rose-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete('paymentOptions', opt.id);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Loyalty Discount Feature Card */}
-            <Card className="border-none shadow-sm bg-gradient-to-br from-amber-50/60 to-orange-50/60 backdrop-blur-sm md:col-span-2 border border-amber-200/60">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl flex items-center gap-2 text-amber-900">
-                  <Gift className="w-6 h-6 text-amber-600" />
-                  Loyalty Discount Program
-                </CardTitle>
-                <CardDescription className="text-amber-800">
-                  Automatically reward returning customers with [Pesos] discounts on their 5th and 10th item purchases in each 10-item cycle.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <form onSubmit={handleSaveLoyalty} className="space-y-4 p-5 bg-white/80 rounded-2xl border border-amber-200 shadow-sm">
-                  <div className="flex items-center justify-between pb-3 border-b border-amber-100">
-                    <div>
-                      <Label className="font-bold text-slate-800 text-sm">Enable Loyalty Program</Label>
-                      <p className="text-xs text-slate-500">Automatically calculate and apply milestone discounts during checkout.</p>
-                    </div>
-                    <input 
-                      type="checkbox" 
-                      className="w-5 h-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                      checked={loyaltyEnabled}
-                      onChange={(e) => setLoyaltyEnabled(e.target.checked)}
-                    />
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-6 pt-2">
-                    <div className="space-y-2 p-3 bg-amber-50/60 rounded-xl border border-amber-200/50">
-                      <div className="flex justify-between items-center">
-                        <Label className="font-bold text-amber-900">Tier 1 Discount (5th Item Milestone)</Label>
-                        <Badge variant="outline" className="bg-amber-100 border-amber-300 text-amber-800 text-[10px]">5th Item</Badge>
-                      </div>
-                      <p className="text-[11px] text-amber-700 leading-snug">Fixed peso discount automatically deducted when customer purchases their 5th item.</p>
-                      <div className="relative pt-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">{settings.currency}</span>
-                        <Input 
-                          type="number" 
-                          min="0"
-                          step="1"
-                          className="pl-7 bg-white border-amber-200 font-bold text-slate-800"
-                          value={loyaltyTier1} 
-                          onChange={(e) => setLoyaltyTier1(Number(e.target.value))} 
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 p-3 bg-orange-50/60 rounded-xl border border-orange-200/50">
-                      <div className="flex justify-between items-center">
-                        <Label className="font-bold text-orange-900">Tier 2 Discount (10th Item Milestone)</Label>
-                        <Badge variant="outline" className="bg-orange-100 border-orange-300 text-orange-800 text-[10px]">10th Item & Cycle Reset</Badge>
-                      </div>
-                      <p className="text-[11px] text-orange-700 leading-snug">Fixed peso discount automatically deducted on 10th item. Cycle resets back to 0 after 10th item.</p>
-                      <div className="relative pt-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">{settings.currency}</span>
-                        <Input 
-                          type="number" 
-                          min="0"
-                          step="1"
-                          className="pl-7 bg-white border-orange-200 font-bold text-slate-800"
-                          value={loyaltyTier2} 
-                          onChange={(e) => setLoyaltyTier2(Number(e.target.value))} 
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {isAdmin && (
-                    <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-11 rounded-xl shadow-md">
-                      Save Loyalty Settings
-                    </Button>
-                  )}
-                </form>
-
-                <div className="p-5 bg-white/80 rounded-2xl border border-amber-200 shadow-sm space-y-4">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <h4 className="font-bold text-slate-800 flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4 text-amber-600" />
-                        Loyalty Database Migration Tool
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Scans all historical completed sales and safely initializes or updates customer item counts (<code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">totalItemsPurchased</code> and <code className="bg-slate-100 px-1 py-0.5 rounded text-[10px]">loyaltyItemCount</code>).
-                      </p>
-                    </div>
-                    {isAdmin && (
-                      <Button 
-                        onClick={handleRunLoyaltyMigration}
-                        disabled={isMigratingLoyalty}
-                        className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-6 shrink-0 rounded-xl"
-                      >
-                        {isMigratingLoyalty ? (
-                          <span className="flex items-center gap-2">
-                            <RefreshCw className="w-4 h-4 animate-spin" /> Running Migration...
-                          </span>
-                        ) : (
-                          'Run Loyalty Migration'
-                        )}
-                      </Button>
-                    )}
-                  </div>
-
-                  {migrationSummary && (
-                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2 text-xs text-emerald-900">
-                      <div className="flex items-center justify-between font-bold text-emerald-800">
-                        <span>✅ Migration Report Summary</span>
-                        <span>{migrationSummary.updatedCustomersCount} / {migrationSummary.totalCustomers} Customers Updated</span>
-                      </div>
-                      <p>Total Items Backfilled from Historical Sales: <strong>{migrationSummary.totalItemsMigrated} items</strong></p>
-                      {migrationSummary.details.length > 0 && (
-                        <div className="max-h-36 overflow-y-auto pt-2 border-t border-emerald-200 space-y-1">
-                          {migrationSummary.details.map((d, i) => (
-                            <div key={i} className="flex justify-between text-[11px] font-mono text-emerald-700">
-                              <span>{d.customerName}</span>
-                              <span>Total: {d.newTotalItems} items | Cycle Count: {d.newLoyaltyCount}/10</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
         <TabsContent value="system">
           <Card className="border-none shadow-sm">
             <CardHeader>
@@ -2173,55 +1764,6 @@ export const Settings: React.FC = () => {
                   </Select>
                 </div>
               </div>
-              <div className="flex items-center justify-between p-5 bg-secondary/50 rounded-2xl border border-border">
-                <div className="flex items-center gap-4">
-                  <div className="p-2 bg-white rounded-lg shadow-sm">
-                    <Package className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-primary">Inventory Synchronization</p>
-                    <p className="text-xs text-muted-foreground">Recalculate total stock levels from location-specific data.</p>
-                  </div>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleSyncStock} 
-                  disabled={isSyncing}
-                  className="gap-2"
-                >
-                  {isSyncing ? 'Syncing...' : 'Sync Stock Now'}
-                </Button>
-              </div>
-
-              {isAdmin && (
-                <div className="border border-border rounded-2xl p-5 bg-indigo-50/40 mt-2 space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="p-2 bg-white rounded-lg shadow-sm border border-indigo-200">
-                      <RotateCcw className="w-5 h-5 text-indigo-600" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900">System Connection & Tally Reconciliation</p>
-                      <p className="text-xs text-slate-500 max-w-lg">
-                        Audit and synchronize all historical sales, POS records, purchasing orders, and inventory. Backtracks missing entries in Unified Ledger, Financial Accounts, and Audit Logs so all KPIs tally across Dashboard, Sales History, Finance, Reports, and System Audit.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3 pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleReconcileSystemData}
-                      disabled={isReconciling}
-                      className="gap-2 font-semibold shadow-sm text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50 border-indigo-300"
-                    >
-                      <RotateCcw className={`w-4 h-4 ${isReconciling ? 'animate-spin' : ''}`} />
-                      {isReconciling ? 'Reconciling System Tally...' : 'Reconcile & Tally Historical Sales & Financials'}
-                    </Button>
-                  </div>
-                </div>
-              )}
 
               {isAdmin && (
                 <div className="border border-border rounded-2xl p-5 bg-slate-50/50 mt-2 space-y-4">
@@ -2520,38 +2062,6 @@ export const Settings: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
-      <Dialog open={!!editingPromo} onOpenChange={(open) => !open && setEditingPromo(null)}>
-        <DialogContent className="sm:max-w-[400px] min-h-[400px] flex flex-col justify-center">
-          <DialogHeader>
-            <DialogTitle>Edit Promo Code</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleUpdatePromo} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Discount Amount ({settings.currency})</Label>
-              <Input 
-                type="number"
-                value={editingPromo?.amount || 0}
-                onChange={(e) => setEditingPromo(prev => prev ? { ...prev, amount: Number(e.target.value) } : null)}
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <Label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="w-4 h-4 rounded border-slate-300"
-                  checked={editingPromo?.isActive}
-                  onChange={(e) => setEditingPromo(prev => prev ? { ...prev, isActive: e.target.checked } : null)}
-                />
-                Is Active
-              </Label>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingPromo(null)}>Cancel</Button>
-              <Button type="submit">Update Promo</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={isRevertDialogOpen} onOpenChange={(open) => !open && setIsRevertDialogOpen(false)}>
         <DialogContent className="sm:max-w-[450px]">
