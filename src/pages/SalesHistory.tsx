@@ -24,7 +24,8 @@ import {
   CreditCard,
   Building2,
   DollarSign,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
 import { 
   collection, 
@@ -850,7 +851,7 @@ export const SalesHistory: React.FC = () => {
       }));
       filename = 'Pending_Payments';
     } else if (activeTab === 'ledger') {
-      exportData = filteredLedger.map(t => ({
+      exportData = displayedLedger.map(t => ({
         ID: t.displayId || t.id,
         Date: format(parseTimestampDate(t.timestamp), 'yyyy-MM-dd HH:mm:ss'),
         Category: t.category || '',
@@ -1211,6 +1212,20 @@ export const SalesHistory: React.FC = () => {
     return matchesSearch && matchesDate && matchesPayment;
   });
 
+  const displayedLedger = useMemo(() => {
+    if (isAdmin || isManager) return filteredLedger;
+    const currentUserId = user?.uid || profile?.id;
+    return filteredLedger.filter(t => {
+      if (!currentUserId) return false;
+      const createdByStr = (t.createdBy || '').toLowerCase();
+      const uidStr = currentUserId.toLowerCase();
+      const createdByNameStr = (t.createdByName || '').toLowerCase();
+      const profileNameStr = (profile?.name || '').toLowerCase();
+
+      return createdByStr === uidStr || (profileNameStr && createdByNameStr === profileNameStr);
+    });
+  }, [filteredLedger, isAdmin, isManager, user?.uid, profile?.id, profile?.name]);
+
   const clearFiltersForTab = (_tab = activeTab) => {
     setDateRange(getTodayDateRange());
     setPaymentFilter(financeCashId || 'cash');
@@ -1427,6 +1442,14 @@ export const SalesHistory: React.FC = () => {
 
       {activeTab === 'ledger' && (
         <div className="space-y-4">
+          {!isAdmin && !isManager && (
+            <div className="flex items-center gap-2.5 p-3 bg-indigo-50/90 border border-indigo-100 rounded-2xl text-xs text-indigo-900 font-medium">
+              <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>
+                <strong>Staff Access View:</strong> The transaction table lists items created by your account, while the KPI cards reflect the full store cash flow balance impact.
+              </span>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Inflow KPI */}
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -1765,14 +1788,14 @@ export const SalesHistory: React.FC = () => {
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-slate-500">Loading transactions...</TableCell>
                   </TableRow>
-                ) : filteredLedger.length === 0 ? (
+                ) : displayedLedger.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-24 text-center text-slate-500">
                       No transactions found for the selected period and payment mode.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredLedger.map((t) => {
+                  displayedLedger.map((t) => {
                     const isIncome = t.type === 'income';
                     const isExpense = t.type === 'expense';
                     const isTransfer = t.type === 'transfer';
@@ -2114,12 +2137,12 @@ export const SalesHistory: React.FC = () => {
             <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
               Loading ledger transactions...
             </div>
-          ) : filteredLedger.length === 0 ? (
+          ) : displayedLedger.length === 0 ? (
             <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
               No ledger transactions found.
             </div>
           ) : (
-            filteredLedger.map((t, index) => {
+            displayedLedger.map((t, index) => {
               const isIncome = t.type === 'income';
               const isExpense = t.type === 'expense';
               const isTransfer = t.type === 'transfer';

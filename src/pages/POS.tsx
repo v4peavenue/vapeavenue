@@ -1143,7 +1143,43 @@ export const POS: React.FC = () => {
         </div>
 
         {/* Category & Brand Hierarchy Filter */}
-        <div className="space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 backdrop-blur-sm shrink-0">
+        {/* Mobile & Tablet Dropdown View */}
+        <div className="lg:hidden grid grid-cols-2 gap-2.5 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 backdrop-blur-sm shrink-0">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Category</span>
+            <Select value={selectedCategory} onValueChange={(val) => handleCategoryChange(val)}>
+              <SelectTrigger className="w-full bg-white h-9 text-xs border-slate-200/80 shadow-xs">
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map(cat => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider truncate">
+              Brand {selectedCategory !== 'all' ? `(${selectedCategory})` : ''}
+            </span>
+            <Select value={selectedBrand} onValueChange={(val) => setSelectedBrand(val)}>
+              <SelectTrigger className="w-full bg-white h-9 text-xs border-slate-200/80 shadow-xs">
+                <SelectValue placeholder="All Brands" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Brands</SelectItem>
+                {brandsForCategory.map(brand => (
+                  <SelectItem key={brand} value={brand}>{brand}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Desktop Button Pills View */}
+        <div className="hidden lg:flex flex-col space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 backdrop-blur-sm shrink-0">
           {/* Category Level */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Category</span>
