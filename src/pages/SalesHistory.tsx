@@ -105,6 +105,7 @@ export const SalesHistory: React.FC = () => {
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [kpiIncludeAll, setKpiIncludeAll] = useState<boolean>(false);
 
   const parseTimestampDate = (ts: any): Date => {
     if (!ts) return new Date(0);
@@ -1212,8 +1213,7 @@ export const SalesHistory: React.FC = () => {
     return matchesSearch && matchesDate && matchesPayment;
   });
 
-  const displayedLedger = useMemo(() => {
-    if (isAdmin || isManager) return filteredLedger;
+  const userLedger = useMemo(() => {
     const currentUserId = user?.uid || profile?.id;
     return filteredLedger.filter(t => {
       if (!currentUserId) return false;
@@ -1224,7 +1224,16 @@ export const SalesHistory: React.FC = () => {
 
       return createdByStr === uidStr || (profileNameStr && createdByNameStr === profileNameStr);
     });
-  }, [filteredLedger, isAdmin, isManager, user?.uid, profile?.id, profile?.name]);
+  }, [filteredLedger, user?.uid, profile?.id, profile?.name]);
+
+  const displayedLedger = useMemo(() => {
+    if (isAdmin || isManager) return filteredLedger;
+    return userLedger;
+  }, [filteredLedger, userLedger, isAdmin, isManager]);
+
+  const kpiLedger = useMemo(() => {
+    return kpiIncludeAll ? filteredLedger : userLedger;
+  }, [kpiIncludeAll, filteredLedger, userLedger]);
 
   const clearFiltersForTab = (_tab = activeTab) => {
     setDateRange(getTodayDateRange());
@@ -1442,14 +1451,51 @@ export const SalesHistory: React.FC = () => {
 
       {activeTab === 'ledger' && (
         <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+              <ShieldCheck className="w-4 h-4 text-[#1A2B4B]" />
+              <span>KPI Summary Mode:</span>
+              <span className="text-slate-500 font-normal">
+                {kpiIncludeAll 
+                  ? 'Showing store-wide totals for all transactions' 
+                  : 'Showing totals for my transactions only'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-end sm:self-auto">
+              <span className="text-xs font-semibold text-slate-600">
+                {kpiIncludeAll ? 'All Transactions' : 'My Totals Only'}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={kpiIncludeAll}
+                onClick={() => setKpiIncludeAll(!kpiIncludeAll)}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#D4AF37]",
+                  kpiIncludeAll ? "bg-[#1A2B4B]" : "bg-slate-300"
+                )}
+                title="Toggle KPI values between All Transactions and My Totals Only"
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                    kpiIncludeAll ? "translate-x-5" : "translate-x-0"
+                  )}
+                />
+              </button>
+            </div>
+          </div>
+
           {!isAdmin && !isManager && (
             <div className="flex items-center gap-2.5 p-3 bg-indigo-50/90 border border-indigo-100 rounded-2xl text-xs text-indigo-900 font-medium">
               <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
               <span>
-                <strong>Staff Access View:</strong> The transaction table lists items created by your account, while the KPI cards reflect the full store cash flow balance impact.
+                <strong>Staff Access View:</strong> The table below displays transactions created by your account. Use the switch above to toggle the KPI summary between store-wide totals and your personal totals.
               </span>
             </div>
           )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Inflow KPI */}
             <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -1460,11 +1506,13 @@ export const SalesHistory: React.FC = () => {
                   </span>
                   Total Cash In (Inflow)
                 </span>
-                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">Plus (+)</span>
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">
+                  {kpiIncludeAll ? 'All Store' : 'My Cash In'}
+                </span>
               </div>
               <div>
                 <span className="text-2xl font-black text-slate-900">
-                  {settings.currency}{filteredLedger.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
+                  {settings.currency}{kpiLedger.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
                 </span>
               </div>
               <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
@@ -1481,11 +1529,13 @@ export const SalesHistory: React.FC = () => {
                   </span>
                   Total Cash Out (Outflow)
                 </span>
-                <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded">Minus (-)</span>
+                <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded">
+                  {kpiIncludeAll ? 'All Store' : 'My Cash Out'}
+                </span>
               </div>
               <div>
                 <span className="text-2xl font-black text-slate-900">
-                  {settings.currency}{filteredLedger.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
+                  {settings.currency}{kpiLedger.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
                 </span>
               </div>
               <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
@@ -1502,12 +1552,14 @@ export const SalesHistory: React.FC = () => {
                   </span>
                   Net Balance Impact
                 </span>
-                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded">Overall Tally</span>
+                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded">
+                  {kpiIncludeAll ? 'Store Tally' : 'My Tally'}
+                </span>
               </div>
               <div>
                 {(() => {
-                  const inflow = filteredLedger.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
-                  const outflow = filteredLedger.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+                  const inflow = kpiLedger.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+                  const outflow = kpiLedger.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
                   const net = inflow - outflow;
                   return (
                     <span className={cn(
