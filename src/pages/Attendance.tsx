@@ -254,7 +254,16 @@ export const Attendance: React.FC = () => {
       let maxPostEnd: string | null = null;
       let postAvail = false;
 
-      if (clockOutStr && schedEnd && getTimeInMinutes(clockOutStr) > getTimeInMinutes(schedEnd)) {
+      let postClockOutMins = clockOutStr ? getTimeInMinutes(clockOutStr) : 0;
+      const clockInMins = clockInStr ? getTimeInMinutes(clockInStr) : 0;
+      const schedEndMins = getTimeInMinutes(schedEnd);
+
+      // If clock-out time is earlier than clock-in time, it crossed midnight into next day
+      if (clockOutStr && clockInStr && postClockOutMins < clockInMins) {
+        postClockOutMins += 1440;
+      }
+
+      if (clockOutStr && schedEnd && postClockOutMins > schedEndMins) {
         maxPostStart = schedEnd;
         maxPostEnd = clockOutStr;
         postAvail = true;
@@ -396,6 +405,17 @@ export const Attendance: React.FC = () => {
       }, (error) => {
         console.warn("Attendance: Error listening to staffRates:", error);
       });
+    } else if (profile?.id) {
+      unsubscribeAllLogs = onSnapshot(
+        query(collection(db, 'attendance'), where('userId', '==', profile.id)),
+        (snapshot) => {
+          setAllLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
+          setLoading(false);
+        }, (error) => {
+          console.warn("Attendance: Error listening to personal attendance logs:", error);
+          setLoading(false);
+        }
+      );
     } else {
       setLoading(false);
     }

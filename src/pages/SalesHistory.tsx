@@ -1496,63 +1496,63 @@ export const SalesHistory: React.FC = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
             {/* Total Inflow KPI */}
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                    <ArrowDownLeft className="w-3 h-3" />
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-xs p-2.5 sm:p-5 space-y-1 sm:space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-1">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-tight sm:tracking-wider flex items-center gap-1 sm:gap-1.5 truncate">
+                  <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                    <ArrowDownLeft className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   </span>
-                  Total Cash In (Inflow)
+                  <span className="truncate">Cash In</span>
                 </span>
-                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">
+                <span className="text-[9px] sm:text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 sm:px-2 py-0.5 rounded w-fit shrink-0">
                   {kpiIncludeAll ? 'All Store' : 'My Cash In'}
                 </span>
               </div>
               <div>
-                <span className="text-2xl font-black text-slate-900">
+                <span className="text-sm sm:text-2xl font-black text-slate-900 truncate block">
                   {settings.currency}{kpiLedger.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
                 </span>
               </div>
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="hidden md:block pt-2 border-t border-slate-100 text-[11px] text-slate-400 truncate">
                 Aggregate of sales receipts and reverse return adjustments.
               </div>
             </div>
 
             {/* Total Outflow KPI */}
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
-                    <ArrowUpRight className="w-3 h-3" />
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-xs p-2.5 sm:p-5 space-y-1 sm:space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-1">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-tight sm:tracking-wider flex items-center gap-1 sm:gap-1.5 truncate">
+                  <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                    <ArrowUpRight className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   </span>
-                  Total Cash Out (Outflow)
+                  <span className="truncate">Cash Out</span>
                 </span>
-                <span className="text-[10px] bg-rose-50 text-rose-700 font-bold px-2 py-0.5 rounded">
+                <span className="text-[9px] sm:text-[10px] bg-rose-50 text-rose-700 font-bold px-1.5 sm:px-2 py-0.5 rounded w-fit shrink-0">
                   {kpiIncludeAll ? 'All Store' : 'My Cash Out'}
                 </span>
               </div>
               <div>
-                <span className="text-2xl font-black text-slate-900">
+                <span className="text-sm sm:text-2xl font-black text-slate-900 truncate block">
                   {settings.currency}{kpiLedger.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2)}
                 </span>
               </div>
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="hidden md:block pt-2 border-t border-slate-100 text-[11px] text-slate-400 truncate">
                 Aggregate of sales returns, void deductions, and recorded expenses.
               </div>
             </div>
 
             {/* Net Balance Change KPI */}
-            <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-5 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <TrendingUp className="w-3 h-3" />
+            <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200/60 shadow-xs p-2.5 sm:p-5 space-y-1 sm:space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200 min-w-0">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-1">
+                <span className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-tight sm:tracking-wider flex items-center gap-1 sm:gap-1.5 truncate">
+                  <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                    <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   </span>
-                  Net Balance Impact
+                  <span className="truncate">Net Impact</span>
                 </span>
-                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded">
+                <span className="text-[9px] sm:text-[10px] bg-indigo-50 text-indigo-700 font-bold px-1.5 sm:px-2 py-0.5 rounded w-fit shrink-0">
                   {kpiIncludeAll ? 'Store Tally' : 'My Tally'}
                 </span>
               </div>
@@ -1563,7 +1563,7 @@ export const SalesHistory: React.FC = () => {
                   const net = inflow - outflow;
                   return (
                     <span className={cn(
-                      "text-2xl font-black",
+                      "text-sm sm:text-2xl font-black truncate block",
                       net >= 0 ? "text-emerald-600" : "text-rose-600"
                     )}>
                       {net >= 0 ? '+' : '-'}{settings.currency}{Math.abs(net).toFixed(2)}
@@ -1571,7 +1571,7 @@ export const SalesHistory: React.FC = () => {
                   );
                 })()}
               </div>
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+              <div className="hidden md:block pt-2 border-t border-slate-100 text-[11px] text-slate-400 truncate">
                 Net movement in and out (transfers neutral to overall cash).
               </div>
             </div>
@@ -1644,8 +1644,8 @@ export const SalesHistory: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden w-full max-w-full">
-        <div className="hidden md:block w-full overflow-x-auto min-w-0">
-          <Table className="w-full table-fixed text-xs min-w-full">
+        <div className="w-full overflow-x-auto min-w-0">
+          <Table className="w-full text-xs min-w-[700px]">
             {activeTab === 'sales' ? (
             <>
               <TableHeader className="bg-slate-50">
@@ -1982,398 +1982,6 @@ export const SalesHistory: React.FC = () => {
             </>
           )}
         </Table>
-      </div>
-
-      {/* Interactive Responsive View for smartphones */}
-      <div className="block md:hidden p-3 bg-slate-50/50 space-y-4">
-        {activeTab === 'sales' ? (
-          loading ? (
-            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
-              Loading sales ledger...
-            </div>
-          ) : filteredSales.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
-              No sales transactions found.
-            </div>
-          ) : (
-            filteredSales.map((sale, index) => (
-              <motion.div
-                key={sale.id}
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: Math.min(index * 0.01, 0.15) }}
-                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-900">
-                      {format(sale.timestamp.toDate(), 'MMM dd, yyyy')}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {format(sale.timestamp.toDate(), 'HH:mm:ss')}
-                    </span>
-                  </div>
-                  <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                    #{sale.id.substring(0, 8)}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 py-1 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Customer</span>
-                    <span className="font-bold text-slate-800">{sale.customerDetails?.name || 'Walk-In'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Sold by seller</span>
-                    <span className="font-medium text-slate-800">
-                      {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Location branch</span>
-                    <Badge variant="secondary" className="bg-[#1A2B4B]/5 text-[#1A2B4B] hover:bg-[#1A2B4B]/10 py-0 px-1.5 border-none font-bold text-[10px]">
-                      {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-start">
-                    <span className="text-slate-400 shrink-0">Purchased items</span>
-                    <span className="text-slate-700 font-medium text-right max-w-[170px] truncate block" title={sale.items.map(i => i.name).join(', ')}>
-                      {sale.items.map(i => i.name).join(', ')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-slate-50 pt-1.5 mt-1 align-middle">
-                    <span className="text-slate-400 font-semibold">Total Paid</span>
-                    <span className="font-black text-slate-900 text-sm">
-                      {settings.currency}{(sale.total ?? 0).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                  <div className="flex flex-col gap-1">
-                    <Badge variant="outline" className={cn(
-                      "capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5 w-fit",
-                      sale.status === 'voided' ? "bg-rose-50 text-rose-600 border-rose-200" : 
-                      sale.status === 'returned' ? "bg-blue-50 text-blue-600 border-blue-200" :
-                      sale.status === 'partially_returned' ? "bg-indigo-50 text-indigo-600 border-indigo-200" :
-                      sale.status === 'pending' ? "bg-amber-50 text-amber-600 border-amber-200" :
-                      sale.status === 'pending_promo_approval' ? "bg-amber-100 text-amber-800 border-amber-300 animate-pulse" :
-                      sale.status === 'pending_total_approval' ? "bg-indigo-100 text-indigo-800 border-indigo-300 animate-pulse" :
-                      "bg-emerald-50 text-emerald-600 border-emerald-200"
-                    )}>
-                      {sale.status === 'voided' ? 'Voided' :
-                       sale.status === 'returned' ? 'Returned' :
-                       sale.status === 'partially_returned' ? 'Partially Returned' :
-                       sale.status === 'pending' ? 'Pending' :
-                       sale.status === 'pending_promo_approval' ? 'Pending Promo' :
-                       sale.status === 'pending_total_approval' ? 'Pending Total' : 'Completed'}
-                    </Badge>
-
-                    {sale.paymentSplits?.some(s => s.reference) && (
-                      <div className="flex flex-wrap gap-1 mt-0.5">
-                        {sale.paymentSplits.filter(s => s.reference).map((s, idx) => (
-                          <span key={idx} className="text-[8px] font-mono text-indigo-600 bg-indigo-50 px-1 rounded border border-indigo-100/30">
-                            Ref: {s.reference}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {(sale.status === 'pending_promo_approval' || sale.status === 'pending_total_approval') && (isAdmin || isManager) && (
-                      <Button 
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8"
-                        onClick={() => handleApprovePromo(sale)}
-                        disabled={approvingPromoId === sale.id}
-                      >
-                        {approvingPromoId === sale.id ? 'Approving...' : 'Approve'}
-                      </Button>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
-                      onClick={() => setSelectedSale(sale)}
-                    >
-                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                      Invoice Receipt
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            ))
-          )
-        ) : activeTab === 'voids' ? (
-          loading ? (
-            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
-              Loading void history...
-            </div>
-          ) : filteredVoids.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
-              No voided transactions found.
-            </div>
-          ) : (
-            filteredVoids.map((sale, index) => (
-              <motion.div
-                key={sale.id}
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: Math.min(index * 0.01, 0.15) }}
-                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-900">
-                      {format(parseTimestampDate(sale.timestamp), 'MMM dd, yyyy')}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {format(parseTimestampDate(sale.timestamp), 'HH:mm:ss')}
-                    </span>
-                  </div>
-                  <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                    #{sale.id.substring(0, 8)}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 py-1 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Customer</span>
-                    <span className="font-semibold text-slate-700">{sale.customerDetails?.name || 'Walk-in'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Branch</span>
-                    <Badge variant="secondary" className="bg-[#1A2B4B]/5 text-[#1A2B4B] py-0 px-1.5 border-none font-bold text-[10px]">
-                      {locations.find(l => l.id === sale.locationId)?.name || sale.locationName || 'Unknown'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-start">
-                    <span className="text-slate-400 shrink-0">Voided Items</span>
-                    <span className="text-slate-700 font-bold text-right max-w-[170px] truncate block" title={sale.items?.map(i => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}>
-                      {sale.items?.map(i => `${i.name} (x${i.quantity})`).join(', ') || 'No items'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Staff</span>
-                    <span className="text-slate-600 font-medium">{usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}</span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-slate-50 pt-1.5 mt-1 align-middle">
-                    <span className="text-slate-400 font-semibold">Voided Amount</span>
-                    <span className="font-black text-rose-600 text-sm">
-                      {settings.currency}{(sale.total ?? 0).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                  <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-200 font-bold text-[10px] py-0 px-1.5">
-                    Voided
-                  </Badge>
-
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
-                    onClick={() => setSelectedSale(sale)}
-                  >
-                    <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                    Inspect Void
-                  </Button>
-                </div>
-              </motion.div>
-            ))
-          )
-        ) : activeTab === 'ledger' ? (
-          loading ? (
-            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
-              Loading ledger transactions...
-            </div>
-          ) : displayedLedger.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
-              No ledger transactions found.
-            </div>
-          ) : (
-            displayedLedger.map((t, index) => {
-              const isIncome = t.type === 'income';
-              const isExpense = t.type === 'expense';
-              const isTransfer = t.type === 'transfer';
-              const date = t.timestamp?.toDate ? t.timestamp.toDate() : new Date();
-
-              return (
-                <motion.div
-                  key={t.id}
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: Math.min(index * 0.01, 0.15) }}
-                  className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-slate-900">
-                        {format(date, 'MMM dd, yyyy')}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {format(date, 'HH:mm:ss')}
-                      </span>
-                    </div>
-                    <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                      #{t.id.substring(0, 8)}
-                    </span>
-                  </div>
-
-                  <div className="space-y-1.5 py-1 text-xs">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400">Flow Type</span>
-                      <Badge variant="outline" className={cn(
-                        "capitalize font-bold text-[10px] py-0 px-1.5",
-                        isIncome ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        isExpense ? "bg-rose-50 text-rose-700 border-rose-200" :
-                        "bg-blue-50 text-blue-700 border-blue-200"
-                      )}>
-                        {t.category || t.type}
-                      </Badge>
-                    </div>
-
-                    <div className="flex justify-between items-start">
-                      <span className="text-slate-400 shrink-0">Description</span>
-                      <span className="text-slate-700 font-medium text-right max-w-[170px] truncate block" title={t.description}>
-                        {t.description || 'No description'}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400">Account Channel</span>
-                      {isTransfer ? (
-                        <div className="flex items-center gap-1 text-blue-600 font-semibold text-right">
-                          <span>{t.accountName || 'Unknown'}</span>
-                          <ArrowLeftRight className="w-3 h-3" />
-                          <span>{t.toAccountName || 'Unknown'}</span>
-                        </div>
-                      ) : (
-                        <span className="font-semibold text-slate-600 text-right">
-                          {t.accountName || 'Unknown'}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-400">Recorded By</span>
-                      <span className="font-medium text-slate-700 text-right">
-                        {t.createdByName || 'Staff'}
-                      </span>
-                    </div>
-
-                    {t.accountBalance !== undefined && (
-                      <div className="flex justify-between items-center pt-1 border-t border-slate-50">
-                        <span className="text-slate-400">Account Balance</span>
-                        <span className="font-bold text-slate-800">
-                          {settings.currency}{t.accountBalance.toFixed(2)}
-                          {isTransfer && t.destAccountBalance !== undefined && (
-                            <span className="text-[10px] text-slate-400 font-normal ml-1">
-                              (Dest: {settings.currency}{t.destAccountBalance.toFixed(2)})
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center border-t border-slate-100 pt-1.5 mt-1 align-middle">
-                      <span className="text-slate-400 font-semibold">Transaction Amount</span>
-                      <span className={cn(
-                        "font-black text-sm",
-                        isIncome ? "text-emerald-600" : isExpense ? "text-rose-600" : "text-blue-600"
-                      )}>
-                        {isIncome ? '+' : isExpense ? '-' : ''}{settings.currency}{t.amount.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })
-          )
-        ) : (
-          loading ? (
-            <div className="p-8 text-center text-slate-500 font-semibold animate-pulse bg-white rounded-2xl border">
-              Loading pending payments...
-            </div>
-          ) : filteredPendingSales.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 bg-white rounded-2xl border">
-              No pending payments found.
-            </div>
-          ) : (
-            filteredPendingSales.map((sale, index) => (
-              <motion.div
-                key={sale.id}
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: Math.min(index * 0.01, 0.15) }}
-                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3 relative overflow-hidden"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-900">
-                      {format(sale.timestamp.toDate(), 'MMM dd, yyyy')}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {format(sale.timestamp.toDate(), 'HH:mm:ss')}
-                    </span>
-                  </div>
-                  <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                    #{sale.id.substring(0, 8)}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 py-1 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Customer</span>
-                    <span className="font-bold text-slate-800">{sale.customerDetails?.name || 'Walk-In'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Sold by seller</span>
-                    <span className="font-medium text-slate-800">
-                      {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Location branch</span>
-                    <Badge variant="secondary" className="bg-[#1A2B4B]/5 text-[#1A2B4B] hover:bg-[#1A2B4B]/10 py-0 px-1.5 border-none font-bold text-[10px]">
-                      {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-start">
-                    <span className="text-slate-400 shrink-0">Purchased items</span>
-                    <span className="text-slate-700 font-medium text-right max-w-[170px] truncate block" title={sale.items.map(i => i.name).join(', ')}>
-                      {sale.items.map(i => i.name).join(', ')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center border-t border-slate-50 pt-1.5 mt-1 align-middle">
-                    <span className="text-slate-400 font-semibold">Total Amount Due</span>
-                    <span className="font-black text-slate-900 text-sm">
-                      {settings.currency}{(sale.total ?? 0).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                  <Badge variant="outline" className="capitalize border-slate-200 font-bold text-[10px] py-0 px-1.5 bg-amber-50 text-amber-600 border-amber-200 animate-pulse">
-                    Pending
-                  </Badge>
-
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-8 text-xs font-bold gap-1 shadow-sm border-slate-200"
-                    onClick={() => setSelectedSale(sale)}
-                  >
-                    <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                    Invoice Receipt
-                  </Button>
-                </div>
-              </motion.div>
-            ))
-          )
-        )}
       </div>
     </div>
 
