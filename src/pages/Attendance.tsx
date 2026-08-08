@@ -877,8 +877,10 @@ export const Attendance: React.FC = () => {
           
           let timeInTimestamp: Timestamp | null = null;
           let timeInBackup: string | null = null;
+          let timeInDate: Date | null = null;
+
           if (req.newStartTime) {
-            const timeInDate = parse(`${req.startDate} ${req.newStartTime}`, 'yyyy-MM-dd HH:mm', new Date());
+            timeInDate = parse(`${req.startDate} ${req.newStartTime}`, 'yyyy-MM-dd HH:mm', new Date());
             if (isValid(timeInDate)) {
               timeInTimestamp = Timestamp.fromDate(timeInDate);
               timeInBackup = timeInDate.toISOString();
@@ -888,7 +890,10 @@ export const Attendance: React.FC = () => {
           let timeOutTimestamp: Timestamp | null = null;
           let timeOutBackup: string | null = null;
           if (req.newEndTime) {
-            const timeOutDate = parse(`${req.startDate} ${req.newEndTime}`, 'yyyy-MM-dd HH:mm', new Date());
+            let timeOutDate = parse(`${req.startDate} ${req.newEndTime}`, 'yyyy-MM-dd HH:mm', new Date());
+            if (timeInDate && isValid(timeInDate) && isValid(timeOutDate) && timeOutDate < timeInDate) {
+              timeOutDate = addDays(timeOutDate, 1);
+            }
             if (isValid(timeOutDate)) {
               timeOutTimestamp = Timestamp.fromDate(timeOutDate);
               timeOutBackup = timeOutDate.toISOString();
