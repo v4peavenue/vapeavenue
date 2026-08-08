@@ -308,6 +308,8 @@ export interface Attendance {
   date: string; // YYYY-MM-DD
   timeIn: Timestamp;
   timeOut?: Timestamp | null;
+  timeInBackup?: string | null;
+  timeOutBackup?: string | null;
   locationId: string;
   locationName: string;
   notes?: string;
@@ -342,6 +344,9 @@ export interface AttendanceRequest {
   locationId?: string;
   locationName?: string;
   reason: string;
+  createdBy?: string;
+  createdByName?: string;
+  autoApprove?: boolean;
   reviewedBy?: string;
   reviewedByName?: string;
   createdAt: Timestamp;

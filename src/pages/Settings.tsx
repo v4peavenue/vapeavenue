@@ -94,6 +94,7 @@ export const Settings: React.FC = () => {
 
   const [editingPromo, setEditingPromo] = useState<PromoCode | null>(null);
   const [editingPayment, setEditingPayment] = useState<PaymentOption | null>(null);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileName, setProfileName] = useState(profile?.name || '');
 
@@ -802,8 +803,32 @@ export const Settings: React.FC = () => {
     try {
       const user = users.find(u => u.id === userId);
       await updateDoc(doc(db, 'users', userId), data);
-      await logAction(profile, 'UPDATE_USER', `Updated settings for ${user?.email}`, userId, 'user');
+      await logAction(profile, 'UPDATE_USER', `Updated settings for ${user?.email || userId}`, userId, 'user');
       toast.success('User updated');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'users');
+    }
+  };
+
+  const handleSaveUserEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      const updateData: any = {
+        name: editingUser.name || '',
+        email: editingUser.email || '',
+        role: editingUser.role || 'staff',
+      };
+      if (editingUser.locationId) {
+        updateData.locationId = editingUser.locationId;
+      } else {
+        updateData.locationId = deleteField();
+      }
+
+      await updateDoc(doc(db, 'users', editingUser.id), updateData);
+      await logAction(profile, 'UPDATE_USER', `Updated user account details for ${editingUser.email}`, editingUser.id, 'user');
+      toast.success('User account updated successfully');
+      setEditingUser(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'users');
     }
@@ -1647,6 +1672,14 @@ export const Settings: React.FC = () => {
                                 <SelectItem value="staff">Staff</SelectItem>
                               </SelectContent>
                             </Select>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 text-xs font-bold gap-1 text-[#1A2B4B] hover:bg-slate-100"
+                              onClick={() => setEditingUser(u)}
+                            >
+                              <Edit2 className="w-3.5 h-3.5" /> Edit Account
+                            </Button>
                             {u.id !== profile?.id && (
                               <Button 
                                 variant="ghost" 
@@ -2412,6 +2445,93 @@ export const Settings: React.FC = () => {
               Initialize Restore
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Account Dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl flex items-center gap-2">
+              <User className="w-5 h-5 text-[#1A2B4B]" /> Edit Staff Account Details
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Update account display name, email, assigned location, or user role.
+            </DialogDescription>
+          </DialogHeader>
+          {editingUser && (
+            <form onSubmit={handleSaveUserEdit} className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold">Full Name</Label>
+                <Input 
+                  value={editingUser.name || ''} 
+                  onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                  placeholder="e.g. Jane Doe"
+                  className="h-10 text-xs font-bold"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold">Email Address</Label>
+                <Input 
+                  type="email"
+                  value={editingUser.email || ''} 
+                  onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                  placeholder="e.g. jane@company.com"
+                  className="h-10 text-xs font-bold"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold">Role</Label>
+                  <Select 
+                    value={editingUser.role} 
+                    onValueChange={(v: 'admin' | 'manager' | 'staff') => setEditingUser({ ...editingUser, role: v })}
+                    disabled={editingUser.id === profile?.id}
+                  >
+                    <SelectTrigger className="h-10 text-xs font-bold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="staff">Staff</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold">Assigned Location</Label>
+                  <Select 
+                    value={editingUser.locationId || 'none'} 
+                    onValueChange={(v: string) => setEditingUser({ ...editingUser, locationId: v === 'none' ? undefined : v })}
+                  >
+                    <SelectTrigger className="h-10 text-xs font-bold">
+                      <SelectValue placeholder="Select Location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Location</SelectItem>
+                      {locations.map(loc => (
+                        <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 mt-6">
+                <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" className="bg-[#1A2B4B] hover:bg-[#2C3E50] font-bold text-white px-6">
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </motion.div>

@@ -29,7 +29,8 @@ import {
   Download,
   Save,
   Percent,
-  Printer
+  Printer,
+  RefreshCw
 } from 'lucide-react';
 import { 
   collection, 
@@ -45,6 +46,7 @@ import {
   Timestamp,
   serverTimestamp,
   getDocs,
+  getDoc,
   limit,
   writeBatch
 } from 'firebase/firestore';
@@ -69,7 +71,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { format, isSameDay, startOfDay, endOfDay, parse, isValid, addDays, differenceInMinutes, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, isPast, isToday } from 'date-fns';
+import { format, isSameDay, startOfDay, endOfDay, parse, isValid, addDays, differenceInMinutes, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, isPast, isToday, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { logAction } from '@/lib/audit';
@@ -192,6 +194,14 @@ export const Attendance: React.FC = () => {
   const [reportStartDate, setReportStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [reportEndDate, setReportEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   
+  const [editingLog, setEditingLog] = useState<{
+    userId: string;
+    userName: string;
+    date: string;
+    timeIn: string;
+    timeOut: string;
+  } | null>(null);
+
   const [currentDate, setCurrentDate] = useState(new Date());
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -199,6 +209,46 @@ export const Attendance: React.FC = () => {
     if (!timeStr) return 0;
     const [hours, minutes] = timeStr.split(':').map(Number);
     return (hours || 0) * 60 + (minutes || 0);
+  };
+
+  const parseTimeStringToDate = (dateStr: string, timeStr: string): Date | null => {
+    if (!timeStr || !dateStr) return null;
+    const trimmed = timeStr.trim();
+    if (!trimmed) return null;
+    
+    // Try standard formats
+    const formats = ['HH:mm', 'H:mm', 'HH:mm:ss', 'H:mm:ss', 'h:mm a', 'hh:mm a', 'h:mm A', 'hh:mm A'];
+    for (const fmt of formats) {
+      try {
+        const d = parse(`${dateStr} ${trimmed}`, `yyyy-MM-dd ${fmt}`, new Date());
+        if (isValid(d)) return d;
+      } catch {
+        // try next
+      }
+    }
+
+    // Fallback regex match
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?$/i);
+    if (match) {
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const ampm = match[3]?.toLowerCase();
+      if (ampm === 'pm' && hours < 12) hours += 12;
+      if (ampm === 'am' && hours === 12) hours = 0;
+      
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const d = parseInt(parts[2], 10);
+        if (y && m && d) {
+          const res = new Date(y, m - 1, d, hours, minutes, 0);
+          if (isValid(res)) return res;
+        }
+      }
+    }
+
+    return null;
   };
 
   const extractHHMM = (ts: any, backup?: string): string | null => {
@@ -222,6 +272,38 @@ export const Attendance: React.FC = () => {
       }
     }
     return null;
+  };
+
+  const formatDisplayTime = (timeStr: string | null | undefined): string => {
+    if (!timeStr) return '--:--';
+    const trimmed = timeStr.trim();
+    if (trimmed === '--:--' || !trimmed) return '--:--';
+    const parts = trimmed.split(':');
+    if (parts.length < 2) return timeStr;
+    let hours = parseInt(parts[0], 10);
+    const minutes = parts[1].substring(0, 2);
+    if (isNaN(hours)) return timeStr;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    if (hours === 0) hours = 12;
+    return `${hours}:${minutes} ${ampm}`;
+  };
+
+  const isUserLogMatch = (log: any, user: { id: string; name?: string; email?: string }) => {
+    if (!log || !user) return false;
+    if (log.userId === user.id) return true;
+    if (user.email && log.userId?.toLowerCase() === user.email.toLowerCase()) return true;
+    if (user.email && log.userName?.toLowerCase() === user.email.toLowerCase()) return true;
+    if (user.name && log.userName?.toLowerCase() === user.name.toLowerCase()) return true;
+    if (user.id && log.userName?.toLowerCase() === user.id.toLowerCase()) return true;
+    return false;
+  };
+
+  const findUserLogForDate = (logs: AttendanceType[], user: { id: string; name?: string; email?: string }, dateStr: string) => {
+    const matchingLogs = logs.filter(l => l.date === dateStr && isUserLogMatch(l, user));
+    if (matchingLogs.length === 0) return null;
+    const logWithTime = matchingLogs.find(l => l.timeIn || l.timeOut || l.timeInBackup || l.timeOutBackup);
+    return logWithTime || matchingLogs[0];
   };
 
   useEffect(() => {
@@ -391,9 +473,11 @@ export const Attendance: React.FC = () => {
     let unsubscribeRates = () => {};
     if (isAdmin || isManager) {
       unsubscribeAllLogs = onSnapshot(
-        query(collection(db, 'attendance'), orderBy('date', 'desc'), limit(1000)),
+        collection(db, 'attendance'),
         (snapshot) => {
-          setAllLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
+          const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType));
+          logs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+          setAllLogs(logs);
           setLoading(false);
         }, (error) => {
           console.warn("Attendance: Error listening to all attendance logs:", error);
@@ -754,11 +838,224 @@ export const Attendance: React.FC = () => {
     }
   };
 
+  const executeApprovedRequestActions = async (req: Partial<AttendanceRequest> & { userId: string; userName: string; startDate: string; type: string }) => {
+    if (req.type === 'time_correction') {
+      const start = parseISO(req.startDate);
+      const end = req.endDate ? parseISO(req.endDate) : start;
+      const datesToProcess: string[] = [];
+
+      if (isValid(start) && isValid(end) && end >= start) {
+        let curr = start;
+        while (curr <= end) {
+          datesToProcess.push(format(curr, 'yyyy-MM-dd'));
+          curr = addDays(curr, 1);
+        }
+      } else {
+        datesToProcess.push(req.startDate);
+      }
+
+      for (const dateStr of datesToProcess) {
+        let snap = await getDocs(query(
+          collection(db, 'attendance'),
+          where('userId', '==', req.userId),
+          where('date', '==', dateStr),
+          limit(1)
+        ));
+
+        if (snap.empty) {
+          const dateSnap = await getDocs(query(
+            collection(db, 'attendance'),
+            where('date', '==', dateStr)
+          ));
+          const matchedDoc = dateSnap.docs.find(d => {
+            const data = d.data();
+            return data.userId === req.userId ||
+              (req.userName && data.userName?.toLowerCase() === req.userName.toLowerCase()) ||
+              (req.userId && data.userId?.toLowerCase() === req.userId.toLowerCase());
+          });
+          if (matchedDoc) {
+            snap = {
+              empty: false,
+              docs: [matchedDoc]
+            } as any;
+          }
+        }
+        
+        let timeInDate: Date | null = req.newStartTime ? parseTimeStringToDate(dateStr, req.newStartTime) : null;
+        let timeOutDate: Date | null = req.newEndTime ? parseTimeStringToDate(dateStr, req.newEndTime) : null;
+
+        let existingDocData: any = null;
+        let existingTimeInDate: Date | null = null;
+
+        if (!snap.empty) {
+          existingDocData = snap.docs[0].data();
+          if (existingDocData.timeIn?.toDate) {
+            existingTimeInDate = existingDocData.timeIn.toDate();
+          } else if (existingDocData.timeInBackup) {
+            const parsed = new Date(existingDocData.timeInBackup);
+            if (isValid(parsed)) existingTimeInDate = parsed;
+          }
+        }
+
+        const refTimeInDate = timeInDate || existingTimeInDate;
+
+        if (timeOutDate && refTimeInDate && isValid(timeOutDate) && isValid(refTimeInDate) && timeOutDate < refTimeInDate) {
+          timeOutDate = addDays(timeOutDate, 1);
+        }
+
+        const timeInTimestamp = timeInDate && isValid(timeInDate) ? Timestamp.fromDate(timeInDate) : null;
+        const timeInBackup = timeInDate && isValid(timeInDate) ? timeInDate.toISOString() : null;
+
+        const timeOutTimestamp = timeOutDate && isValid(timeOutDate) ? Timestamp.fromDate(timeOutDate) : null;
+        const timeOutBackup = timeOutDate && isValid(timeOutDate) ? timeOutDate.toISOString() : null;
+
+        const locationId = req.locationId || existingDocData?.locationId || locations[0]?.id || 'all';
+        const locationName = req.locationName || existingDocData?.locationName || locations[0]?.name || 'Default';
+
+        if (!snap.empty) {
+          const attDoc = snap.docs[0];
+          const updateData: any = {};
+          if (timeInTimestamp) {
+            updateData.timeIn = timeInTimestamp;
+            updateData.timeInBackup = timeInBackup;
+          }
+          if (timeOutTimestamp) {
+            updateData.timeOut = timeOutTimestamp;
+            updateData.timeOutBackup = timeOutBackup;
+          }
+          if (req.locationId) updateData.locationId = req.locationId;
+          if (req.locationName) updateData.locationName = req.locationName;
+
+          if (Object.keys(updateData).length > 0) {
+            await updateDoc(doc(db, 'attendance', attDoc.id), updateData);
+          }
+        } else {
+          await addDoc(collection(db, 'attendance'), {
+            userId: req.userId,
+            userName: req.userName,
+            date: dateStr,
+            timeIn: timeInTimestamp,
+            timeInBackup,
+            timeOut: timeOutTimestamp,
+            timeOutBackup,
+            locationId,
+            locationName,
+            notes: 'Time correction requested and approved'
+          });
+        }
+      }
+    } else if (req.type === 'schedule_change') {
+      const start = new Date(req.startDate);
+      const end = req.endDate ? new Date(req.endDate) : start;
+      
+      if (isValid(start) && isValid(end)) {
+        const days = eachDayOfInterval({ start, end });
+        const batch = writeBatch(db);
+        
+        for (const day of days) {
+          const dateStr = format(day, 'yyyy-MM-dd');
+          
+          // Find existing schedule for this user and date
+          const existing = schedules.find(s => s.userId === req.userId && s.date === dateStr);
+          
+          const scheduleData = {
+            userId: req.userId,
+            userName: req.userName,
+            date: dateStr,
+            isDayOff: false,
+            startTime: req.newStartTime || null,
+            endTime: req.newEndTime || null,
+            updatedAt: serverTimestamp()
+          };
+          
+          if (existing) {
+            batch.update(doc(db, 'schedules', existing.id), scheduleData);
+          } else {
+            batch.set(doc(collection(db, 'schedules')), scheduleData);
+          }
+        }
+        await batch.commit();
+      }
+    }
+  };
+
+  const handleSaveDirectLog = async () => {
+    if (!editingLog) return;
+    try {
+      const dateSnap = await getDocs(query(
+        collection(db, 'attendance'),
+        where('date', '==', editingLog.date)
+      ));
+
+      const targetUser = allUsers.find(u => u.id === editingLog.userId) || { id: editingLog.userId, name: editingLog.userName };
+
+      const matchingDocs = dateSnap.docs.filter(d => {
+        const data = d.data();
+        return isUserLogMatch(data, targetUser) ||
+          (editingLog.userName && data.userName?.toLowerCase() === editingLog.userName.toLowerCase()) ||
+          (editingLog.userId && data.userId?.toLowerCase() === editingLog.userId.toLowerCase());
+      });
+
+      let timeInDate = editingLog.timeIn ? parseTimeStringToDate(editingLog.date, editingLog.timeIn) : null;
+      let timeOutDate = editingLog.timeOut ? parseTimeStringToDate(editingLog.date, editingLog.timeOut) : null;
+
+      if (timeOutDate && timeInDate && isValid(timeOutDate) && isValid(timeInDate) && timeOutDate < timeInDate) {
+        timeOutDate = addDays(timeOutDate, 1);
+      }
+
+      const timeInTimestamp = timeInDate && isValid(timeInDate) ? Timestamp.fromDate(timeInDate) : null;
+      const timeInBackup = timeInDate && isValid(timeInDate) ? timeInDate.toISOString() : null;
+      const timeOutTimestamp = timeOutDate && isValid(timeOutDate) ? Timestamp.fromDate(timeOutDate) : null;
+      const timeOutBackup = timeOutDate && isValid(timeOutDate) ? timeOutDate.toISOString() : null;
+
+      const payload: any = {
+        userId: targetUser.id || editingLog.userId,
+        userName: targetUser.name || targetUser.email || editingLog.userName,
+        date: editingLog.date,
+        timeIn: timeInTimestamp,
+        timeInBackup: timeInBackup,
+        timeOut: timeOutTimestamp,
+        timeOutBackup: timeOutBackup,
+        updatedAt: serverTimestamp()
+      };
+
+      if (matchingDocs.length > 0) {
+        const primaryDoc = matchingDocs[0];
+        await updateDoc(doc(db, 'attendance', primaryDoc.id), payload);
+
+        // Delete any duplicate redundant docs for the same user and date
+        if (matchingDocs.length > 1) {
+          for (let i = 1; i < matchingDocs.length; i++) {
+            await deleteDoc(doc(db, 'attendance', matchingDocs[i].id));
+          }
+        }
+      } else {
+        await addDoc(collection(db, 'attendance'), {
+          ...payload,
+          locationId: locations[0]?.id || 'all',
+          locationName: locations[0]?.name || 'Default',
+          notes: 'Directly edited by Admin/Manager',
+          createdAt: serverTimestamp()
+        });
+      }
+
+      toast.success('Attendance log updated successfully!');
+      setEditingLog(null);
+    } catch (err) {
+      console.error('Error saving direct attendance log:', err);
+      toast.error('Failed to save attendance log');
+    }
+  };
+
   const handleSubmitRequest = async () => {
     if (!profile || !newRequest.reason) {
       toast.error('Please provide a reason');
       return;
     }
+
+    const targetUserId = newRequest.userId || profile.id;
+    const targetUser = allUsers.find(u => u.id === targetUserId);
+    const targetUserName = targetUser?.name || targetUser?.email || profile.name || profile.email;
 
     if (newRequest.type === 'overtime') {
       if (!newRequest.isPreShiftSelected && !newRequest.isPostShiftSelected) {
@@ -830,24 +1127,45 @@ export const Attendance: React.FC = () => {
         otHours = Math.max(0, totalOtMins / 60);
       }
 
+      const isAutoApprove = (isAdmin || isManager) && (newRequest.autoApprove !== false);
+      const initialStatus = isAutoApprove ? 'approved' : 'pending';
+
       const requestData = {
         ...newRequest,
+        status: initialStatus as 'pending' | 'approved',
         otHours: newRequest.type === 'overtime' ? otHours : null,
-        userId: profile.id,
-        userName: profile.name || profile.email,
-        createdAt: serverTimestamp()
+        userId: targetUserId,
+        userName: targetUserName,
+        createdBy: profile.id,
+        createdByName: profile.name || profile.email,
+        createdAt: serverTimestamp(),
+        ...(initialStatus === 'approved' ? {
+          reviewedBy: profile.id,
+          reviewedByName: profile.name || profile.email,
+          reviewedAt: serverTimestamp()
+        } : {})
       };
 
       await addDoc(collection(db, 'attendanceRequests'), requestData);
-      toast.success('Request submitted successfully');
+
+      if (initialStatus === 'approved') {
+        await executeApprovedRequestActions({
+          ...requestData,
+          startDate: newRequest.startDate || format(new Date(), 'yyyy-MM-dd'),
+          type: newRequest.type || 'leave'
+        });
+      }
+
+      toast.success(initialStatus === 'approved' ? 'Request submitted and approved successfully' : 'Request submitted successfully');
       setIsRequestDialogOpen(false);
       setNewRequest({
         type: 'leave',
         status: 'pending',
         startDate: format(new Date(), 'yyyy-MM-dd'),
+        userId: profile.id,
         reason: ''
       });
-      await logAction(profile, 'REQUEST_SUBMITTED', `Submitted a ${newRequest.type} request`);
+      await logAction(profile, 'REQUEST_SUBMITTED', `Submitted a ${newRequest.type} request for ${targetUserName}`);
     } catch (error) {
       console.error('Error submitting request:', error);
       toast.error('Failed to submit request');
@@ -865,96 +1183,12 @@ export const Attendance: React.FC = () => {
       });
 
       if (status === 'approved') {
-        const req = requests.find(r => r.id === requestId);
-        if (req && req.type === 'time_correction') {
-          const q = query(
-            collection(db, 'attendance'),
-            where('userId', '==', req.userId),
-            where('date', '==', req.startDate),
-            limit(1)
-          );
-          const snap = await getDocs(q);
-          
-          let timeInTimestamp: Timestamp | null = null;
-          let timeInBackup: string | null = null;
-          let timeInDate: Date | null = null;
-
-          if (req.newStartTime) {
-            timeInDate = parse(`${req.startDate} ${req.newStartTime}`, 'yyyy-MM-dd HH:mm', new Date());
-            if (isValid(timeInDate)) {
-              timeInTimestamp = Timestamp.fromDate(timeInDate);
-              timeInBackup = timeInDate.toISOString();
-            }
-          }
-          
-          let timeOutTimestamp: Timestamp | null = null;
-          let timeOutBackup: string | null = null;
-          if (req.newEndTime) {
-            let timeOutDate = parse(`${req.startDate} ${req.newEndTime}`, 'yyyy-MM-dd HH:mm', new Date());
-            if (timeInDate && isValid(timeInDate) && isValid(timeOutDate) && timeOutDate < timeInDate) {
-              timeOutDate = addDays(timeOutDate, 1);
-            }
-            if (isValid(timeOutDate)) {
-              timeOutTimestamp = Timestamp.fromDate(timeOutDate);
-              timeOutBackup = timeOutDate.toISOString();
-            }
-          }
-
-          const locationId = req.locationId || locations[0]?.id || 'all';
-          const locationName = req.locationName || locations[0]?.name || 'Default';
-
-          if (!snap.empty) {
-            const attDoc = snap.docs[0];
-            await updateDoc(doc(db, 'attendance', attDoc.id), {
-              ...(timeInTimestamp ? { timeIn: timeInTimestamp, timeInBackup } : {}),
-              ...(timeOutTimestamp ? { timeOut: timeOutTimestamp, timeOutBackup } : {})
-            });
-          } else {
-            await addDoc(collection(db, 'attendance'), {
-              userId: req.userId,
-              userName: req.userName,
-              date: req.startDate,
-              timeIn: timeInTimestamp || Timestamp.now(),
-              timeInBackup: timeInBackup || new Date().toISOString(),
-              timeOut: timeOutTimestamp,
-              timeOutBackup,
-              locationId,
-              locationName,
-              notes: 'Time correction requested and approved'
-            });
-          }
-        } else if (req && req.type === 'schedule_change') {
-          const start = new Date(req.startDate);
-          const end = req.endDate ? new Date(req.endDate) : start;
-          
-          if (isValid(start) && isValid(end)) {
-            const days = eachDayOfInterval({ start, end });
-            const batch = writeBatch(db);
-            
-            for (const day of days) {
-              const dateStr = format(day, 'yyyy-MM-dd');
-              
-              // Find existing schedule for this user and date
-              const existing = schedules.find(s => s.userId === req.userId && s.date === dateStr);
-              
-              const scheduleData = {
-                userId: req.userId,
-                userName: req.userName,
-                date: dateStr,
-                isDayOff: false,
-                startTime: req.newStartTime || null,
-                endTime: req.newEndTime || null,
-                updatedAt: serverTimestamp()
-              };
-              
-              if (existing) {
-                batch.update(doc(db, 'schedules', existing.id), scheduleData);
-              } else {
-                batch.set(doc(collection(db, 'schedules')), scheduleData);
-              }
-            }
-            await batch.commit();
-          }
+        const reqSnap = await getDoc(doc(db, 'attendanceRequests', requestId));
+        const reqData = reqSnap.exists() 
+          ? ({ id: reqSnap.id, ...reqSnap.data() } as AttendanceRequest) 
+          : requests.find(r => r.id === requestId);
+        if (reqData) {
+          await executeApprovedRequestActions(reqData);
         }
       }
 
@@ -1534,6 +1768,9 @@ export const Attendance: React.FC = () => {
                         type: 'leave',
                         status: 'pending',
                         startDate: format(new Date(), 'yyyy-MM-dd'),
+                        userId: profile?.id,
+                        userName: profile?.name || profile?.email || '',
+                        autoApprove: true,
                         reason: ''
                       });
                       setIsRequestDialogOpen(true);
@@ -1574,6 +1811,11 @@ export const Attendance: React.FC = () => {
                                 )}>
                                   {req.status}
                                 </Badge>
+                                {req.createdByName && req.createdBy !== req.userId && (
+                                  <Badge variant="outline" className="text-[9px] bg-slate-100 text-slate-600 border-slate-200 font-semibold py-0">
+                                    By Admin: {req.createdByName}
+                                  </Badge>
+                                )}
                               </div>
                               <p className="text-xs text-slate-500 font-medium">
                                 {req.type === 'leave' ? 'Leave Request' : 
@@ -1649,6 +1891,20 @@ export const Attendance: React.FC = () => {
                                 <CloseIcon className="w-4 h-4" /> Reject
                               </Button>
                             </div>
+                          )}
+
+                          {(isManager || isAdmin) && req.status === 'approved' && req.type === 'time_correction' && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="h-8 px-3 border-indigo-100 text-indigo-600 hover:bg-indigo-50 gap-1.5 font-bold text-[11px]"
+                              onClick={async () => {
+                                await executeApprovedRequestActions(req);
+                                toast.success('Attendance record re-synced successfully!');
+                              }}
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" /> Sync to Log
+                            </Button>
                           )}
 
                           {req.reviewedBy && (
@@ -2095,12 +2351,15 @@ export const Attendance: React.FC = () => {
                             <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Scheduled Out</th>
                             <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Actual Out</th>
                             <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                            {(isAdmin || isManager) && (
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                           {filteredCompareUsers.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="text-center py-12 text-slate-400 italic text-sm">
+                              <td colSpan={isAdmin || isManager ? 7 : 6} className="text-center py-12 text-slate-400 italic text-sm">
                                 No matching staff members found.
                               </td>
                             </tr>
@@ -2108,7 +2367,7 @@ export const Attendance: React.FC = () => {
                             filteredCompareUsers.map((user) => {
                               const targetDateStr = compareDateFilter || format(new Date(), 'yyyy-MM-dd');
                               const schedule = getDateSchedule(user.id, targetDateStr);
-                              const attendance = allLogs.find(l => l.userId === user.id && l.date === targetDateStr);
+                              const attendance = findUserLogForDate(allLogs, user, targetDateStr);
 
                               const actualInStr = extractHHMM(attendance?.timeIn, attendance?.timeInBackup);
                               const actualOutStr = extractHHMM(attendance?.timeOut, attendance?.timeOutBackup);
@@ -2121,16 +2380,16 @@ export const Attendance: React.FC = () => {
                                 <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                                   <td className="px-6 py-4 font-bold text-sm text-primary">{user.name || user.email || user.id}</td>
                                   <td className="px-6 py-4 text-xs font-medium text-slate-400 tabular-nums">
-                                    {schedule?.isDayOff ? 'DAY OFF' : schedule?.startTime || '--:--'}
+                                    {schedule?.isDayOff ? 'DAY OFF' : formatDisplayTime(schedule?.startTime)}
                                   </td>
                                   <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
-                                    {actualInStr || '--:--'}
+                                    {formatDisplayTime(actualInStr)}
                                   </td>
                                   <td className="px-6 py-4 text-xs font-medium text-slate-400 tabular-nums">
-                                    {schedule?.isDayOff ? 'DAY OFF' : schedule?.endTime || '--:--'}
+                                    {schedule?.isDayOff ? 'DAY OFF' : formatDisplayTime(schedule?.endTime)}
                                   </td>
                                   <td className="px-6 py-4 text-xs font-black text-primary tabular-nums">
-                                    {actualOutStr || '--:--'}
+                                    {formatDisplayTime(actualOutStr)}
                                   </td>
                                   <td className="px-6 py-4">
                                     {schedule?.isDayOff ? (
@@ -2143,6 +2402,25 @@ export const Attendance: React.FC = () => {
                                       <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-100 font-bold uppercase text-[9px] tracking-widest">On Time</Badge>
                                     )}
                                   </td>
+                                  {(isAdmin || isManager) && (
+                                    <td className="px-6 py-4 text-right">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 px-2.5 text-xs font-bold text-[#1A2B4B] hover:bg-slate-100 gap-1 rounded-lg"
+                                        onClick={() => setEditingLog({
+                                          userId: user.id,
+                                          userName: user.name || user.email || user.id,
+                                          date: targetDateStr,
+                                          timeIn: actualInStr || schedule?.startTime || '08:00',
+                                          timeOut: actualOutStr || schedule?.endTime || '17:00'
+                                        })}
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                        Edit Log
+                                      </Button>
+                                    </td>
+                                  )}
                                 </tr>
                               );
                             })
@@ -2760,6 +3038,46 @@ export const Attendance: React.FC = () => {
           </div>
           
           <div className="p-8 space-y-6 bg-white">
+            {(isAdmin || isManager) && (
+              <div className="space-y-3 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-black uppercase text-amber-800 tracking-wider">Post On Behalf Of Staff</Label>
+                  <Select 
+                    value={newRequest.userId || profile?.id || ''} 
+                    onValueChange={(val) => {
+                      const selectedUser = allUsers.find(u => u.id === val);
+                      setNewRequest(prev => ({ 
+                        ...prev, 
+                        userId: val,
+                        userName: selectedUser?.name || selectedUser?.email || ''
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="bg-white border border-amber-200 h-11 rounded-xl text-xs font-bold text-slate-800 shadow-sm">
+                      <SelectValue placeholder="Select Staff Member" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {allUsers.map(u => (
+                        <SelectItem key={u.id} value={u.id} className="font-semibold text-xs">
+                          {u.name || u.email} ({u.role || 'staff'})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex items-center justify-between pt-2 border-t border-amber-200/60">
+                  <span className="text-[11px] font-bold text-amber-900">Auto-approve immediately</span>
+                  <input 
+                    type="checkbox"
+                    className="rounded border-amber-300 text-[#1A2B4B] focus:ring-[#1A2B4B] w-4 h-4 cursor-pointer"
+                    checked={newRequest.autoApprove !== false}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, autoApprove: e.target.checked }))}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase text-slate-400">Request Type</Label>
@@ -2790,9 +3108,9 @@ export const Attendance: React.FC = () => {
               </div>
             </div>
 
-            {(newRequest.type === 'leave' || newRequest.type === 'schedule_change') && (
+            {(newRequest.type === 'leave' || newRequest.type === 'schedule_change' || newRequest.type === 'time_correction') && (
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase text-slate-400">End Date (optional)</Label>
+                <Label className="text-[10px] font-black uppercase text-slate-400">End Date (optional for multi-day)</Label>
                 <Input 
                   type="date" 
                   className="bg-slate-50 border-none h-12 rounded-xl text-xs font-bold"
@@ -3279,6 +3597,61 @@ export const Attendance: React.FC = () => {
               <Button variant="ghost" onClick={() => setIsScheduleDialogOpen(false)} className="rounded-xl font-bold">Cancel</Button>
               <Button onClick={handleSaveSchedule} className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl shadow-lg shadow-[#1A2B4B]/10 font-bold px-8 h-12">
                 Save Changes
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingLog} onOpenChange={(open) => { if (!open) setEditingLog(null); }}>
+        <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl rounded-3xl text-primary">
+          <div className="bg-gradient-to-r from-[#1A2B4B] to-[#2C3E50] p-8 text-white border-b-2 border-[#D4AF37]/30">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-black italic">Edit Actual Attendance Log</DialogTitle>
+              <DialogDescription className="text-white/60 font-medium pt-2">
+                Directly adjust Actual IN and Actual OUT log for staff.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+          
+          <div className="p-8 space-y-6 bg-white">
+            <div className="space-y-4">
+              <div>
+                <Label className="text-[10px] font-black uppercase text-slate-400">Staff Member</Label>
+                <p className="text-sm font-bold text-primary pt-1">{editingLog?.userName}</p>
+              </div>
+
+              <div>
+                <Label className="text-[10px] font-black uppercase text-slate-400">Date</Label>
+                <p className="text-sm font-bold text-primary pt-1">{editingLog?.date}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400">Actual In Time</Label>
+                  <Input 
+                    type="time" 
+                    className="bg-slate-50 border-none h-12 rounded-xl text-xs font-bold"
+                    value={editingLog?.timeIn || ''} 
+                    onChange={(e) => setEditingLog(prev => prev ? { ...prev, timeIn: e.target.value } : null)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase text-slate-400">Actual Out Time</Label>
+                  <Input 
+                    type="time" 
+                    className="bg-slate-50 border-none h-12 rounded-xl text-xs font-bold"
+                    value={editingLog?.timeOut || ''} 
+                    onChange={(e) => setEditingLog(prev => prev ? { ...prev, timeOut: e.target.value } : null)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setEditingLog(null)} className="rounded-xl font-bold">Cancel</Button>
+              <Button onClick={handleSaveDirectLog} className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl shadow-lg shadow-[#1A2B4B]/10 font-bold px-8 h-12">
+                Save Log
               </Button>
             </DialogFooter>
           </div>
