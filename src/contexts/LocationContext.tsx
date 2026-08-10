@@ -48,7 +48,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.uid]);
 
   // Handle initial selection and restrictions
   useEffect(() => {
@@ -69,7 +69,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSelectedLocationId('all');
       }
     }
-  }, [profile, isAdmin, isManager, loading, locations]);
+  }, [profile?.locationId, profile?.role, isAdmin, isManager, loading, locations.length]);
 
   const handleSetSelectedLocationId = (id: string | 'all') => {
     if (!isAdmin && !isManager) {

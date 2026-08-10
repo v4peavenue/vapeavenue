@@ -5,6 +5,7 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
+  limit,
   doc, 
   updateDoc, 
   addDoc,
@@ -83,7 +84,7 @@ export const Purchasing: React.FC = () => {
       return;
     }
 
-    const q = query(collection(db, 'purchaseOrders'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'purchaseOrders'), orderBy('createdAt', 'desc'), limit(200));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseOrder)));
       setLoading(false);
@@ -130,7 +131,7 @@ export const Purchasing: React.FC = () => {
       unsubPayments();
       unsubAccounts();
     };
-  }, [profile, user, isAdmin, isManager]);
+  }, [profile?.id, user?.uid, isAdmin, isManager]);
 
   const handleReceiveStock = async (po: PurchaseOrder) => {
     setIsReceiving(true);

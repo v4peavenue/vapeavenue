@@ -66,7 +66,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.uid]);
 
   const updateCurrency = async (currency: string) => {
     if (!isAdmin) return;

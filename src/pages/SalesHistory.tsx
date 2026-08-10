@@ -181,11 +181,11 @@ export const SalesHistory: React.FC = () => {
       unsubscribeAccounts();
       unsubscribeUsers();
     };
-  }, [profile, user]);
+  }, [profile?.id, user?.uid]);
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'));
+    const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(300));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let salesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
       
@@ -201,7 +201,7 @@ export const SalesHistory: React.FC = () => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile]);
+  }, [selectedLocationId, profile?.id]);
 
   useEffect(() => {
     if (!profile) return;
@@ -227,11 +227,11 @@ export const SalesHistory: React.FC = () => {
     });
     
     return () => unsubscribe();
-  }, [selectedLocationId, profile]);
+  }, [selectedLocationId, profile?.id]);
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'));
+    const q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'), limit(200));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let returnsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -245,11 +245,11 @@ export const SalesHistory: React.FC = () => {
       console.warn("SalesHistory: Error listening to returnTransactions:", error);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile]);
+  }, [selectedLocationId, profile?.id]);
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'financialTransactions'), orderBy('timestamp', 'desc'));
+    const q = query(collection(db, 'financialTransactions'), orderBy('timestamp', 'desc'), limit(300));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -263,7 +263,7 @@ export const SalesHistory: React.FC = () => {
       console.warn("Ledger error loading financial transactions:", error);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile]);
+  }, [selectedLocationId, profile?.id]);
 
   const getPaymentMethodName = React.useCallback((id: string, splits?: any[]) => {
     if (!id) return '';

@@ -251,7 +251,8 @@ export const Dashboard: React.FC = () => {
       collection(db, 'sales'),
       where('timestamp', '>=', Timestamp.fromDate(startDate)),
       where('timestamp', '<=', Timestamp.fromDate(endDate)),
-      orderBy('timestamp', 'desc')
+      orderBy('timestamp', 'desc'),
+      limit(500)
     );
 
     const unsubscribeSales = onSnapshot(salesQuery, (snapshot) => {
@@ -392,7 +393,7 @@ export const Dashboard: React.FC = () => {
       unsubscribeUsers();
       unsubscribeAttendance();
     };
-  }, [isAdmin, selectedLocationId, timeRange, groupBy, locations, customStartDate, customEndDate, activeDateRange]);
+  }, [isAdmin, selectedLocationId, timeRange, groupBy, locations.length, customStartDate, customEndDate, activeDateRange.start.getTime(), activeDateRange.end.getTime()]);
 
   // Dynamically extract unique categories and brands for the analysis filters
   const categories = useMemo(() => {

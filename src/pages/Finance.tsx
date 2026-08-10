@@ -5,6 +5,7 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
+  limit,
   Timestamp,
   doc,
   updateDoc,
@@ -158,7 +159,8 @@ export const Finance: React.FC = () => {
 
       const qTrans = query(
         collection(db, 'financialTransactions'),
-        orderBy('timestamp', 'desc')
+        orderBy('timestamp', 'desc'),
+        limit(300)
       );
       unsubTrans = onSnapshot(qTrans, (snapshot) => {
         const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
@@ -195,7 +197,8 @@ export const Finance: React.FC = () => {
     if (isManagerUser) {
       const qLogs = query(
         collection(db, 'audit_logs'), 
-        orderBy('timestamp', 'desc')
+        orderBy('timestamp', 'desc'),
+        limit(100)
       );
       unsubLogs = onSnapshot(qLogs, (snapshot) => {
         const financeLogs = snapshot.docs
@@ -223,7 +226,7 @@ export const Finance: React.FC = () => {
       unsubTrans();
       unsubLogs();
     };
-  }, [profile, user, isAdmin, isManager]);
+  }, [profile?.id, user?.uid, isAdmin, isManager]);
 
   const getAccountIcon = (type: string) => {
     switch (type) {

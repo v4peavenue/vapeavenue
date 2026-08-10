@@ -555,7 +555,7 @@ export const POS: React.FC = () => {
       unsubscribeUsers();
       if (unsubscribeAccounts) unsubscribeAccounts();
     };
-  }, [profile, user]);
+  }, [profile?.id, profile?.role, user?.uid]);
 
   useEffect(() => {
     if (selectedLocationId && selectedLocationId !== 'all') {

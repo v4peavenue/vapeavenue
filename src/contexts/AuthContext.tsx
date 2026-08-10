@@ -147,19 +147,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    let unsubscribeProfile: (() => void) | null = null;
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+        unsubscribeProfile = null;
+      }
+
       setUser(firebaseUser);
       
       if (firebaseUser) {
         // Listen to user profile changes
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         
-        const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
+        unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
-            setProfile({ id: docSnap.id, ...docSnap.data() } as UserProfile);
+            const data = docSnap.data();
+            setProfile(prev => {
+              if (
+                prev &&
+                prev.id === docSnap.id &&
+                prev.role === data.role &&
+                prev.name === data.name &&
+                prev.email === data.email &&
+                prev.locationId === data.locationId
+              ) {
+                return prev; // Return same reference if data hasn't visually changed
+              }
+              return { id: docSnap.id, ...data } as UserProfile;
+            });
           } else {
-            // If profile doesn't exist, maybe it's the first login
-            // We'll handle profile creation in the login page or a setup hook
             setProfile(null);
           }
           setLoading(false);
@@ -167,15 +185,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn("AuthContext: Error fetching profile snapshot:", error);
           setLoading(false);
         });
-
-        return () => unsubscribeProfile();
       } else {
         setProfile(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      if (unsubscribeProfile) {
+        unsubscribeProfile();
+      }
+      unsubscribeAuth();
+    };
   }, []);
 
   const isAdmin = profile?.role === 'admin' || user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || user?.email?.toLowerCase() === 'v4peavenue@gmail.com';

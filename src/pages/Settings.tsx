@@ -186,7 +186,7 @@ export const Settings: React.FC = () => {
       }, (error) => {
         console.warn("Settings: Error listening to invites:", error);
       });
-      unsubscribeAudit = onSnapshot(query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc')), (snapshot) => {
+      unsubscribeAudit = onSnapshot(query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(100)), (snapshot) => {
         setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog)));
       }, (error) => {
         console.warn("Settings: Error listening to audit_logs:", error);
@@ -204,7 +204,7 @@ export const Settings: React.FC = () => {
       unsubscribeInvites();
       unsubscribeAudit();
     };
-  }, [profile, isAdmin]);
+  }, [profile?.id, isAdmin]);
 
   useEffect(() => {
     if (profile) setProfileName(profile.name || '');

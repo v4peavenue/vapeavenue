@@ -114,7 +114,7 @@ export const Inventory: React.FC = () => {
       unsubscribeSups();
       unsubscribeBrands();
     };
-  }, [profile]);
+  }, [profile?.id]);
 
   const handleDelete = async (id: string) => {
     if (!isManager) {

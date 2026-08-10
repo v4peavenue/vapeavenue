@@ -242,7 +242,7 @@ export const Reports: React.FC = () => {
       unsubscribePayments();
       unsubscribeAccounts();
     };
-  }, [start, end, selectedLocationId, profile, isAdmin]);
+  }, [start.getTime(), end.getTime(), selectedLocationId, profile?.id, isAdmin]);
 
   const handleGeneratePDF = () => {
     window.print();

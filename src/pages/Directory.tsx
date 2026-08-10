@@ -193,40 +193,54 @@ export const Directory: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
 
-    const unsubscribeCats = onSnapshot(collection(db, 'categories'), (snapshot) => {
-      setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
-    }, (error) => {
-      console.warn("Directory: Error listening to categories:", error);
-    });
-    const unsubscribeBrands = onSnapshot(collection(db, 'brands'), (snapshot) => {
-      setBrands(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)));
-    }, (error) => {
-      console.warn("Directory: Error listening to brands:", error);
-    });
-    const unsubscribeSups = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
-      setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier)));
-    }, (error) => {
-      console.warn("Directory: Error listening to suppliers:", error);
-    });
-    const unsubscribeLocs = onSnapshot(collection(db, 'locations'), (snapshot) => {
-      setLocations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Location)));
-    }, (error) => {
-      console.warn("Directory: Error listening to locations:", error);
-    });
+    let unsubscribeCats = () => {};
+    let unsubscribeBrands = () => {};
+    let unsubscribeSups = () => {};
+    let unsubscribeLocs = () => {};
+    let unsubscribePromos = () => {};
+
+    if (isAdmin || isManager) {
+      unsubscribeCats = onSnapshot(collection(db, 'categories'), (snapshot) => {
+        setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
+      }, (error) => {
+        console.warn("Directory: Error listening to categories:", error);
+      });
+
+      unsubscribeBrands = onSnapshot(collection(db, 'brands'), (snapshot) => {
+        setBrands(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)));
+      }, (error) => {
+        console.warn("Directory: Error listening to brands:", error);
+      });
+
+      unsubscribeSups = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
+        setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier)));
+      }, (error) => {
+        console.warn("Directory: Error listening to suppliers:", error);
+      });
+
+      unsubscribeLocs = onSnapshot(collection(db, 'locations'), (snapshot) => {
+        setLocations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Location)));
+      }, (error) => {
+        console.warn("Directory: Error listening to locations:", error);
+      });
+
+      unsubscribePromos = onSnapshot(collection(db, 'promos'), (snapshot) => {
+        setPromos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PromoCode)));
+      }, (error) => {
+        console.warn("Directory: Error listening to promos:", error);
+      });
+    }
+
     const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
       setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
     }, (error) => {
       console.warn("Directory: Error listening to customers:", error);
     });
+
     const unsubscribeCards = onSnapshot(collection(db, 'loyaltyCards'), (snapshot) => {
       setLoyaltyCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoyaltyCard)));
     }, (error) => {
       console.warn("Directory: Error listening to loyaltyCards:", error);
-    });
-    const unsubscribePromos = onSnapshot(collection(db, 'promos'), (snapshot) => {
-      setPromos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PromoCode)));
-    }, (error) => {
-      console.warn("Directory: Error listening to promos:", error);
     });
 
     return () => {
@@ -238,7 +252,7 @@ export const Directory: React.FC = () => {
       unsubscribeCards();
       unsubscribePromos();
     };
-  }, [profile]);
+  }, [profile?.id, isAdmin, isManager]);
 
   const handleAddPromo = async (e: React.FormEvent) => {
     e.preventDefault();
