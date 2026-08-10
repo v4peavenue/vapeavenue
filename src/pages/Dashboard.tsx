@@ -1210,11 +1210,25 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 1.8 */}
+              {/* Patch 1.9 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.8: Customer Search & Default Selection Rework</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.9: POS Customer Autocomplete, Staff Directory Access & Management Authorization</h4>
                   <span className="text-[8px] font-mono text-[#D4AF37] bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold animate-pulse">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>POS Customer Autocomplete Search:</strong> Replaced the customer dropdown with an interactive search input featuring real-time suggestions, name/phone/email filtering, and hardware/barcode loyalty card scanning (defaults to Walk-In Customer).</li>
+                  <li><strong>Staff Directory & Loyalty Registration:</strong> Extended Directory access to Staff role users, restricted specifically to viewing and registering Customers and Loyalty Cards.</li>
+                  <li><strong>Branch Selector Access:</strong> Allowed Staff & Managers to switch or filter locations dynamically across POS, Inventory, and Purchasing.</li>
+                  <li><strong>Manager Void Authorization:</strong> Updated Sales History, Returns, and Purchasing permissions allowing Managers alongside Administrators to void sales, void returns, and void purchase orders.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.8 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.8: Customer Search & Default Selection Rework</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Customer Name Search:</strong> Allowed searching customer names directly in the Sales History searchbox, filtering records across Sales, Returns, and Pending Payments.</li>

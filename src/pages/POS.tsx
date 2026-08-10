@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
   ShoppingCart, 
@@ -22,7 +22,10 @@ import {
   Gift,
   AlertTriangle,
   Sparkles,
-  QrCode
+  QrCode,
+  ChevronDown,
+  Check,
+  User
 } from 'lucide-react';
 import { calculateLoyaltyDiscount, processCustomerLoyaltyCheckout } from '@/lib/loyalty';
 
@@ -114,6 +117,35 @@ export const POS: React.FC = () => {
     country: 'Philippines',
     zip: ''
   });
+
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
+  const customerSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (customerSearchRef.current && !customerSearchRef.current.contains(event.target as Node)) {
+        setIsCustomerSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedCustomerId === 'walk-in') {
+      setCustomerSearchQuery('Walk-In Customer');
+    } else if (selectedCustomerId === 'new') {
+      setCustomerSearchQuery(customerDetails.name || '');
+    } else {
+      const cust = customers.find(c => c.id === selectedCustomerId);
+      if (cust) {
+        setCustomerSearchQuery(cust.name);
+      }
+    }
+  }, [selectedCustomerId, customers]);
 
   const [activeTab, setActiveTab] = useState<'products' | 'cart'>('products');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -362,6 +394,7 @@ export const POS: React.FC = () => {
     const location = locations.find(l => l.id === activeLocationId);
 
     if (id === 'walk-in') {
+      setCustomerSearchQuery('Walk-In Customer');
       setCustomerDetails({
         name: 'Walk-In Customer',
         billingAddress: location?.addressLine1 || '',
@@ -372,6 +405,7 @@ export const POS: React.FC = () => {
         zip: ''
       });
     } else if (id === 'new') {
+      setCustomerSearchQuery('');
       setCustomerDetails({
         name: '',
         billingAddress: location?.addressLine1 || '',
@@ -384,6 +418,7 @@ export const POS: React.FC = () => {
     } else {
       const customer = customers.find(c => c.id === id);
       if (customer) {
+        setCustomerSearchQuery(customer.name);
         setCustomerDetails({
           name: customer.name,
           billingAddress: customer.billingAddress,
@@ -393,6 +428,67 @@ export const POS: React.FC = () => {
           country: customer.country,
           zip: customer.zip
         });
+      }
+    }
+    setIsCustomerSearchOpen(false);
+  };
+
+  const filteredCustomers = customers.filter(c => {
+    const query = customerSearchQuery.trim().toLowerCase();
+    if (!query || query === 'walk-in customer' || query === 'walk-in') return true;
+
+    const matchName = c.name?.toLowerCase().includes(query);
+    const matchPhone = c.phone?.toLowerCase().includes(query);
+    const matchEmail = c.email?.toLowerCase().includes(query);
+    const matchLoyaltyNum = c.loyaltyCardNumber?.toLowerCase().includes(query);
+    const matchLoyaltyQr = c.loyaltyCardQr?.toLowerCase().includes(query);
+
+    const hasMatchingCardDoc = loyaltyCards.some(l => 
+      l.customerId === c.id && 
+      ((l.cardNumber && l.cardNumber.toLowerCase().includes(query)) || 
+       (l.qrCode && l.qrCode.toLowerCase().includes(query)))
+    );
+
+    return matchName || matchPhone || matchEmail || matchLoyaltyNum || matchLoyaltyQr || hasMatchingCardDoc;
+  });
+
+  const handleCustomerInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const query = customerSearchQuery.trim().toLowerCase();
+      if (!query) return;
+
+      // 1. Try loyalty card scan/code match
+      const loyaltyMatch = findCustomerByLoyaltyCode(query);
+      if (loyaltyMatch.customer) {
+        handleCustomerSelect(loyaltyMatch.customer.id);
+        toast.success(`💳 Loyalty Card Found: Selected customer ${loyaltyMatch.customer.name}`);
+        return;
+      }
+
+      // 2. Exact match on name, phone, email, or loyalty card number
+      const exactMatch = customers.find(c => 
+        c.name.toLowerCase() === query || 
+        c.phone?.toLowerCase() === query || 
+        c.email?.toLowerCase() === query ||
+        c.loyaltyCardNumber?.toLowerCase() === query
+      );
+      if (exactMatch) {
+        handleCustomerSelect(exactMatch.id);
+        toast.success(`Selected customer ${exactMatch.name}`);
+        return;
+      }
+
+      // 3. Single filtered result
+      if (filteredCustomers.length === 1) {
+        handleCustomerSelect(filteredCustomers[0].id);
+        toast.success(`Selected customer ${filteredCustomers[0].name}`);
+        return;
+      }
+
+      // 4. Default to walk-in if 'walk-in' typed
+      if (query === 'walk-in' || query === 'walkin' || query === 'walk-in customer') {
+        handleCustomerSelect('walk-in');
       }
     }
   };
@@ -1632,30 +1728,157 @@ export const POS: React.FC = () => {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="checkout-customer">Customer</Label>
-                <Select required value={selectedCustomerId} onValueChange={handleCustomerSelect}>
-                  <SelectTrigger id="checkout-customer" className="bg-[#FDFCF8]">
-                    <SelectValue placeholder="Select Customer">
-                      {selectedCustomerId === 'walk-in' ? '🚶 Walk-In Customer' : 
-                       selectedCustomerId === 'new' ? '+ New Customer' : 
-                       (customers.find(c => c.id === selectedCustomerId)?.name || 'Select Customer')}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="walk-in">🚶 Walk-In Customer</SelectItem>
-                    <SelectItem value="new">+ New Customer</SelectItem>
-                    {customers.map(c => {
+              <div className="space-y-2 relative" ref={customerSearchRef}>
+                <Label htmlFor="checkout-customer" className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span>Customer</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Type or scan loyalty card</span>
+                </Label>
+
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <Input
+                    id="checkout-customer"
+                    type="text"
+                    className="pl-9 pr-16 bg-[#FDFCF8] border-slate-200 focus:border-amber-500 font-medium text-xs h-10 rounded-xl"
+                    placeholder="Search name, phone, or scan card..."
+                    value={customerSearchQuery}
+                    onFocus={() => setIsCustomerSearchOpen(true)}
+                    onChange={(e) => {
+                      setCustomerSearchQuery(e.target.value);
+                      setIsCustomerSearchOpen(true);
+                    }}
+                    onKeyDown={handleCustomerInputKeyDown}
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                    {customerSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => handleCustomerSelect('walk-in')}
+                        className="p-1 hover:bg-slate-200/60 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                        title="Reset to Walk-In Customer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomerSearchOpen(!isCustomerSearchOpen)}
+                      className="p-1 hover:bg-slate-200/60 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Autocomplete Suggestions Popover */}
+                {isCustomerSearchOpen && (
+                  <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-72 overflow-y-auto divide-y divide-slate-100">
+                    {/* Option 1: Walk-In Customer */}
+                    <div
+                      className={cn(
+                        "p-2.5 hover:bg-amber-50/80 cursor-pointer transition-colors flex items-center justify-between",
+                        selectedCustomerId === 'walk-in' && "bg-amber-50 font-bold"
+                      )}
+                      onClick={() => handleCustomerSelect('walk-in')}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-xs">
+                          🚶
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">Walk-In Customer</p>
+                          <p className="text-[10px] text-slate-400">Default guest checkout</p>
+                        </div>
+                      </div>
+                      {selectedCustomerId === 'walk-in' && <Check className="w-4 h-4 text-amber-600" />}
+                    </div>
+
+                    {/* Option 2: Register New Customer */}
+                    <div
+                      className={cn(
+                        "p-2.5 hover:bg-amber-50/80 cursor-pointer transition-colors flex items-center justify-between",
+                        selectedCustomerId === 'new' && "bg-amber-50 font-bold"
+                      )}
+                      onClick={() => handleCustomerSelect('new')}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-bold">
+                          <Plus className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-amber-900">+ Register New Customer</p>
+                          <p className="text-[10px] text-amber-700">Add details & assign card on checkout</p>
+                        </div>
+                      </div>
+                      {selectedCustomerId === 'new' && <Check className="w-4 h-4 text-amber-600" />}
+                    </div>
+
+                    {/* Section Header */}
+                    {filteredCustomers.length > 0 && (
+                      <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Registered Customers ({filteredCustomers.length})
+                      </div>
+                    )}
+
+                    {/* Customer list */}
+                    {filteredCustomers.map(c => {
                       const count = c.loyaltyItemCount ?? ((c.totalItemsPurchased ?? 0) % 10);
-                      const cardInfo = c.loyaltyCardNumber ? ` [💳 ${c.loyaltyCardNumber}]` : '';
+                      const cardNum = c.loyaltyCardNumber;
+                      const isSelected = selectedCustomerId === c.id;
+
                       return (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}{cardInfo} ({count}/10 items)
-                        </SelectItem>
+                        <div
+                          key={c.id}
+                          className={cn(
+                            "p-2.5 hover:bg-amber-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2",
+                            isSelected && "bg-amber-50/90 font-semibold"
+                          )}
+                          onClick={() => handleCustomerSelect(c.id)}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-xs shrink-0">
+                              {c.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="truncate">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="text-xs font-bold text-slate-800 truncate">{c.name}</span>
+                                {cardNum && (
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 border-amber-300 bg-amber-100/60 text-amber-900 font-mono shrink-0">
+                                    💳 {cardNum}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 truncate">
+                                {c.phone && <span>{c.phone}</span>}
+                                {c.email && <span className="truncate">{c.email}</span>}
+                                <span className="text-amber-800 font-medium ml-auto">({count}/10 items)</span>
+                              </div>
+                            </div>
+                          </div>
+                          {isSelected && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
+                        </div>
                       );
                     })}
-                  </SelectContent>
-                </Select>
+
+                    {filteredCustomers.length === 0 && customerSearchQuery.trim() !== '' && (
+                      <div className="p-4 text-center text-xs text-slate-500 space-y-2">
+                        <p>No registered customers found matching "{customerSearchQuery}"</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7 border-amber-300 text-amber-800 hover:bg-amber-50"
+                          onClick={() => {
+                            handleCustomerSelect('new');
+                            setCustomerDetails(prev => ({ ...prev, name: customerSearchQuery }));
+                          }}
+                        >
+                          <Plus className="w-3.5 h-3.5 mr-1" /> Register "{customerSearchQuery}" as New Customer
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {selectedCustomerId !== 'walk-in' && selectedCustomerId !== 'new' && selectedCustomer && (

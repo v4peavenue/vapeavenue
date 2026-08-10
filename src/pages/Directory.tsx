@@ -55,7 +55,16 @@ import {
 } from '@/components/ui/table';
 export const Directory: React.FC = () => {
   const { profile, user, isAdmin, isManager } = useAuth();
+  const isStaff = !isAdmin && !isManager;
   const { settings, updateLoyaltySettings } = useSettings();
+  const [activeTab, setActiveTab] = useState<string>(() => (isAdmin || isManager) ? 'categories' : 'customers');
+
+  useEffect(() => {
+    if (isStaff && activeTab !== 'customers' && activeTab !== 'loyaltyCards') {
+      setActiveTab('customers');
+    }
+  }, [isStaff, activeTab]);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -701,20 +710,24 @@ export const Directory: React.FC = () => {
         </div>
       </div>
 
-      <Tabs defaultValue="categories" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="bg-secondary p-1 rounded-xl w-full md:w-auto overflow-x-auto flex-nowrap justify-start">
-          <TabsTrigger value="categories" className="gap-2 rounded-lg px-6">
-            <Tags className="w-4 h-4" />
-            Categories
-          </TabsTrigger>
-          <TabsTrigger value="brands" className="gap-2 rounded-lg px-6">
-            <BookOpen className="w-4 h-4" />
-            Brands
-          </TabsTrigger>
-          <TabsTrigger value="suppliers" className="gap-2 rounded-lg px-6">
-            <Building2 className="w-4 h-4" />
-            Suppliers
-          </TabsTrigger>
+          {(isAdmin || isManager) && (
+            <>
+              <TabsTrigger value="categories" className="gap-2 rounded-lg px-6">
+                <Tags className="w-4 h-4" />
+                Categories
+              </TabsTrigger>
+              <TabsTrigger value="brands" className="gap-2 rounded-lg px-6">
+                <BookOpen className="w-4 h-4" />
+                Brands
+              </TabsTrigger>
+              <TabsTrigger value="suppliers" className="gap-2 rounded-lg px-6">
+                <Building2 className="w-4 h-4" />
+                Suppliers
+              </TabsTrigger>
+            </>
+          )}
           {isAdmin && (
             <TabsTrigger value="locations" className="gap-2 rounded-lg px-6">
               <MapPin className="w-4 h-4" />
@@ -729,10 +742,12 @@ export const Directory: React.FC = () => {
             <CreditCard className="w-4 h-4 text-amber-500" />
             Loyalty Cards
           </TabsTrigger>
-          <TabsTrigger value="promos" className="gap-2 rounded-lg px-6">
-            <Ticket className="w-4 h-4 text-[#D4AF37]" />
-            Promo Codes
-          </TabsTrigger>
+          {(isAdmin || isManager) && (
+            <TabsTrigger value="promos" className="gap-2 rounded-lg px-6">
+              <Ticket className="w-4 h-4 text-[#D4AF37]" />
+              Promo Codes
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="categories" className="space-y-6">
