@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Helper functions (Zero Document Reads)
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,17 +16,21 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.role == 'admin' ||
-        (request.auth.token.email != null && request.auth.token.email in ['v4peavenue@gmail.com', 'vanhuxley24@gmail.com'])
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin') ||
+        request.auth.token.email in ['v4peavenue@gmail.com', 'vanhuxley24@gmail.com']
       );
     }
 
     function isManager() {
       return isSignedIn() && (
         isAdmin() ||
-        request.auth.token.role == 'manager'
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'manager')
       );
     }
 
