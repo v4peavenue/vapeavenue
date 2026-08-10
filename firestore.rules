@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Helper functions (Zero Document Reads)
+    // Helper functions (Zero Document Reads via Custom Claims)
     function isSignedIn() {
       return request.auth != null;
     }
@@ -48,7 +48,7 @@ service cloud.firestore {
     // Inventory Products
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Sales transactions (Owner attribution by staffId)
@@ -142,79 +142,79 @@ service cloud.firestore {
     // Suppliers
     match /suppliers/{supplierId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Categories
     match /categories/{categoryId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Brands
     match /brands/{brandId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Business Locations
     match /locations/{locationId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Customers
     match /customers/{customerId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Loyalty Cards
     match /loyaltyCards/{cardId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // System Invites
     match /invites/{inviteId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Price Tiers
     match /priceTiers/{tierId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Promos
     match /promos/{promoId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Payment Options
     match /paymentOptions/{optionId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Financial Accounts
     match /accounts/{accountId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // System Settings
     match /settings/{settingId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
 
     // Staff Rates
     match /staffRates/{staffId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+      allow create, update, delete: if isAdmin() || isManager();
     }
   }
 }
