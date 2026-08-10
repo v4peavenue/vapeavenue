@@ -257,8 +257,8 @@ export const Purchasing: React.FC = () => {
   };
 
   const handleVoidPO = async (po: PurchaseOrder) => {
-    if (!isAdmin) {
-      toast.error('Only administrators can void purchase orders');
+    if (!isAdmin && !isManager) {
+      toast.error('Only administrators or managers can void purchase orders');
       return;
     }
 
@@ -373,7 +373,7 @@ export const Purchasing: React.FC = () => {
   );
 
   const visibleProducts = products.filter(p => {
-    if (isAdmin) return true;
+    if (isAdmin || isManager) return true;
     const userLocId = profile?.locationId;
     if (!userLocId) return false;
     return (p.locationIds && p.locationIds.includes(userLocId)) || 
@@ -629,7 +629,7 @@ export const Purchasing: React.FC = () => {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
-            {isAdmin && (selectedPO?.status === 'ordered' || selectedPO?.status === 'received') && (
+            {(isAdmin || isManager) && (selectedPO?.status === 'ordered' || selectedPO?.status === 'received') && (
               <Button 
                 variant="destructive" 
                 className="gap-2"

@@ -92,7 +92,7 @@ export default function App() {
                   <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
                   <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
                   <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
-                  <Route path="/directory" element={<ManagerRoute><Directory /></ManagerRoute>} />
+                  <Route path="/directory" element={<ProtectedRoute><Directory /></ProtectedRoute>} />
                   <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 </Routes>
               </Router>

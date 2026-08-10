@@ -455,8 +455,8 @@ export const SalesHistory: React.FC = () => {
   }, [sales, rawFinancialTransactions, usersList, accounts, locations, getPaymentMethodName]);
 
   const handleOpenVoidDialog = (sale: Sale) => {
-    if (!isAdmin) {
-      toast.error('Only administrators can void sales');
+    if (!isAdmin && !isManager) {
+      toast.error('Only administrators or managers can void sales');
       return;
     }
     setSaleToVoid(sale);
@@ -2635,7 +2635,7 @@ export const SalesHistory: React.FC = () => {
           )}
 
           <DialogFooter className="bg-white p-6 border-t border-slate-100 rounded-b-xl gap-2 sm:gap-0">
-            {isAdmin && selectedReturn && selectedReturn.status !== 'voided' && (
+            {(isAdmin || isManager) && selectedReturn && selectedReturn.status !== 'voided' && (
               <Button 
                 variant="destructive"
                 className="font-bold gap-2"

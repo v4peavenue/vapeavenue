@@ -63,7 +63,7 @@ import { MapPin, LayoutGrid, LayoutList } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const POS: React.FC = () => {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, isManager } = useAuth();
   const { locations, selectedLocationId } = useLocations();
   const { settings } = useSettings();
   const [products, setProducts] = useState<Product[]>([]);
@@ -121,7 +121,7 @@ export const POS: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
   const visibleProducts = products.filter(p => {
-    if (isAdmin) return true;
+    if (isAdmin || isManager) return true;
     const userLocId = profile?.locationId;
     if (!userLocId) return false;
     return (p.locationIds && p.locationIds.includes(userLocId)) || 

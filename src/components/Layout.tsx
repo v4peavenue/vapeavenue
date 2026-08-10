@@ -37,7 +37,7 @@ const navItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { name: 'Inventory', path: '/inventory', icon: Package, roles: ['admin', 'manager', 'staff'] },
   { name: 'Purchasing', path: '/purchasing', icon: ShoppingCart, roles: ['admin', 'manager'] },
-  { name: 'Directory', path: '/directory', icon: BookOpen, roles: ['admin', 'manager'] },
+  { name: 'Directory', path: '/directory', icon: BookOpen, roles: ['admin', 'manager', 'staff'] },
   { name: 'Sales History', path: '/sales', icon: History, roles: ['admin', 'manager', 'staff'] },
   { name: 'Reports', path: '/reports', icon: TrendingUp, roles: ['admin'] },
   { name: 'Finance', path: '/finance', icon: Wallet, roles: ['admin', 'manager', 'staff'] },
@@ -147,7 +147,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <Select 
             value={selectedLocationId} 
             onValueChange={setSelectedLocationId}
-            disabled={!isAdmin}
+            disabled={!isAdmin && !isManager}
           >
             <SelectTrigger className="w-full bg-white/10 border-white/10 h-8 text-xs font-semibold text-white hover:bg-white/20 transition-colors">
               <SelectValue>
@@ -155,7 +155,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </SelectValue>
             </SelectTrigger>
             <SelectContent className="bg-primary text-white border-white/10">
-              {isAdmin && <SelectItem value="all">All Locations</SelectItem>}
+              {(isAdmin || isManager) && <SelectItem value="all">All Locations</SelectItem>}
               {locations.map(loc => (
                 <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
               ))}

@@ -23,7 +23,7 @@ const LocationContext = createContext<LocationContextType>({
 export const useLocations = () => useContext(LocationContext);
 
 export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, isManager } = useAuth();
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string | 'all'>('all');
   const [loading, setLoading] = useState(true);
@@ -53,11 +53,11 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Handle initial selection and restrictions
   useEffect(() => {
     if (!loading) {
-      if (!isAdmin && profile?.locationId) {
-        // Non-admins are locked to their assigned location
+      if (!isAdmin && !isManager && profile?.locationId) {
+        // Non-admin and non-manager staff are locked to their assigned location
         setSelectedLocationId(profile.locationId);
-      } else if (isAdmin) {
-        // Admins can use stored preference or default to 'all'
+      } else if (isAdmin || isManager) {
+        // Admins and Managers can use stored preference or default to 'all'
         const stored = localStorage.getItem('selectedLocationId');
         if (stored && (stored === 'all' || locations.some(l => l.id === stored))) {
           setSelectedLocationId(stored);
@@ -69,11 +69,11 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSelectedLocationId('all');
       }
     }
-  }, [profile, isAdmin, loading, locations]);
+  }, [profile, isAdmin, isManager, loading, locations]);
 
   const handleSetSelectedLocationId = (id: string | 'all') => {
-    if (!isAdmin) {
-      // Only Admins can change location
+    if (!isAdmin && !isManager) {
+      // Only Admins and Managers can change location
       return;
     }
     setSelectedLocationId(id);

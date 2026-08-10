@@ -134,7 +134,7 @@ export const Inventory: React.FC = () => {
   };
 
   const getDisplayStock = (product: Product) => {
-    if (!isAdmin) {
+    if (!isAdmin && !isManager) {
       const userLocId = profile?.locationId;
       if (!userLocId) return 0;
       return Number(product.stocks?.[userLocId] || 0);
@@ -146,7 +146,7 @@ export const Inventory: React.FC = () => {
   };
 
   const isLowStock = (product: Product, locationId: string) => {
-    const locId = isAdmin ? locationId : (profile?.locationId || 'none');
+    const locId = (isAdmin || isManager) ? locationId : (profile?.locationId || 'none');
     if (locId === 'none') return false;
 
     const stock = locId === 'all' 
@@ -161,7 +161,7 @@ export const Inventory: React.FC = () => {
   };
 
   const isOutOfStock = (product: Product, locationId: string) => {
-    const locId = isAdmin ? locationId : (profile?.locationId || 'none');
+    const locId = (isAdmin || isManager) ? locationId : (profile?.locationId || 'none');
     if (locId === 'none') return true;
 
     const stock = locId === 'all' 
@@ -171,7 +171,7 @@ export const Inventory: React.FC = () => {
   };
 
   const visibleProducts = products.filter(p => {
-    if (isAdmin) return true;
+    if (isAdmin || isManager) return true;
     const userLocId = profile?.locationId;
     if (!userLocId) return false;
     return (p.locationIds && p.locationIds.includes(userLocId)) || 
@@ -579,7 +579,7 @@ export const Inventory: React.FC = () => {
                 </div>
 
                 {/* Location Stocks Details */}
-                {isAdmin && (
+                {(isAdmin || isManager) && (
                   <div className="border-t border-slate-100 pt-3 space-y-1.5">
                     <div className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center justify-between pb-1">
                       <span>Stock Distribution by Branch</span>
