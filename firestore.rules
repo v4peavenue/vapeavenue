@@ -7,7 +7,7 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Helper functions (Zero Document Reads via Custom Claims)
+    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -16,9 +16,18 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function hasUserDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.role == 'admin' ||
+        (hasUserDoc() && getUserData().role == 'admin') ||
+        ('role' in request.auth.token && request.auth.token.role == 'admin') ||
         (request.auth.token.email != null && request.auth.token.email in ['v4peavenue@gmail.com', 'vanhuxley24@gmail.com', 'dutchlordsilvertongue24@gmail.com'])
       );
     }
@@ -26,22 +35,14 @@ service cloud.firestore {
     function isManager() {
       return isSignedIn() && (
         isAdmin() ||
-        request.auth.token.role == 'manager'
+        (hasUserDoc() && getUserData().role == 'manager') ||
+        ('role' in request.auth.token && request.auth.token.role == 'manager')
       );
     }
 
     // User profiles & account ownership
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow update: if isSignedIn() && (
-        request.auth.uid == userId || isAdmin()
-      ) && (
-        !('role' in request.resource.data) ||
-        !('role' in resource.data) ||
-        request.resource.data.role == resource.data.role ||
-        isAdmin()
-      );
+      allow read, create, update: if isSignedIn();
       allow delete: if isAdmin();
     }
 
