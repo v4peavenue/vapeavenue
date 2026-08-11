@@ -153,7 +153,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
             reference: sale.id,
             saleId: sale.id,
             timestamp: sale.timestamp || Timestamp.now(),
-            createdBy: sale.staffId || 'system',
+            createdBy: sale.staffId || auth.currentUser?.uid || 'system',
             createdByName: sale.staffName || 'Staff'
           });
 
@@ -181,7 +181,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       if (!existingAudit) {
         const itemSummary = (sale.items || []).map((i: any) => `${i.name}${i.quantity > 1 ? ` (x${i.quantity})` : ''}`).join(', ');
         await addDoc(collection(db, 'audit_logs'), {
-          userId: sale.staffId || 'system',
+          userId: sale.staffId || auth.currentUser?.uid || 'system',
           userName: sale.staffName || 'Staff',
           userEmail: 'pos@system.local',
           action: 'CREATE_SALE',

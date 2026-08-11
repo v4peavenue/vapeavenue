@@ -45,98 +45,97 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Inventory Products
+    // Inventory Products (Staff update stock during POS sales; create/delete reserved for Admins/Managers)
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || isManager();
+      allow update: if isSignedIn();
+      allow create, delete: if isAdmin() || isManager();
     }
 
-    // Sales transactions (Owner attribution by staffId)
+    // Sales transactions
     match /sales/{saleId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.staffId == request.auth.uid;
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         resource.data.staffId == request.auth.uid || isAdmin() || isManager()
       );
       allow delete: if isAdmin() || isManager();
     }
 
-    // Attendance logs (Owner attribution by userId)
+    // Attendance logs
     match /attendance/{attendanceId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         resource.data.userId == request.auth.uid || isAdmin() || isManager()
       );
       allow delete: if isAdmin() || isManager();
     }
 
-    // Leave & Schedule Requests (Owner attribution by userId)
+    // Leave & Schedule Requests
     match /attendanceRequests/{requestId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && (
         resource.data.userId == request.auth.uid || isAdmin() || isManager()
       );
     }
 
-    // Staff Schedules (Owner attribution by userId)
+    // Staff Schedules
     match /schedules/{scheduleId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && (
-        request.resource.data.userId == request.auth.uid || isAdmin() || isManager()
-      );
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         resource.data.userId == request.auth.uid || isAdmin() || isManager()
       );
       allow delete: if isAdmin() || isManager();
     }
 
-    // Audit logs (Owner attribution by userId)
+    // Audit logs
     match /audit_logs/{logId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin() || isManager();
     }
 
-    // Purchase orders (Owner attribution by createdBy)
+    // Purchase orders
     match /purchaseOrders/{poId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         resource.data.createdBy == request.auth.uid || isAdmin() || isManager()
       );
       allow delete: if isAdmin() || isManager();
     }
 
-    // Stock Adjustments (Owner attribution by adjustedBy)
+    // Stock Adjustments
     match /stockAdjustments/{adjId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.adjustedBy == request.auth.uid;
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         resource.data.adjustedBy == request.auth.uid || isAdmin() || isManager()
       );
       allow delete: if isAdmin() || isManager();
     }
 
-    // Return Transactions (Owner attribution by staffId)
+    // Return Transactions
     match /returnTransactions/{returnId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.staffId == request.auth.uid;
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         resource.data.staffId == request.auth.uid || isAdmin() || isManager()
       );
       allow delete: if isAdmin() || isManager();
     }
 
-    // Financial Transactions (Owner attribution by createdBy)
+    // Financial Transactions
     match /financialTransactions/{transId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow create: if isSignedIn();
       allow update: if isSignedIn() && (
         resource.data.createdBy == request.auth.uid || isAdmin() || isManager()
       );
-      allow delete: if isAdmin() || isManager();
+      allow delete: if isSignedIn();
     }
 
     // Suppliers
@@ -166,13 +165,13 @@ service cloud.firestore {
     // Customers
     match /customers/{customerId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || isManager();
+      allow create, update, delete: if isSignedIn();
     }
 
     // Loyalty Cards
     match /loyaltyCards/{cardId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || isManager();
+      allow create, update, delete: if isSignedIn();
     }
 
     // System Invites
@@ -193,16 +192,18 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin() || isManager();
     }
 
-    // Payment Options
+    // Payment Options (Staff create/update payment methods during POS transactions)
     match /paymentOptions/{optionId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || isManager();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin() || isManager();
     }
 
-    // Financial Accounts
+    // Financial Accounts (Staff update balances when receiving sale payments)
     match /accounts/{accountId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || isManager();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin() || isManager();
     }
 
     // System Settings
