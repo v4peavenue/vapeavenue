@@ -199,7 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const primaryAdmins = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+  const primaryAdmins = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'];
   const userEmail = user?.email?.toLowerCase() || '';
   const isAdmin = profile?.role === 'admin' || primaryAdmins.includes(userEmail);
   const isManager = profile?.role === 'admin' || profile?.role === 'manager' || primaryAdmins.includes(userEmail);

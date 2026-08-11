@@ -57,7 +57,7 @@ export const Login: React.FC = () => {
       console.log("Login: User profile exists:", userDoc.exists());
 
       if (!userDoc.exists()) {
-        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'];
         const isPrimaryAdmin = user.email && primaryAdminEmails.includes(user.email.toLowerCase());
         let role = isPrimaryAdmin ? 'admin' : null;
 
@@ -109,7 +109,7 @@ export const Login: React.FC = () => {
 
         const profileData = userDoc.data();
         
-        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'];
         if (user.email && primaryAdminEmails.includes(user.email.toLowerCase()) && profileData.role !== 'admin') {
           await updateDoc(userDocRef, { role: 'admin' });
           profileData.role = 'admin';

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
+  Home as HomeIcon,
   LayoutDashboard, 
   Package, 
   ShoppingCart, 
@@ -33,6 +34,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
 
 const navItems = [
+  { name: 'Home', path: '/home', icon: HomeIcon, roles: ['admin', 'manager', 'staff'] },
   { name: 'POS', path: '/pos', icon: ShoppingCart, roles: ['admin', 'manager', 'staff'] },
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { name: 'Inventory', path: '/inventory', icon: Package, roles: ['admin', 'manager', 'staff'] },

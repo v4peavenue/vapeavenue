@@ -158,7 +158,7 @@ export const SalesHistory: React.FC = () => {
 
     let unsubscribeAccounts = () => {};
     const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || 
-                        ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'].includes(user?.email?.toLowerCase() || '');
+                        ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'].includes(user?.email?.toLowerCase() || '');
 
     if (isStaffUser) {
       unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {

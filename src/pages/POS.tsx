@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { calculateLoyaltyDiscount, processCustomerLoyaltyCheckout } from '@/lib/loyalty';
 
-import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc, writeBatch, limit, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Product, Sale, SaleItem, Location, Customer, PromoCode, PaymentOption, PaymentSplit, LoyaltyCard } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -293,7 +293,7 @@ export const POS: React.FC = () => {
     return { customer: null, isLoyaltyCode: false };
   };
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       const term = searchTerm.trim().toLowerCase();
       if (!term) return;
@@ -322,6 +322,31 @@ export const POS: React.FC = () => {
         toast.error('Loyalty cards apply only to registered customers in the app.');
         setSearchTerm('');
         return;
+      }
+
+      // On-demand Firestore lookup for un-cached products (by barcode or SKU)
+      try {
+        const barcodeQ = query(collection(db, 'products'), where('barcode', '==', searchTerm.trim()), limit(1));
+        const barcodeSnap = await getDocs(barcodeQ);
+        if (!barcodeSnap.empty) {
+          const fetchedP = { id: barcodeSnap.docs[0].id, ...barcodeSnap.docs[0].data() } as Product;
+          addToCart(fetchedP, addQtyMulti);
+          setSearchTerm('');
+          toast.success(`Scanned and added ${fetchedP.name} to cart`);
+          return;
+        }
+
+        const skuQ = query(collection(db, 'products'), where('sku', '==', searchTerm.trim()), limit(1));
+        const skuSnap = await getDocs(skuQ);
+        if (!skuSnap.empty) {
+          const fetchedP = { id: skuSnap.docs[0].id, ...skuSnap.docs[0].data() } as Product;
+          addToCart(fetchedP, addQtyMulti);
+          setSearchTerm('');
+          toast.success(`Scanned and added ${fetchedP.name} to cart`);
+          return;
+        }
+      } catch (err) {
+        console.warn("On-demand product barcode lookup notice:", err);
       }
 
       if (filteredProducts.length === 1) {
@@ -496,32 +521,37 @@ export const POS: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
 
-    const q = query(collection(db, 'products'), orderBy('name', 'asc'));
+    // Limit initial product streaming to 100 items (additional products loaded via direct SKU/barcode scanner or search)
+    const q = query(collection(db, 'products'), orderBy('name', 'asc'), limit(100));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
     }, (error) => {
       console.warn("POS: Error listening to products collection:", error);
     });
 
-    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
+    const custQ = query(collection(db, 'customers'), orderBy('name', 'asc'), limit(50));
+    const unsubscribeCustomers = onSnapshot(custQ, (snapshot) => {
       setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
     }, (error) => {
       console.warn("POS: Error listening to customers collection:", error);
     });
 
-    const unsubscribeCards = onSnapshot(collection(db, 'loyaltyCards'), (snapshot) => {
+    const cardsQ = query(collection(db, 'loyaltyCards'), limit(50));
+    const unsubscribeCards = onSnapshot(cardsQ, (snapshot) => {
       setLoyaltyCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoyaltyCard)));
     }, (error) => {
       console.warn("POS: Error listening to loyaltyCards collection:", error);
     });
 
-    const unsubscribePromos = onSnapshot(collection(db, 'promos'), (snapshot) => {
+    const promosQ = query(collection(db, 'promos'), limit(30));
+    const unsubscribePromos = onSnapshot(promosQ, (snapshot) => {
       setPromos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PromoCode)));
     }, (error) => {
       console.warn("POS: Error listening to promos collection:", error);
     });
 
-    const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
+    const paymentsQ = query(collection(db, 'paymentOptions'), limit(30));
+    const unsubscribePayments = onSnapshot(paymentsQ, (snapshot) => {
       setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PaymentOption)));
     }, (error) => {
       console.warn("POS: Error listening to paymentOptions collection:", error);
@@ -529,17 +559,19 @@ export const POS: React.FC = () => {
 
     let unsubscribeAccounts: (() => void) | null = null;
     const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || 
-                        ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'].includes(user?.email?.toLowerCase() || '');
+                        ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'].includes(user?.email?.toLowerCase() || '');
 
     if (isStaffUser) {
-      unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      const accsQ = query(collection(db, 'accounts'), limit(20));
+      unsubscribeAccounts = onSnapshot(accsQ, (snapshot) => {
         setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       }, (error) => {
         console.warn("POS: Error listening to accounts collection:", error);
       });
     }
 
-    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+    const usersQ = query(collection(db, 'users'), limit(50));
+    const unsubscribeUsers = onSnapshot(usersQ, (snapshot) => {
       setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       console.warn("POS: Error listening to users collection:", error);

@@ -127,7 +127,7 @@ export const Finance: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
 
-    const primaryAdmins = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+    const primaryAdmins = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'];
     const userEmail = user?.email?.toLowerCase() || '';
 
     const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || primaryAdmins.includes(userEmail);

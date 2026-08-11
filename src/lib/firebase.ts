@@ -13,18 +13,18 @@ export const db = initializeFirestore(app, {
   experimentalAutoDetectLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 
-// Enable Offline Persistence (Disabled in development/iframe mode to prevent IndexedDB lock assertion crashes)
-/*
+// Enable Offline Persistence with graceful fallback
 enableMultiTabIndexedDbPersistence(db).catch((err) => {
-    if (err.code == 'failed-precondition') {
-        // Multiple tabs open, persistence can only be enabled in one tab at a a time.
-        console.warn('Firestore persistence failed: Multiple tabs open');
-    } else if (err.code == 'unimplemented') {
-        // The current browser does not support all of the features required to enable persistence
-        console.warn('Firestore persistence is not supported by this browser');
-    }
+  if (err.code === 'failed-precondition') {
+    // Multiple tabs open, persistence can only be enabled in one tab at a time.
+    console.warn('Firestore persistence notice: Multiple tabs open in browser.');
+  } else if (err.code === 'unimplemented') {
+    // The current browser does not support all features required for persistence
+    console.warn('Firestore persistence notice: Browser does not support IndexedDB persistence.');
+  } else {
+    console.warn('Firestore persistence notice:', err.message || err);
+  }
 });
-*/
 
 // Initialize Auth
 export const auth = getAuth(app);

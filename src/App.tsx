@@ -10,6 +10,7 @@ import { Layout } from './components/Layout';
 
 // Lazy load page components for bundle size & loading performance optimization
 const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
 const Inventory = lazy(() => import('./pages/Inventory').then(m => ({ default: m.Inventory })));
 const POS = lazy(() => import('./pages/POS').then(m => ({ default: m.POS })));
@@ -80,7 +81,8 @@ export default function App() {
                 <Suspense fallback={PageLoader}>
                   <Routes>
                     <Route path="/login" element={<Login />} />
-                    <Route path="/" element={<Navigate to="/pos" replace />} />
+                    <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                    <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
                     <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
                     <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
                     <Route path="/purchasing" element={<ManagerRoute><Purchasing /></ManagerRoute>} />
