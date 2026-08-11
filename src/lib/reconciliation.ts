@@ -1,10 +1,11 @@
-import { collection, getDocs, doc, writeBatch, Timestamp, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, Timestamp, addDoc, deleteDoc, increment } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 export interface ReconciliationResult {
   repairedSales: number;
   repairedFinancials: number;
   repairedAudits: number;
+  repairedInventory?: number;
   message: string;
 }
 
@@ -267,13 +268,47 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       }
     }
 
+    // 4. Backtrack & Sync Sales Stock Deductions
+    let repairedInventory = 0;
+    const invBatch = writeBatch(db);
+    let invOps = 0;
+
+    for (const sale of sales) {
+      if ((!sale.status || sale.status === 'completed' || sale.status === 'returned' || sale.status === 'partially_returned') && sale.stockDeducted === false) {
+        for (const item of sale.items || []) {
+          if (!item.productId) continue;
+          const productRef = doc(db, 'products', item.productId);
+          invBatch.update(productRef, {
+            stock: increment(-item.quantity),
+            [`stocks.${sale.locationId}`]: increment(-item.quantity),
+            updatedAt: Timestamp.now()
+          });
+          invOps++;
+        }
+        const saleRef = doc(db, 'sales', sale.id);
+        invBatch.update(saleRef, {
+          stockDeducted: true,
+          updatedAt: Timestamp.now()
+        });
+        invOps++;
+        repairedInventory++;
+      }
+    }
+
+    if (invOps > 0) {
+      await invBatch.commit();
+    }
+
     let msg = `System reconciliation completed successfully! Rechecked ${repairedSales} sales.`;
     if (duplicatesRemoved > 0) {
       msg += ` Removed ${duplicatesRemoved} duplicate transaction line(s).`;
     }
+    if (repairedInventory > 0) {
+      msg += ` Re-aligned inventory stock for ${repairedInventory} un-deducted sale(s).`;
+    }
     if (repairedFinancials > 0 || repairedAudits > 0) {
       msg += ` Added ${repairedFinancials} missing financial transaction(s) and ${repairedAudits} missing audit record(s).`;
-    } else if (duplicatesRemoved === 0) {
+    } else if (duplicatesRemoved === 0 && repairedInventory === 0) {
       msg += ` All financial transactions and ledgers are fully aligned and balanced.`;
     }
 
@@ -281,6 +316,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       repairedSales,
       repairedFinancials,
       repairedAudits,
+      repairedInventory,
       message: msg
     };
 

@@ -1175,7 +1175,7 @@ export const Settings: React.FC = () => {
           return;
         }
 
-        if (saleToVoid.items) {
+        if (saleToVoid.items && saleToVoid.stockDeducted !== false) {
           for (const item of saleToVoid.items) {
             const productRef = doc(db, 'products', item.productId);
             batch.update(productRef, {
@@ -1188,6 +1188,7 @@ export const Settings: React.FC = () => {
         const saleRef = doc(db, 'sales', saleToVoid.id);
         batch.update(saleRef, {
           status: 'voided',
+          stockDeducted: false,
           updatedAt: Timestamp.now()
         });
 

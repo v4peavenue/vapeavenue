@@ -129,14 +129,12 @@ export const Finance: React.FC = () => {
 
     reconcileSystemData().catch(err => console.warn("Finance reconciliation notice:", err));
 
-    const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || 
-                        user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || 
-                        user?.email?.toLowerCase() === 'v4peavenue@gmail.com';
+    const primaryAdmins = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+    const userEmail = user?.email?.toLowerCase() || '';
+
+    const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || primaryAdmins.includes(userEmail);
                         
-    const isManagerUser = ['admin', 'manager'].includes(profile.role) || 
-                          user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || 
-                          user?.email?.toLowerCase() === 'v4peavenue@gmail.com' ||
-                          isAdmin || isManager;
+    const isManagerUser = ['admin', 'manager'].includes(profile.role) || primaryAdmins.includes(userEmail) || isAdmin || isManager;
 
     let unsubAccounts = () => {};
     let unsubTrans = () => {};

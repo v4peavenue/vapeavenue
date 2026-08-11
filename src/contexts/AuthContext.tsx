@@ -199,8 +199,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const isAdmin = profile?.role === 'admin' || user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || user?.email?.toLowerCase() === 'v4peavenue@gmail.com';
-  const isManager = profile?.role === 'admin' || profile?.role === 'manager' || user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || user?.email?.toLowerCase() === 'v4peavenue@gmail.com';
+  const primaryAdmins = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+  const userEmail = user?.email?.toLowerCase() || '';
+  const isAdmin = profile?.role === 'admin' || primaryAdmins.includes(userEmail);
+  const isManager = profile?.role === 'admin' || profile?.role === 'manager' || primaryAdmins.includes(userEmail);
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, isAdmin, isManager, updateProfile, loginOffline }}>

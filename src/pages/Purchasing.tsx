@@ -76,8 +76,7 @@ export const Purchasing: React.FC = () => {
 
     const isAuthorized = isManager || isAdmin || 
                          ['admin', 'manager'].includes(profile.role) || 
-                         user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || 
-                         user?.email?.toLowerCase() === 'v4peavenue@gmail.com';
+                         ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'].includes(user?.email?.toLowerCase() || '');
 
     if (!isAuthorized) {
       setLoading(false);

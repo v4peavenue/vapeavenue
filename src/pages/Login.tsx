@@ -57,8 +57,8 @@ export const Login: React.FC = () => {
       console.log("Login: User profile exists:", userDoc.exists());
 
       if (!userDoc.exists()) {
-        // Check if user is the primary admin
-        const isPrimaryAdmin = user.email === 'vanhuxley24@gmail.com' || user.email === 'v4peavenue@gmail.com';
+        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+        const isPrimaryAdmin = user.email && primaryAdminEmails.includes(user.email.toLowerCase());
         let role = isPrimaryAdmin ? 'admin' : null;
 
         if (!isPrimaryAdmin) {
@@ -109,8 +109,8 @@ export const Login: React.FC = () => {
 
         const profileData = userDoc.data();
         
-        // Force update primary admin role if it's not set correctly
-        if ((user.email === 'vanhuxley24@gmail.com' || user.email === 'v4peavenue@gmail.com') && profileData.role !== 'admin') {
+        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+        if (user.email && primaryAdminEmails.includes(user.email.toLowerCase()) && profileData.role !== 'admin') {
           await updateDoc(userDocRef, { role: 'admin' });
           profileData.role = 'admin';
         }

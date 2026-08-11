@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { calculateLoyaltyDiscount, processCustomerLoyaltyCheckout } from '@/lib/loyalty';
 
-import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Product, Sale, SaleItem, Location, Customer, PromoCode, PaymentOption, PaymentSplit, LoyaltyCard } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -529,8 +529,7 @@ export const POS: React.FC = () => {
 
     let unsubscribeAccounts: (() => void) | null = null;
     const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || 
-                        user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || 
-                        user?.email?.toLowerCase() === 'v4peavenue@gmail.com';
+                        ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'].includes(user?.email?.toLowerCase() || '');
 
     if (isStaffUser) {
       unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
@@ -962,6 +961,7 @@ export const POS: React.FC = () => {
         loyaltyDiscount,
         loyaltyTier1Earned: loyaltyResult.tier1Triggers,
         loyaltyTier2Earned: loyaltyResult.tier2Triggers,
+        stockDeducted: true,
         timestamp: Timestamp.now()
       };
 
@@ -975,11 +975,13 @@ export const POS: React.FC = () => {
         }
       }
 
-      // 1. Record the sale
-      const saleRef = await addDoc(collection(db, 'sales'), saleData);
+      // Perform ATOMIC write batch for sale creation, stock deduction, accounts, and financial transactions
+      const batch = writeBatch(db);
+      const saleRef = doc(collection(db, 'sales'));
       setLastSaleId(saleRef.id);
+      batch.set(saleRef, saleData);
 
-      // 4. Update financial accounts (ONLY IF NOT PENDING, NOT PENDING PROMO APPROVAL, AND NOT PENDING TOTAL APPROVAL)
+      // Update financial accounts & transactions (ONLY IF NOT PENDING)
       const isPromoPending = !!appliedPromo && !approvedByInfo;
       const isTotalPending = isTotalEdited && !isAdmin;
       if (!isPending && !isPromoPending && !isTotalPending) {
@@ -989,13 +991,14 @@ export const POS: React.FC = () => {
           const newBalance = currentBalance + split.amount;
 
           const accountRef = doc(db, 'accounts', split.methodId);
-          await updateDoc(accountRef, {
+          batch.update(accountRef, {
             balance: increment(split.amount),
             lastUpdated: Timestamp.now()
           });
 
           // Create financial transaction record for Finance history
-          await addDoc(collection(db, 'financialTransactions'), {
+          const finRef = doc(collection(db, 'financialTransactions'));
+          batch.set(finRef, {
             amount: split.amount,
             type: 'income',
             accountId: split.methodId,
@@ -1016,19 +1019,21 @@ export const POS: React.FC = () => {
         }
       }
 
-      // 2. Update inventory stock
+      // Update inventory stock atomically
       for (const item of cart) {
         const product = products.find(p => p.id === item.productId);
         if (!product) continue;
 
         const productRef = doc(db, 'products', item.productId);
-        
-        await updateDoc(productRef, {
+        batch.update(productRef, {
           stock: increment(-item.quantity),
           [`stocks.${checkoutLocationId}`]: increment(-item.quantity),
           updatedAt: Timestamp.now()
         });
       }
+
+      // Commit entire batch atomically
+      await batch.commit();
 
       // 3. Update customer loyalty purchase count and check for card expiration/consumption
       if (finalCustomerId && finalCustomerId !== 'walk-in' && finalCustomerId !== 'new') {

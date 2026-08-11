@@ -158,8 +158,7 @@ export const SalesHistory: React.FC = () => {
 
     let unsubscribeAccounts = () => {};
     const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || 
-                        user?.email?.toLowerCase() === 'vanhuxley24@gmail.com' || 
-                        user?.email?.toLowerCase() === 'v4peavenue@gmail.com';
+                        ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'].includes(user?.email?.toLowerCase() || '');
 
     if (isStaffUser) {
       unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
@@ -632,19 +631,24 @@ export const SalesHistory: React.FC = () => {
     try {
       const batch = writeBatch(db);
 
-      // Reverse stock reduction
-      for (const item of saleToVoid.items) {
-        const productRef = doc(db, 'products', item.productId);
-        batch.update(productRef, {
-          stock: increment(item.quantity),
-          [`stocks.${saleToVoid.locationId}`]: increment(item.quantity)
-        });
+      // Reverse stock reduction ONLY if stock was actually deducted when sale was made
+      const wasStockDeducted = saleToVoid.stockDeducted !== false;
+      if (wasStockDeducted) {
+        for (const item of saleToVoid.items || []) {
+          if (!item.productId) continue;
+          const productRef = doc(db, 'products', item.productId);
+          batch.update(productRef, {
+            stock: increment(item.quantity),
+            [`stocks.${saleToVoid.locationId}`]: increment(item.quantity)
+          });
+        }
       }
 
       // Update sale status
       const saleRef = doc(db, 'sales', saleToVoid.id);
       batch.update(saleRef, {
         status: 'voided',
+        stockDeducted: false,
         updatedAt: Timestamp.now()
       });
 
