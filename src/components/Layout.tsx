@@ -264,30 +264,36 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     </div>
   );
 
+  const isHomePage = location.pathname === '/' || location.pathname === '/home';
+
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex md:w-64 md:flex-col fixed inset-y-0 z-20">
-        <NavContent />
-      </aside>
+      {/* Desktop Sidebar (Hidden on Home page) */}
+      {!isHomePage && (
+        <aside className="hidden md:flex md:w-64 md:flex-col fixed inset-y-0 z-20">
+          <NavContent />
+        </aside>
+      )}
 
       {/* Main Content */}
-      <div className="flex-1 md:pl-64 flex flex-col min-h-screen">
-        {/* Mobile Header */}
-        <header className="md:hidden h-16 bg-primary border-b border-white/10 flex items-center justify-between px-4 sticky top-0 z-30">
-          <div className="flex items-center gap-2">
-            <Waves className="w-6 h-6 text-sidebar-primary" />
-            <span className="font-bold text-white font-heading text-xl">Agos</span>
-          </div>
-          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-            <SheetTrigger render={<Button variant="ghost" className="text-white h-11 w-11 hover:bg-white/10 flex items-center justify-center p-0" />}>
-              <Menu className="w-6 h-6" />
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-64 border-none">
-              <NavContent />
-            </SheetContent>
-          </Sheet>
-        </header>
+      <div className={cn("flex-1 flex flex-col min-h-screen", !isHomePage && "md:pl-64")}>
+        {/* Mobile Header (Hidden on Home page) */}
+        {!isHomePage && (
+          <header className="md:hidden h-16 bg-primary border-b border-white/10 flex items-center justify-between px-4 sticky top-0 z-30">
+            <div className="flex items-center gap-2">
+              <Waves className="w-6 h-6 text-sidebar-primary" />
+              <span className="font-bold text-white font-heading text-xl">Agos</span>
+            </div>
+            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+              <SheetTrigger render={<Button variant="ghost" className="text-white h-11 w-11 hover:bg-white/10 flex items-center justify-center p-0" />}>
+                <Menu className="w-6 h-6" />
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-64 border-none">
+                <NavContent />
+              </SheetContent>
+            </Sheet>
+          </header>
+        )}
 
         <main className="flex-1 relative overflow-x-hidden">
           <AnimatePresence mode="wait">
@@ -297,7 +303,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="p-3 md:p-5 lg:p-6"
+              className={cn("p-3 md:p-5 lg:p-6", isHomePage && "p-0 md:p-0 lg:p-0")}
             >
               {children}
             </motion.div>
