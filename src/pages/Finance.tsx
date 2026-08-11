@@ -127,8 +127,6 @@ export const Finance: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
 
-    reconcileSystemData().catch(err => console.warn("Finance reconciliation notice:", err));
-
     const primaryAdmins = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
     const userEmail = user?.email?.toLowerCase() || '';
 

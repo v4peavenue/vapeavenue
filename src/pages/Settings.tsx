@@ -120,17 +120,25 @@ export const Settings: React.FC = () => {
   // Backup / Restore states
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isReconciling, setIsReconciling] = useState(false);
   const [backupProgress, setBackupProgress] = useState('');
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoreConfirmText, setRestoreConfirmText] = useState('');
   const [restoreOption, setRestoreOption] = useState<'merge' | 'replace'>('merge');
 
-  useEffect(() => {
-    if (!profile) return;
-    // Auto reconcile historical data on load
-    reconcileSystemData().catch(err => console.warn("Auto reconciliation notice:", err));
-  }, [profile]);
+  const handleManualReconcile = async () => {
+    setIsReconciling(true);
+    try {
+      const res = await reconcileSystemData();
+      toast.success(res.message || 'System data reconciled successfully!');
+    } catch (err: any) {
+      toast.error('Reconciliation failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
 
   useEffect(() => {
     if (!profile) return;
@@ -1833,11 +1841,22 @@ export const Settings: React.FC = () => {
                         setRestoreConfirmText('');
                         setIsRestoreModalOpen(true);
                       }}
-                      disabled={isBackingUp || isRestoring}
+                      disabled={isBackingUp || isRestoring || isReconciling}
                       className="gap-2 font-semibold shadow-sm text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 border-emerald-200"
                     >
                       <Upload className="w-4 h-4" />
                       Import &amp; Restore Backup
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleManualReconcile}
+                      disabled={isBackingUp || isRestoring || isReconciling}
+                      className="gap-2 font-semibold shadow-sm text-slate-700 hover:text-slate-800 hover:bg-slate-100 border-slate-200"
+                    >
+                      <RefreshCw className={cn("w-4 h-4", isReconciling && "animate-spin")} />
+                      {isReconciling ? 'Reconciling Data...' : 'Reconcile Data'}
                     </Button>
                   </div>
                 </div>

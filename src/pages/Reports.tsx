@@ -144,9 +144,48 @@ export const Reports: React.FC = () => {
     return { start: s, end: e };
   }, [dateRange, customStartDate, customEndDate]);
 
+  // 1. Static reference collection listeners (does not re-subscribe when changing report dates)
   useEffect(() => {
     if (!isAdmin) return;
-    
+
+    const unsubscribeProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'products');
+      setLoading(false);
+    });
+
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Reports: Error listening to users:", error);
+    });
+
+    const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
+      setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Reports: Error listening to payment options:", error);
+    });
+
+    const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Reports: Error listening to accounts:", error);
+    });
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeUsers();
+      unsubscribePayments();
+      unsubscribeAccounts();
+    };
+  }, []);
+
+  // 2. Date & location range dependent listeners
+  useEffect(() => {
+    if (!isAdmin) return;
+
     const q = query(
       collection(db, 'sales'),
       where('timestamp', '>=', Timestamp.fromDate(start)),
@@ -168,19 +207,6 @@ export const Reports: React.FC = () => {
       setSales(salesList);
     }, (error) => {
       console.warn("Reports: Error listening to sales:", error);
-    });
-
-    const unsubscribeProducts = onSnapshot(collection(db, 'products'), (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'products');
-    });
-
-    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.warn("Reports: Error listening to users:", error);
     });
 
     const adjQ = query(
@@ -220,27 +246,11 @@ export const Reports: React.FC = () => {
       console.warn("Reports: Error listening to return transactions:", error);
     });
 
-    const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
-      setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.warn("Reports: Error listening to payment options:", error);
-    });
-
-    const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
-      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      console.warn("Reports: Error listening to accounts:", error);
-    });
-
     return () => {
       unsubscribeSales();
-      unsubscribeProducts();
-      unsubscribeUsers();
       unsubscribeAdjustments();
       unsubscribePOs();
       unsubscribeReturns();
-      unsubscribePayments();
-      unsubscribeAccounts();
     };
   }, [start.getTime(), end.getTime(), selectedLocationId, profile?.id, isAdmin]);
 

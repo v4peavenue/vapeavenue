@@ -169,6 +169,7 @@ export const Dashboard: React.FC = () => {
     return { start, end };
   }, [timeRange, customStartDate, customEndDate]);
 
+  // 1. Static reference data listeners (only re-subscribe if role/location changes, NOT date filter)
   useEffect(() => {
     if (!isAdmin) return;
 
@@ -187,7 +188,6 @@ export const Dashboard: React.FC = () => {
       let alerts: LowStockAlert[] = [];
       if (selectedLocationId === 'all') {
         allProducts.forEach(p => {
-          // Only show alerts for locations that actually carry the product (linked or has stock)
           const productLocations = Array.from(new Set([
             ...(p.locationIds || []),
             ...Object.keys(p.stocks || {})
@@ -243,7 +243,40 @@ export const Dashboard: React.FC = () => {
       console.warn("Dashboard: Error listening to audit_logs:", error);
     });
 
-    // Calculate dates based on range
+    const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
+      setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
+    }, (error) => {
+      console.warn("Dashboard: Error listening to users:", error);
+    });
+
+    const unsubscribeAttendance = onSnapshot(collection(db, 'attendance'), (snapshot) => {
+      setAllAttendance(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
+    }, (error) => {
+      console.warn("Dashboard: Error listening to attendance:", error);
+    });
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeAudit();
+      unsubscribePayments();
+      unsubscribeAccounts();
+      unsubscribeUsers();
+      unsubscribeAttendance();
+    };
+  }, [isAdmin, selectedLocationId, locations]);
+
+  // 2. Date range dependent sales listener
+  useEffect(() => {
+    if (!isAdmin) return;
+
     const startDate = activeDateRange.start;
     const endDate = activeDateRange.end;
 
@@ -364,36 +397,10 @@ export const Dashboard: React.FC = () => {
       setLoading(false);
     });
 
-    const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
-      setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
-      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
-    }, (error) => {
-      console.warn("Dashboard: Error listening to users:", error);
-    });
-
-    const unsubscribeAttendance = onSnapshot(collection(db, 'attendance'), (snapshot) => {
-      setAllAttendance(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType)));
-    }, (error) => {
-      console.warn("Dashboard: Error listening to attendance:", error);
-    });
-
     return () => {
-      unsubscribeProducts();
       unsubscribeSales();
-      unsubscribeAudit();
-      unsubscribePayments();
-      unsubscribeAccounts();
-      unsubscribeUsers();
-      unsubscribeAttendance();
     };
-  }, [isAdmin, selectedLocationId, timeRange, groupBy, locations.length, customStartDate, customEndDate, activeDateRange.start.getTime(), activeDateRange.end.getTime()]);
+  }, [isAdmin, selectedLocationId, groupBy, locations, activeDateRange.start.getTime(), activeDateRange.end.getTime()]);
 
   // Dynamically extract unique categories and brands for the analysis filters
   const categories = useMemo(() => {
