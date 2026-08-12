@@ -5,7 +5,7 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc } fro
 import { auth, db } from '../lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, LogIn, AlertCircle, Database } from 'lucide-react';
+import { TrendingUp, LogIn, AlertCircle, Database, Waves } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '@/lib/audit';
 import { useAuth } from '../contexts/AuthContext';
@@ -136,30 +136,35 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <Card className="max-w-md w-full shadow-xl border-slate-200">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
-            <TrendingUp className="w-10 h-10 text-white" />
+    <div className="relative min-h-screen flex items-center justify-center bg-slate-100/90 p-4 overflow-hidden font-sans">
+      {/* Background Stylized Agos Shapes */}
+      <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#1C2D4E] rounded-full mix-blend-multiply opacity-25 filter blur-2xl pointer-events-none" />
+      <div className="absolute top-1/3 -right-20 w-80 h-80 bg-[#D4AF37] rounded-full mix-blend-multiply opacity-20 filter blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-28 left-1/4 w-[500px] h-[500px] bg-indigo-900/20 rounded-full filter blur-3xl pointer-events-none" />
+
+      <Card className="max-w-md w-full shadow-2xl border-slate-200/90 bg-white/95 backdrop-blur-md rounded-[28px] relative z-10">
+        <CardHeader className="text-center space-y-4 pt-8">
+          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-[#1C2D4E] to-[#15233D] rounded-2xl flex items-center justify-center shadow-lg shadow-[#1C2D4E]/20 border border-[#D4AF37]/30">
+            <Waves className="w-9 h-9 text-[#D4AF37]" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-bold tracking-tight text-slate-900">Agos Local ERP</CardTitle>
-            <CardDescription className="text-slate-500 mt-2">
-              Professional Inventory & Sales Management
+            <CardTitle className="text-3xl font-extrabold tracking-tight text-[#1C2D4E] font-heading">AGOS ERP</CardTitle>
+            <CardDescription className="text-slate-500 mt-1 font-medium">
+              Smart Local-First Store & Inventory Portal
             </CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6 pt-4">
-          <div className="text-center text-sm text-slate-600">
-            Sign in to access your business dashboard, manage inventory, and process sales.
+        <CardContent className="space-y-6 pt-2">
+          <div className="text-center text-xs text-slate-600 font-medium leading-relaxed">
+            Sign in to access store operations, barcodes, cash registers, and multi-location management.
           </div>
 
-          <div className="bg-[#F5F2ED]/80 border border-[#E5E1DA] rounded-xl p-3 text-xs text-[#1A2B4B] flex items-start gap-2.5">
+          <div className="bg-[#F5F2ED] border border-[#E5E1DA] rounded-2xl p-3.5 text-xs text-[#1C2D4E] flex items-start gap-2.5">
             <AlertCircle className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="font-semibold text-[11px] uppercase tracking-wider text-[#A0522D]">Sandbox Environment Note</p>
-              <p className="leading-relaxed">
-                If Firebase is not yet fully configured with your live custom credentials, click the <strong className="underline cursor-pointer" onClick={() => setShowOffline(true)}>Offline Local Mode</strong> link below to launch a secure local database session.
+              <p className="font-bold text-[11px] uppercase tracking-wider text-[#A0522D]">Sandbox Environment Note</p>
+              <p className="leading-relaxed text-slate-600">
+                If Firebase is not yet fully configured with your live custom credentials, click the <strong className="underline cursor-pointer text-[#1C2D4E]" onClick={() => setShowOffline(true)}>Offline Local Mode</strong> link below to launch a secure local session.
               </p>
             </div>
           </div>
@@ -167,10 +172,10 @@ export const Login: React.FC = () => {
           <Button 
             onClick={handleGoogleLogin} 
             disabled={loading}
-            className="w-full h-12 gap-3 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm animate-pulse"
+            className="w-full h-12 gap-3 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm rounded-xl font-bold text-sm"
           >
             <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-            <span className="font-semibold">Continue with Google</span>
+            <span>Continue with Google</span>
           </Button>
 
           {!showOffline ? (
@@ -178,19 +183,19 @@ export const Login: React.FC = () => {
               <button 
                 type="button"
                 onClick={() => setShowOffline(true)}
-                className="text-xs text-indigo-600 hover:text-indigo-800 underline font-medium"
+                className="text-xs text-[#1C2D4E] hover:text-[#2B4570] underline font-bold"
               >
                 Or sign in using Offline Local Mode
               </button>
             </div>
           ) : (
-            <div className="space-y-4 border border-indigo-100 bg-indigo-50/30 p-4 rounded-xl mt-4 text-left">
-              <div className="flex items-center gap-2 text-indigo-950 font-bold text-sm">
-                <Database className="w-4 h-4 text-indigo-600" />
+            <div className="space-y-4 border border-amber-200/80 bg-amber-50/40 p-4 rounded-2xl mt-4 text-left">
+              <div className="flex items-center gap-2 text-[#1C2D4E] font-bold text-sm">
+                <Database className="w-4 h-4 text-[#D4AF37]" />
                 <span>Local-First Offline Session</span>
               </div>
-              <p className="text-xs text-slate-500 leading-normal">
-                No internet or Firebase connection is required. Data is stored locally on this computer.
+              <p className="text-xs text-slate-600 leading-normal">
+                No internet or Firebase connection is required. Data is stored locally on this workstation.
               </p>
               
               <div className="space-y-3 pt-1">
@@ -202,7 +207,7 @@ export const Login: React.FC = () => {
                     type="email" 
                     value={offlineEmail}
                     onChange={(e) => setOfflineEmail(e.target.value)}
-                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1C2D4E] text-slate-800"
                   />
                 </div>
                 
@@ -214,7 +219,7 @@ export const Login: React.FC = () => {
                     type="text" 
                     value={offlineName}
                     onChange={(e) => setOfflineName(e.target.value)}
-                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1C2D4E] text-slate-800"
                     placeholder="e.g. Administrator"
                   />
                 </div>
@@ -226,7 +231,7 @@ export const Login: React.FC = () => {
                   <select 
                     value={offlineRole}
                     onChange={(e) => setOfflineRole(e.target.value)}
-                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1C2D4E] text-slate-800"
                   >
                     <option value="admin">Administrator (Full Access)</option>
                     <option value="manager">Manager (Intermediate Access)</option>
@@ -236,7 +241,7 @@ export const Login: React.FC = () => {
 
                 <Button 
                   onClick={handleOfflineLogin}
-                  className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold transition-colors mt-2"
+                  className="w-full h-11 bg-gradient-to-r from-[#1C2D4E] to-[#2B4570] hover:opacity-95 text-[#D4AF37] font-bold rounded-xl shadow-lg shadow-[#1C2D4E]/20 transition-all mt-2"
                 >
                   Launch Offline ERP
                 </Button>
@@ -245,7 +250,7 @@ export const Login: React.FC = () => {
                   <button 
                     type="button"
                     onClick={() => setShowOffline(false)}
-                    className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+                    className="text-[10px] text-slate-400 hover:text-slate-600 underline font-medium"
                   >
                     Back to Google Sign-in
                   </button>
@@ -254,9 +259,9 @@ export const Login: React.FC = () => {
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex flex-col gap-4 border-t bg-slate-50/50 rounded-b-xl pt-6">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <LogIn className="w-3 h-3" />
+        <CardFooter className="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/50 rounded-b-[28px] pt-4 pb-6">
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+            <LogIn className="w-3.5 h-3.5 text-[#D4AF37]" />
             <span>Secure Enterprise Authentication</span>
           </div>
         </CardFooter>
@@ -264,3 +269,5 @@ export const Login: React.FC = () => {
     </div>
   );
 };
+
+export default Login;

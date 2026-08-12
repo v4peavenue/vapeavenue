@@ -49,17 +49,14 @@ service cloud.firestore {
     // Inventory Products (Staff update stock during POS sales; create/delete reserved for Admins/Managers)
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow update: if isSignedIn();
-      allow create, delete: if isAdmin() || isManager();
+      allow update, create: if isSignedIn();
+      allow delete: if isAdmin() || isManager();
     }
 
     // Sales transactions
     match /sales/{saleId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        resource.data.staffId == request.auth.uid || isAdmin() || isManager()
-      );
+      allow create, update: if isSignedIn();
       allow delete: if isAdmin() || isManager();
     }
 

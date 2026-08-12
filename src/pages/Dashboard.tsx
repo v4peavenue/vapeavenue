@@ -2144,3 +2144,5 @@ export const Dashboard: React.FC = () => {
 </motion.div>
   );
 };
+
+export default Dashboard;

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { DataTablePagination } from '@/components/DataTablePagination';
 import { 
   Package, 
   Plus, 
@@ -76,6 +77,8 @@ export const Inventory: React.FC = () => {
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProductId, setAdjustingProductId] = useState<string | undefined>(undefined);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     if (!profile) return;
@@ -193,6 +196,13 @@ export const Inventory: React.FC = () => {
     return matchesSearch && matchesCategory && matchesBrand && matchesLocation;
   });
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, brandFilter, selectedLocationId]);
+
+  const totalPages = Math.ceil(filteredProducts.length / pageSize) || 1;
+  const paginatedProducts = filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -299,7 +309,7 @@ export const Inventory: React.FC = () => {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product, index) => {
+              paginatedProducts.map((product, index) => {
                 return (
                   <motion.tr 
                     key={product.id}
@@ -458,6 +468,18 @@ export const Inventory: React.FC = () => {
             )}
           </TableBody>
         </Table>
+
+        <DataTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={filteredProducts.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setCurrentPage => {
+            setPageSize(setCurrentPage);
+            setCurrentPage(1);
+          }}
+        />
       </div>
 
       {/* Mobile Card-Based Grid - optimized for smartphone scanning */}
@@ -471,7 +493,8 @@ export const Inventory: React.FC = () => {
             {searchTerm ? 'No products found matching search.' : 'No products in inventory yet.'}
           </div>
         ) : (
-          filteredProducts.map((product, index) => {
+          <>
+            {paginatedProducts.map((product, index) => {
             const outOfStock = isOutOfStock(product, selectedLocationId);
             const lowStock = isLowStock(product, selectedLocationId);
             
@@ -606,7 +629,20 @@ export const Inventory: React.FC = () => {
                 )}
               </motion.div>
             );
-          })
+          })}
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredProducts.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={size => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+          />
+        </>
         )}
       </div>
 
@@ -637,3 +673,5 @@ export const Inventory: React.FC = () => {
     </motion.div>
   );
 };
+
+export default Inventory;

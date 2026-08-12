@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { DataTablePagination } from '@/components/DataTablePagination';
 import { 
   collection, 
   onSnapshot, 
@@ -65,6 +66,8 @@ export const Purchasing: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
@@ -372,6 +375,13 @@ export const Purchasing: React.FC = () => {
     po.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const totalPages = Math.ceil(filteredPos.length / pageSize) || 1;
+  const paginatedPos = filteredPos.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   const visibleProducts = products.filter(p => {
     if (isAdmin || isManager) return true;
     const userLocId = profile?.locationId;
@@ -434,7 +444,7 @@ export const Purchasing: React.FC = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredPos.map((po) => (
+                paginatedPos.map((po) => (
                   <TableRow key={po.id} className="hover:bg-slate-50/50">
                     <TableCell className="font-mono font-medium">{po.poNumber}</TableCell>
                     <TableCell className="text-xs">
@@ -464,6 +474,18 @@ export const Purchasing: React.FC = () => {
               )}
             </TableBody>
             </Table>
+
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              totalItems={filteredPos.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={size => {
+                setPageSize(size);
+                setCurrentPage(1);
+              }}
+            />
           </div>
 
           {/* Mobile-optimized cards for smartphones */}
@@ -477,7 +499,8 @@ export const Purchasing: React.FC = () => {
                 No purchase orders found.
               </div>
             ) : (
-              filteredPos.map((po, index) => (
+              <>
+                {paginatedPos.map((po, index) => (
                 <motion.div
                   key={po.id}
                   initial={{ opacity: 0, y: 15 }}
@@ -531,7 +554,20 @@ export const Purchasing: React.FC = () => {
                     </Button>
                   </div>
                 </motion.div>
-              ))
+              ))}
+
+              <DataTablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                totalItems={filteredPos.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={size => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+              />
+            </>
             )}
           </div>
         </CardContent>
@@ -664,3 +700,5 @@ export const Purchasing: React.FC = () => {
     </div>
   );
 };
+
+export default Purchasing;

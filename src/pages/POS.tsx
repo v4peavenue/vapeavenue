@@ -161,12 +161,25 @@ export const POS: React.FC = () => {
   });
 
   const categories = Array.from(new Set(visibleProducts.map(p => p.category).filter(Boolean))) as string[];
-  const brandsForCategory = Array.from(new Set(
-    visibleProducts
-      .filter(p => selectedCategory === 'all' || p.category === selectedCategory)
-      .map(p => p.brand)
-      .filter(Boolean)
-  )) as string[];
+
+  const categoryCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    visibleProducts.forEach(p => {
+      const matchesSearch = !searchTerm || 
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesLocation = selectedLocationId === 'all' || 
+        (p.locationIds && p.locationIds.includes(selectedLocationId)) ||
+        (p.stocks && p.stocks[selectedLocationId] !== undefined && Number(p.stocks[selectedLocationId]) > 0);
+      
+      if (matchesSearch && matchesLocation) {
+        const cat = p.category || 'Uncategorized';
+        counts[cat] = (counts[cat] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [visibleProducts, searchTerm, selectedLocationId]);
 
   const handleCategoryChange = (cat: string) => {
     setSelectedCategory(cat);
@@ -1171,20 +1184,14 @@ export const POS: React.FC = () => {
       </div>
 
       {/* Product Selection Area */}
-      <div className={cn("flex-1 flex flex-col gap-6 min-h-0", activeTab !== 'products' && "hidden lg:flex")}>
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          {selectedLocationId === 'all' && (
-            <div className="bg-[#1A2B4B]/5 border border-[#1A2B4B]/10 p-3 rounded-xl flex items-center gap-3 text-[#1A2B4B] text-sm backdrop-blur-sm">
-              <MapPin className="w-5 h-5 text-[#D4AF37]" />
-              <p className="font-bold">Viewing all locations. You will need to select a specific branch at checkout.</p>
-            </div>
-          )}
-          <div className="relative flex-1 w-full flex flex-wrap items-center gap-2 sm:gap-3">
-            <div className="relative flex-1 flex gap-2 min-w-[200px]">
+      <div className={cn("flex-1 flex flex-col gap-6 min-h-0 min-w-0", activeTab !== 'products' && "hidden lg:flex")}>
+        <div className="w-full flex flex-col md:flex-row items-center gap-3">
+          <div className="relative flex-1 w-full flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
+            <div className="relative flex-1 flex gap-2 w-full min-w-[200px]">
               <div className="relative flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                 <Input 
-                  className="pl-10 sm:pl-12 h-10 sm:h-12 text-sm sm:text-base bg-white/50 border-slate-200 shadow-sm rounded-xl focus-visible:ring-[#D4AF37] backdrop-blur-sm" 
+                  className="pl-10 sm:pl-12 h-10 sm:h-12 text-sm sm:text-base bg-white/50 border-slate-200 shadow-sm rounded-xl focus-visible:ring-[#D4AF37] backdrop-blur-sm w-full" 
                   placeholder="Search by name, SKU, or Barcode..." 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -1202,14 +1209,14 @@ export const POS: React.FC = () => {
               </Button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
               {/* Add Qty Selector */}
-              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-12 select-none">
+              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-10 sm:h-12 select-none">
                 <span className="text-[10px] font-black uppercase text-[#1A2B4B] tracking-wider pl-2 pr-1">Add Qty:</span>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
+                  className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
                   type="button"
                   onClick={() => setAddQtyMulti(prev => Math.max(1, prev - 1))}
                 >
@@ -1217,7 +1224,7 @@ export const POS: React.FC = () => {
                 </Button>
                 <Input 
                   type="number"
-                  className="w-10 h-8 text-center font-black text-sm border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
+                  className="w-10 h-7 sm:h-8 text-center font-black text-xs sm:text-sm border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
                   value={addQtyMulti}
                   onChange={(e) => {
                     const val = parseInt(e.target.value);
@@ -1230,7 +1237,7 @@ export const POS: React.FC = () => {
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
+                  className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
                   type="button"
                   onClick={() => setAddQtyMulti(prev => prev + 1)}
                 >
@@ -1239,13 +1246,13 @@ export const POS: React.FC = () => {
               </div>
 
               {/* View Mode Toggle */}
-              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-12 select-none">
+              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-10 sm:h-12 select-none">
                 <Button
                   variant="ghost"
                   size="sm"
                   type="button"
                   className={cn(
-                    "h-10 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
+                    "h-8 sm:h-10 px-2.5 sm:px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
                     viewMode === 'list' 
                       ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
                       : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
@@ -1260,7 +1267,7 @@ export const POS: React.FC = () => {
                   size="sm"
                   type="button"
                   className={cn(
-                    "h-10 px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
+                    "h-8 sm:h-10 px-2.5 sm:px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
                     viewMode === 'grid' 
                       ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
                       : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
@@ -1275,119 +1282,75 @@ export const POS: React.FC = () => {
           </div>
         </div>
 
-        {/* Category & Brand Hierarchy Filter */}
-        {/* Mobile & Tablet Dropdown View */}
-        <div className="lg:hidden grid grid-cols-2 gap-2.5 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 backdrop-blur-sm shrink-0">
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Category</span>
+        {/* Category Filter Bar (Clean horizontal strip with uniform height pills) */}
+        <div className="w-full bg-slate-50/80 p-1.5 rounded-2xl border border-slate-200/80 backdrop-blur-sm shrink-0 flex items-center gap-2">
+          {/* Mobile Select Dropdown for quick category picking */}
+          <div className="sm:hidden w-full">
             <Select value={selectedCategory} onValueChange={(val) => handleCategoryChange(val)}>
-              <SelectTrigger className="w-full bg-white h-9 text-xs border-slate-200/80 shadow-xs">
+              <SelectTrigger className="w-full bg-white h-9 text-xs font-bold border-slate-200 shadow-xs rounded-xl text-[#1A2B4B]">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
+              <SelectContent className="bg-white border-slate-200 text-[#1A2B4B]">
+                <SelectItem value="all" className="font-bold">All Categories ({filteredProducts.length})</SelectItem>
                 {categories.map(cat => (
-                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  <SelectItem key={cat} value={cat}>
+                    {cat} ({categoryCounts[cat] || 0})
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider truncate">
-              Brand {selectedCategory !== 'all' ? `(${selectedCategory})` : ''}
-            </span>
-            <Select value={selectedBrand} onValueChange={(val) => setSelectedBrand(val)}>
-              <SelectTrigger className="w-full bg-white h-9 text-xs border-slate-200/80 shadow-xs">
-                <SelectValue placeholder="All Brands" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {brandsForCategory.map(brand => (
-                  <SelectItem key={brand} value={brand}>{brand}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+          {/* Desktop/Tablet Horizontal Scrollable Category Strip */}
+          <div className="hidden sm:flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5 w-full">
+            <button
+              type="button"
+              onClick={() => handleCategoryChange('all')}
+              className={cn(
+                "h-9 px-3.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 flex items-center gap-2 select-none border cursor-pointer",
+                selectedCategory === 'all'
+                  ? "bg-[#1A2B4B] text-white border-[#1A2B4B] shadow-xs font-black"
+                  : "bg-white text-slate-600 border-slate-200/90 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"
+              )}
+            >
+              <span>All Categories</span>
+              <span className={cn(
+                "px-1.5 py-0.5 text-[10px] font-black rounded-md transition-colors",
+                selectedCategory === 'all'
+                  ? "bg-[#D4AF37] text-[#1A2B4B]"
+                  : "bg-slate-100 text-slate-500"
+              )}>
+                {filteredProducts.length}
+              </span>
+            </button>
 
-        {/* Desktop Button Pills View */}
-        <div className="hidden lg:flex flex-col space-y-3 bg-slate-50/50 p-4 rounded-2xl border border-slate-100 backdrop-blur-sm shrink-0">
-          {/* Category Level */}
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Category</span>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar pr-1">
-              <Button
-                variant={selectedCategory === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => handleCategoryChange('all')}
-                className={cn(
-                  "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
-                  selectedCategory === 'all'
-                    ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]"
-                    : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                )}
-              >
-                All Categories
-              </Button>
-              {categories.map(cat => (
-                <Button
+            {categories.map(cat => {
+              const count = categoryCounts[cat] || 0;
+              const isActive = selectedCategory === cat;
+              return (
+                <button
                   key={cat}
-                  variant={selectedCategory === cat ? 'default' : 'outline'}
-                  size="sm"
+                  type="button"
                   onClick={() => handleCategoryChange(cat)}
                   className={cn(
-                    "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
-                    selectedCategory === cat
-                      ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]"
-                      : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+                    "h-9 px-3.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 flex items-center gap-2 select-none border cursor-pointer",
+                    isActive
+                      ? "bg-[#1A2B4B] text-white border-[#1A2B4B] shadow-xs font-black"
+                      : "bg-white text-slate-600 border-slate-200/90 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300"
                   )}
                 >
-                  {cat}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Brand Level */}
-          <div className="flex flex-col gap-1.5 border-t border-slate-200/50 pt-2.5">
-            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
-              Brand
-              {selectedCategory !== 'all' && (
-                <span className="text-slate-400/80 font-medium normal-case font-sans">under {selectedCategory}</span>
-              )}
-            </span>
-            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar pr-1">
-              <Button
-                variant={selectedBrand === 'all' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedBrand('all')}
-                className={cn(
-                  "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
-                  selectedBrand === 'all'
-                    ? "bg-[#D4AF37] text-[#1A2B4B] hover:bg-[#D4AF37] font-bold"
-                    : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                )}
-              >
-                All Brands
-              </Button>
-              {brandsForCategory.map(brand => (
-                <Button
-                  key={brand}
-                  variant={selectedBrand === brand ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedBrand(brand)}
-                  className={cn(
-                    "h-8 text-xs font-semibold px-3 rounded-lg border-slate-200/80 shadow-sm transition-all",
-                    selectedBrand === brand
-                      ? "bg-[#D4AF37] text-[#1A2B4B] hover:bg-[#D4AF37] font-bold"
-                      : "bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-                  )}
-                >
-                  {brand}
-                </Button>
-              ))}
-            </div>
+                  <span>{cat}</span>
+                  <span className={cn(
+                    "px-1.5 py-0.5 text-[10px] font-black rounded-md transition-colors",
+                    isActive
+                      ? "bg-[#D4AF37] text-[#1A2B4B]"
+                      : "bg-slate-100 text-slate-500"
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -2729,3 +2692,5 @@ export const POS: React.FC = () => {
     </motion.div>
   );
 };
+
+export default POS;

@@ -51,6 +51,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { DataTablePagination } from '@/components/DataTablePagination';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocations } from '@/contexts/LocationContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -102,6 +103,10 @@ export const Attendance: React.FC = () => {
   });
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [scheduleSearch, setScheduleSearch] = useState('');
+  const [personalLogsPage, setPersonalLogsPage] = useState(1);
+  const [personalLogsPageSize, setPersonalLogsPageSize] = useState(20);
+  const [schedulesPage, setSchedulesPage] = useState(1);
+  const [schedulesPageSize, setSchedulesPageSize] = useState(20);
   const [compareUserFilter, setCompareUserFilter] = useState('all');
   const [compareDateFilter, setCompareDateFilter] = useState(format(new Date(), 'yyyy-MM-dd'));
 
@@ -2014,7 +2019,9 @@ export const Attendance: React.FC = () => {
 
             <TabsContent value="history">
               <div className="space-y-4">
-                {personalLogs.map((log) => (
+                {personalLogs
+                  .slice((personalLogsPage - 1) * personalLogsPageSize, personalLogsPage * personalLogsPageSize)
+                  .map((log) => (
                   <motion.div
                     key={log.id}
                     initial={{ opacity: 0, x: -10 }}
@@ -2060,11 +2067,23 @@ export const Attendance: React.FC = () => {
                     </div>
                   </motion.div>
                 ))}
-                {personalLogs.length === 0 && (
+                {personalLogs.length === 0 ? (
                   <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 border-dashed">
                     <History className="w-12 h-12 text-slate-200 mx-auto mb-4" />
                     <p className="text-slate-400 font-medium">No attendance records found.</p>
                   </div>
+                ) : (
+                  <DataTablePagination
+                    currentPage={personalLogsPage}
+                    totalPages={Math.ceil(personalLogs.length / personalLogsPageSize) || 1}
+                    pageSize={personalLogsPageSize}
+                    totalItems={personalLogs.length}
+                    onPageChange={setPersonalLogsPage}
+                    onPageSizeChange={size => {
+                      setPersonalLogsPageSize(size);
+                      setPersonalLogsPage(1);
+                    }}
+                  />
                 )}
               </div>
             </TabsContent>
@@ -2211,7 +2230,9 @@ export const Attendance: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {filteredSchedules.slice(0, 50).map((sch) => (
+                      {filteredSchedules
+                        .slice((schedulesPage - 1) * schedulesPageSize, schedulesPage * schedulesPageSize)
+                        .map((sch) => (
                         <tr key={sch.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-4">
                             <p className="text-sm font-black text-primary">
@@ -2267,11 +2288,17 @@ export const Attendance: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
-                  {filteredSchedules.length > 50 && (
-                    <div className="p-4 text-center text-xs text-slate-400 font-medium bg-slate-50/50">
-                      Showing first 50 scheduled dates. Use search or filters to find specific records.
-                    </div>
-                  )}
+                  <DataTablePagination
+                    currentPage={schedulesPage}
+                    totalPages={Math.ceil(filteredSchedules.length / schedulesPageSize) || 1}
+                    pageSize={schedulesPageSize}
+                    totalItems={filteredSchedules.length}
+                    onPageChange={setSchedulesPage}
+                    onPageSizeChange={size => {
+                      setSchedulesPageSize(size);
+                      setSchedulesPage(1);
+                    }}
+                  />
                   {schedules.length === 0 && (
                     <div className="text-center py-20 bg-white">
                       <Calendar className="w-12 h-12 text-slate-200 mx-auto mb-4" />
@@ -3694,3 +3721,5 @@ export const Attendance: React.FC = () => {
     </div>
   );
 };
+
+export default Attendance;

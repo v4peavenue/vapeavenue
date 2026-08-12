@@ -45,6 +45,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { Badge } from '@/components/ui/badge';
+import { DataTablePagination } from '@/components/DataTablePagination';
 import { 
   Table, 
   TableBody, 
@@ -72,6 +73,10 @@ export const Directory: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loyaltyCards, setLoyaltyCards] = useState<LoyaltyCard[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
+  const [customerPage, setCustomerPage] = useState(1);
+  const [customerPageSize, setCustomerPageSize] = useState(20);
+  const [supplierPage, setSupplierPage] = useState(1);
+  const [supplierPageSize, setSupplierPageSize] = useState(20);
 
   const [loyaltyEnabled, setLoyaltyEnabled] = useState(true);
   const [loyaltyTier1, setLoyaltyTier1] = useState(50);
@@ -1010,6 +1015,7 @@ export const Directory: React.FC = () => {
                       ) : (
                         suppliers
                           .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .slice((supplierPage - 1) * supplierPageSize, supplierPage * supplierPageSize)
                           .map((sup) => (
                             <TableRow key={sup.id} className="group hover:bg-secondary/20">
                               <TableCell className="font-semibold text-primary">{sup.name}</TableCell>
@@ -1044,6 +1050,17 @@ export const Directory: React.FC = () => {
                       )}
                     </TableBody>
                   </Table>
+                  <DataTablePagination
+                    currentPage={supplierPage}
+                    totalPages={Math.ceil(suppliers.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length / supplierPageSize) || 1}
+                    pageSize={supplierPageSize}
+                    totalItems={suppliers.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase())).length}
+                    onPageChange={setSupplierPage}
+                    onPageSizeChange={size => {
+                      setSupplierPageSize(size);
+                      setSupplierPage(1);
+                    }}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -1278,6 +1295,7 @@ export const Directory: React.FC = () => {
                             (c.loyaltyCardNumber && c.loyaltyCardNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
                             (c.phone && c.phone.includes(searchQuery))
                           )
+                          .slice((customerPage - 1) * customerPageSize, customerPage * customerPageSize)
                           .map((cust) => (
                             <TableRow key={cust.id} className="group hover:bg-secondary/20">
                               <TableCell className="font-semibold text-primary">{cust.name}</TableCell>
@@ -1332,6 +1350,25 @@ export const Directory: React.FC = () => {
                       )}
                     </TableBody>
                   </Table>
+                  <DataTablePagination
+                    currentPage={customerPage}
+                    totalPages={Math.ceil(customers.filter(c => 
+                      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                      (c.loyaltyCardNumber && c.loyaltyCardNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                      (c.phone && c.phone.includes(searchQuery))
+                    ).length / customerPageSize) || 1}
+                    pageSize={customerPageSize}
+                    totalItems={customers.filter(c => 
+                      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                      (c.loyaltyCardNumber && c.loyaltyCardNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                      (c.phone && c.phone.includes(searchQuery))
+                    ).length}
+                    onPageChange={setCustomerPage}
+                    onPageSizeChange={size => {
+                      setCustomerPageSize(size);
+                      setCustomerPage(1);
+                    }}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -2184,3 +2221,5 @@ export const Directory: React.FC = () => {
     </div>
   );
 };
+
+export default Directory;

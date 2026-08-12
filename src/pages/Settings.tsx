@@ -1185,29 +1185,33 @@ export const Settings: React.FC = () => {
 
         if (saleToVoid.items && saleToVoid.stockDeducted !== false) {
           for (const item of saleToVoid.items) {
+            if (!item.productId) continue;
             const productRef = doc(db, 'products', item.productId);
-            batch.update(productRef, {
-              stock: increment(item.quantity),
-              [`stocks.${saleToVoid.locationId}`]: increment(item.quantity)
-            });
+            const stockUpdates: Record<string, any> = {
+              stock: increment(item.quantity)
+            };
+            if (saleToVoid.locationId) {
+              stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(item.quantity);
+            }
+            batch.set(productRef, stockUpdates, { merge: true });
           }
         }
 
         const saleRef = doc(db, 'sales', saleToVoid.id);
-        batch.update(saleRef, {
+        batch.set(saleRef, {
           status: 'voided',
           stockDeducted: false,
           updatedAt: Timestamp.now()
-        });
+        }, { merge: true });
 
         if (revertAccountId && saleToVoid.total > 0) {
           const account = accounts.find(a => a.id === revertAccountId);
           if (account) {
             const accountRef = doc(db, 'accounts', revertAccountId);
-            batch.update(accountRef, {
+            batch.set(accountRef, {
               balance: increment(-saleToVoid.total),
               lastUpdated: Timestamp.now()
-            });
+            }, { merge: true });
 
             const newTransRef = doc(collection(db, 'financialTransactions'));
             batch.set(newTransRef, {
@@ -2557,3 +2561,5 @@ export const Settings: React.FC = () => {
     </motion.div>
   );
 };
+
+export default Settings;

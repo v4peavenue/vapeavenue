@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { DataTablePagination } from '@/components/DataTablePagination';
 import { TrendingDown, Trash2 } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, updateDoc, doc, increment, Timestamp, deleteDoc } from 'firebase/firestore';
@@ -69,6 +70,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
   const [expenseCategory, setExpenseCategory] = useState<string>('Supplies');
   const [expenseDescription, setExpenseDescription] = useState<string>('');
   const [expenseSearch, setExpenseSearch] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   React.useEffect(() => {
     if (accounts.length > 0 && !expenseAccountId) {
@@ -347,7 +350,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredExpenses.map((exp) => (
+                  filteredExpenses
+                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                    .map((exp) => (
                     <TableRow key={exp.id} className="hover:bg-slate-50/50 border-slate-50">
                       <TableCell className="font-bold text-slate-700 text-xs">
                         {exp.description}
@@ -391,6 +396,17 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({ accounts, transactions
                 )}
               </TableBody>
             </Table>
+            <DataTablePagination
+              currentPage={currentPage}
+              totalPages={Math.ceil(filteredExpenses.length / pageSize) || 1}
+              pageSize={pageSize}
+              totalItems={filteredExpenses.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={size => {
+                setPageSize(size);
+                setCurrentPage(1);
+              }}
+            />
           </div>
         </CardContent>
       </Card>

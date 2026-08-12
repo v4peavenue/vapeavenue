@@ -1295,3 +1295,5 @@ export const Finance: React.FC = () => {
     </div>
   );
 };
+
+export default Finance;

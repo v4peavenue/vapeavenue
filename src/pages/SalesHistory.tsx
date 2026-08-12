@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
+import { DataTablePagination } from '@/components/DataTablePagination';
 import { 
   History, 
   Search, 
@@ -132,6 +133,8 @@ export const SalesHistory: React.FC = () => {
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
   const [activeTab, setActiveTab] = useState<'sales' | 'voids' | 'pending' | 'ledger'>('ledger');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [rawFinancialTransactions, setRawFinancialTransactions] = useState<any[]>([]);
   const [pendingSales, setPendingSales] = useState<Sale[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<any[]>([]);
@@ -637,30 +640,33 @@ export const SalesHistory: React.FC = () => {
         for (const item of saleToVoid.items || []) {
           if (!item.productId) continue;
           const productRef = doc(db, 'products', item.productId);
-          batch.update(productRef, {
-            stock: increment(item.quantity),
-            [`stocks.${saleToVoid.locationId}`]: increment(item.quantity)
-          });
+          const stockUpdates: Record<string, any> = {
+            stock: increment(item.quantity)
+          };
+          if (saleToVoid.locationId) {
+            stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(item.quantity);
+          }
+          batch.set(productRef, stockUpdates, { merge: true });
         }
       }
 
       // Update sale status
       const saleRef = doc(db, 'sales', saleToVoid.id);
-      batch.update(saleRef, {
+      batch.set(saleRef, {
         status: 'voided',
         stockDeducted: false,
         updatedAt: Timestamp.now()
-      });
+      }, { merge: true });
 
       // Update chosen financial account
       const currentBalance = account.balance || 0;
       const newBalance = currentBalance - saleToVoid.total;
 
       const accountRef = doc(db, 'accounts', voidAccountId);
-      batch.update(accountRef, {
+      batch.set(accountRef, {
         balance: increment(-saleToVoid.total),
         lastUpdated: Timestamp.now()
-      });
+      }, { merge: true });
 
       // Create financial transaction record (reversed income / expense)
       const newTransRef = doc(collection(db, 'financialTransactions'));
@@ -719,10 +725,10 @@ export const SalesHistory: React.FC = () => {
       // 1. Return refund amount back to selected account (deducting/adjusting from the refund account balance)
       if (returnToReverse.totalRefund > 0 && account) {
         const accountRef = doc(db, 'accounts', reverseAccountId);
-        batch.update(accountRef, {
+        batch.set(accountRef, {
           balance: increment(returnToReverse.totalRefund),
           lastUpdated: Timestamp.now()
-        });
+        }, { merge: true });
 
         // Financial transaction representing income (refund cancellation)
         const newTransRef = doc(collection(db, 'financialTransactions'));
@@ -744,12 +750,15 @@ export const SalesHistory: React.FC = () => {
 
       // 2. Reverse stock levels for restocked items (decrement stock back since they are no longer returned)
       for (const item of returnToReverse.items) {
-        if (item.restock) {
+        if (item.restock && item.productId) {
           const productRef = doc(db, 'products', item.productId);
-          batch.update(productRef, {
-            stock: increment(-item.quantity),
-            [`stocks.${returnToReverse.locationId}`]: increment(-item.quantity)
-          });
+          const stockUpdates: Record<string, any> = {
+            stock: increment(-item.quantity)
+          };
+          if (returnToReverse.locationId) {
+            stockUpdates[`stocks.${returnToReverse.locationId}`] = increment(-item.quantity);
+          }
+          batch.set(productRef, stockUpdates, { merge: true });
         }
       }
 
@@ -773,24 +782,24 @@ export const SalesHistory: React.FC = () => {
         const hasAnyReturnsLeft = updatedItems.some(i => (i.returnedQuantity || 0) > 0);
         const newStatus = hasAnyReturnsLeft ? 'partially_returned' : 'completed';
 
-        batch.update(saleRef, {
+        batch.set(saleRef, {
           items: updatedItems,
           status: newStatus,
           updatedAt: Timestamp.now()
-        });
+        }, { merge: true });
       } else {
-        batch.update(saleRef, {
+        batch.set(saleRef, {
           status: 'completed',
           updatedAt: Timestamp.now()
-        });
+        }, { merge: true });
       }
 
       // 4. Update return transaction record status to voided
       const returnRef = doc(db, 'returnTransactions', returnToReverse.id);
-      batch.update(returnRef, {
+      batch.set(returnRef, {
         status: 'voided',
         updatedAt: Timestamp.now()
-      });
+      }, { merge: true });
 
       await batch.commit();
 
@@ -1243,9 +1252,27 @@ export const SalesHistory: React.FC = () => {
     setDateRange(getTodayDateRange());
     setPaymentFilter(financeCashId || 'cash');
     setSearchTerm('');
+    setCurrentPage(1);
   };
 
   const clearFilters = () => clearFiltersForTab(activeTab);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchTerm, paymentFilter, dateRange.start, dateRange.end]);
+
+  const activeList = useMemo(() => {
+    if (activeTab === 'sales') return filteredSales;
+    if (activeTab === 'voids') return filteredVoids;
+    if (activeTab === 'ledger') return displayedLedger;
+    return filteredPendingSales;
+  }, [activeTab, filteredSales, filteredVoids, displayedLedger, filteredPendingSales]);
+
+  const totalPages = Math.ceil(activeList.length / pageSize) || 1;
+  const paginatedList = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return activeList.slice(start, start + pageSize);
+  }, [activeList, currentPage, pageSize]);
 
   useEffect(() => {
     if (paymentFilter === 'cash' && financeCashId !== 'cash') {
@@ -1675,7 +1702,7 @@ export const SalesHistory: React.FC = () => {
                     <TableCell colSpan={9} className="h-24 text-center text-slate-500">No transactions found.</TableCell>
                   </TableRow>
                 ) : (
-              filteredSales.map((sale) => (
+              (paginatedList as Sale[]).map((sale) => (
                 <TableRow key={sale.id} className="hover:bg-slate-50/50">
                   <TableCell className="whitespace-nowrap">
                     <div className="font-medium text-slate-900">
@@ -1696,7 +1723,7 @@ export const SalesHistory: React.FC = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs font-semibold text-slate-600">
-                    {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
+                    {usersList.find(u => u.id === sale.staffId)?.name || (sale as any).staffName || 'Staff'}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-slate-900 max-w-[200px] truncate">
@@ -1781,7 +1808,7 @@ export const SalesHistory: React.FC = () => {
                     <TableCell colSpan={8} className="h-24 text-center text-slate-500">No voided transactions found.</TableCell>
                   </TableRow>
                 ) : (
-                  filteredVoids.map((sale) => (
+                  (paginatedList as Sale[]).map((sale) => (
                     <TableRow key={sale.id} className="hover:bg-slate-50/50">
                       <TableCell className="whitespace-nowrap">
                         <div className="font-medium text-slate-900">
@@ -1796,14 +1823,14 @@ export const SalesHistory: React.FC = () => {
                       </TableCell>
                       <TableCell className="text-xs">
                         <Badge variant="secondary" className="bg-indigo-50 text-[#1A2B4B] hover:bg-slate-100 border-none">
-                          {locations.find(l => l.id === sale.locationId)?.name || sale.locationName || 'Unknown'}
+                          {locations.find(l => l.id === sale.locationId)?.name || (sale as any).locationName || 'Unknown'}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-medium text-slate-800">
                         {sale.customerDetails?.name || 'Walk-in Customer'}
                       </TableCell>
                       <TableCell className="text-slate-600 text-xs font-medium">
-                        {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
+                        {usersList.find(u => u.id === sale.staffId)?.name || (sale as any).staffName || 'Staff'}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm text-slate-900 max-w-[200px] truncate" title={sale.items?.map(i => `${i.name} (x${i.quantity})`).join(', ')}>
@@ -1851,7 +1878,7 @@ export const SalesHistory: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  displayedLedger.map((t) => {
+                  (paginatedList as any[]).map((t) => {
                     const isIncome = t.type === 'income';
                     const isExpense = t.type === 'expense';
                     const isTransfer = t.type === 'transfer';
@@ -1939,7 +1966,7 @@ export const SalesHistory: React.FC = () => {
                     <TableCell colSpan={9} className="h-24 text-center text-slate-500">No pending payments found.</TableCell>
                   </TableRow>
                 ) : (
-                  filteredPendingSales.map((sale) => (
+                  (paginatedList as Sale[]).map((sale) => (
                     <TableRow key={sale.id} className="hover:bg-slate-50/50">
                       <TableCell className="whitespace-nowrap">
                         <div className="font-medium text-slate-900">
@@ -1960,7 +1987,7 @@ export const SalesHistory: React.FC = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs font-semibold text-slate-600">
-                        {usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff'}
+                        {usersList.find(u => u.id === sale.staffId)?.name || (sale as any).staffName || 'Staff'}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm text-slate-900 max-w-[200px] truncate">
@@ -1986,6 +2013,18 @@ export const SalesHistory: React.FC = () => {
             </>
           )}
         </Table>
+
+        <DataTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          totalItems={activeList.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={size => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
       </div>
     </div>
 
@@ -2728,3 +2767,5 @@ export const SalesHistory: React.FC = () => {
     </div>
   );
 };
+
+export default SalesHistory;

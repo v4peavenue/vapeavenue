@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -8,23 +8,22 @@ import { TooltipProvider } from './components/ui/tooltip';
 import ErrorBoundary from './components/ErrorBoundary';
 import { Layout } from './components/Layout';
 
-// Lazy load page components for bundle size & loading performance optimization
-const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
-const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
-const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
-const Inventory = lazy(() => import('./pages/Inventory').then(m => ({ default: m.Inventory })));
-const POS = lazy(() => import('./pages/POS').then(m => ({ default: m.POS })));
-const SalesHistory = lazy(() => import('./pages/SalesHistory').then(m => ({ default: m.SalesHistory })));
-const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
-const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
-const Purchasing = lazy(() => import('./pages/Purchasing').then(m => ({ default: m.Purchasing })));
-const Directory = lazy(() => import('./pages/Directory').then(m => ({ default: m.Directory })));
-const Finance = lazy(() => import('./pages/Finance').then(m => ({ default: m.Finance })));
-const Attendance = lazy(() => import('./pages/Attendance').then(m => ({ default: m.Attendance })));
+import { Login } from './pages/Login';
+import { Home } from './pages/Home';
+import { Dashboard } from './pages/Dashboard';
+import { Inventory } from './pages/Inventory';
+import { POS } from './pages/POS';
+import { SalesHistory } from './pages/SalesHistory';
+import { Reports } from './pages/Reports';
+import { Settings } from './pages/Settings';
+import { Purchasing } from './pages/Purchasing';
+import { Directory } from './pages/Directory';
+import { Finance } from './pages/Finance';
+import { Attendance } from './pages/Attendance';
 
 const PageLoader = (
   <div className="min-h-screen flex items-center justify-center bg-[#FDFCF8]">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1A2B4B]"></div>
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1C2D4E]"></div>
   </div>
 );
 

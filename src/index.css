@@ -52,29 +52,29 @@
 
 :root {
     --background: #FDFCF8; /* Warm off-white */
-    --foreground: #1A2B4B; /* Deep Indigo */
+    --foreground: #1C2D4E; /* Agos Navy */
     --card: #FFFFFF;
-    --card-foreground: #1A2B4B;
+    --card-foreground: #1C2D4E;
     --popover: #FFFFFF;
-    --popover-foreground: #1A2B4B;
-    --primary: #1A2B4B; /* Deep Indigo */
+    --popover-foreground: #1C2D4E;
+    --primary: #1C2D4E; /* Agos Navy */
     --primary-foreground: #FDFCF8;
     --secondary: #F5F2ED;
-    --secondary-foreground: #A0522D; /* Warm Wood */
+    --secondary-foreground: #D4AF37; /* Agos Gold */
     --muted: #F5F2ED;
     --muted-foreground: #64748B;
     --accent: #FDFCF8;
-    --accent-foreground: #1A2B4B;
+    --accent-foreground: #1C2D4E;
     --destructive: #991B1B;
     --border: #E5E1DA;
     --input: #E5E1DA;
-    --ring: #1A2B4B;
-    --radius: 0.5rem;
+    --ring: #1C2D4E;
+    --radius: 0.75rem;
     
-    --sidebar: #1A2B4B;
+    --sidebar: #1C2D4E;
     --sidebar-foreground: #FDFCF8;
     --sidebar-primary: #D4AF37; /* Gold/Brass */
-    --sidebar-primary-foreground: #1A2B4B;
+    --sidebar-primary-foreground: #1C2D4E;
     --sidebar-accent: rgba(255, 255, 255, 0.1);
     --sidebar-accent-foreground: #FDFCF8;
     --sidebar-border: rgba(255, 255, 255, 0.1);

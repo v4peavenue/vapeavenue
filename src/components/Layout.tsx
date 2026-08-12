@@ -35,7 +35,7 @@ import { Badge } from '@/components/ui/badge';
 
 const navItems = [
   { name: 'Home', path: '/home', icon: HomeIcon, roles: ['admin', 'manager', 'staff'] },
-  { name: 'POS', path: '/pos', icon: ShoppingCart, roles: ['admin', 'manager', 'staff'] },
+  { name: 'POS Register', path: '/pos', icon: ShoppingCart, roles: ['admin', 'manager', 'staff'] },
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'] },
   { name: 'Inventory', path: '/inventory', icon: Package, roles: ['admin', 'manager', 'staff'] },
   { name: 'Purchasing', path: '/purchasing', icon: ShoppingCart, roles: ['admin', 'manager'] },
@@ -267,49 +267,248 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isHomePage = location.pathname === '/' || location.pathname === '/home';
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Desktop Sidebar (Hidden on Home page) */}
+    <div className="min-h-screen flex flex-col bg-slate-100/80 font-sans relative overflow-x-hidden">
+      {/* Background Stylized Agos Shapes (Navy & Gold ambient theme glow) */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#1C2D4E] rounded-full mix-blend-multiply opacity-20 filter blur-2xl" />
+        <div className="absolute top-1/3 -right-20 w-80 h-80 bg-[#D4AF37] rounded-full mix-blend-multiply opacity-15 filter blur-3xl" />
+        <div className="absolute -bottom-28 left-1/4 w-[500px] h-[500px] bg-indigo-900/15 rounded-full filter blur-3xl" />
+      </div>
+
+      {/* Top Header Navigation Bar (Hidden on Home page) */}
       {!isHomePage && (
-        <aside className="hidden md:flex md:w-64 md:flex-col fixed inset-y-0 z-20">
-          <NavContent />
-        </aside>
+        <header className="sticky top-0 z-40 w-full bg-[#1C2D4E] text-[#FDFCF8] border-b border-[#D4AF37]/25 shadow-xl shadow-[#1C2D4E]/15 backdrop-blur-md">
+          <div className="w-full px-3 sm:px-4 lg:px-6">
+            <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
+              
+              {/* Left: Brand Logo */}
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                <Link to="/home" className="flex items-center gap-2 group">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-[#1C2D4E] to-[#15233D] border border-[#D4AF37]/40 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-md shadow-black/20 group-hover:scale-105 transition-transform">
+                    <Waves className="w-4 h-4 sm:w-5 sm:h-5 text-[#D4AF37]" />
+                  </div>
+                  <div className="flex flex-col hidden sm:flex">
+                    <span className="text-base sm:text-lg font-extrabold tracking-tight font-heading leading-none text-white">AGOS</span>
+                    <span className="text-[7px] text-[#D4AF37] font-black tracking-widest uppercase mt-0.5 opacity-90 whitespace-nowrap">Local-First ERP</span>
+                  </div>
+                </Link>
+              </div>
+
+              {/* Center: Inline Navigation Links directly inside Dark Header */}
+              <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+                {navItems
+                  .filter(item => {
+                    const currentRole = isAdmin ? 'admin' : (profile?.role || 'staff');
+                    return item.roles.includes(currentRole as any) || 
+                           (isManager && item.roles.includes('manager')) ||
+                           (isAdmin && item.roles.includes('admin'));
+                  })
+                  .map((item) => {
+                    const isActive = location.pathname === item.path;
+                    const displayName = (item.path === '/settings' && !isAdmin) ? 'Profile' : item.name;
+
+                    const showPendingBadge = item.path === '/sales' && (isAdmin || isManager) && pendingCount > 0;
+                    const showPromoDot = isAdmin && item.path === '/sales' && pendingPromoCount > 0;
+                    const showPendingRequestBadge = item.path === '/attendance' && (isAdmin || isManager) && pendingRequestsCount > 0;
+
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={cn(
+                          "flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-extrabold transition-all duration-150 whitespace-nowrap relative shrink-0",
+                          isActive 
+                            ? "bg-[#D4AF37] text-[#1C2D4E] shadow-md shadow-[#D4AF37]/25" 
+                            : "text-slate-200 hover:text-white hover:bg-white/10"
+                        )}
+                      >
+                        <item.icon className={cn("w-3.5 h-3.5", isActive ? "text-[#1C2D4E] stroke-[2.5px]" : "text-[#D4AF37]")} />
+                        <span>{displayName}</span>
+
+                        {showPromoDot && (
+                          <span className="w-2 h-2 bg-rose-500 rounded-full animate-pulse ml-0.5" />
+                        )}
+                        {showPendingBadge && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full shadow-xs">
+                            {pendingCount}
+                          </span>
+                        )}
+                        {showPendingRequestBadge && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-black bg-rose-500 text-white rounded-full shadow-xs">
+                            {pendingRequestsCount}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+              </nav>
+
+              {/* Right: Location Selector, Status & User Profile */}
+              <div className="hidden sm:flex items-center gap-2 shrink-0">
+                {/* Location Select */}
+                <div className="w-28 sm:w-32 lg:w-36">
+                  <Select 
+                    value={selectedLocationId} 
+                    onValueChange={setSelectedLocationId}
+                    disabled={!isAdmin && !isManager}
+                  >
+                    <SelectTrigger className="w-full bg-white/10 border border-white/20 h-8 rounded-full text-xs font-semibold text-white hover:bg-white/15 transition-colors px-3">
+                      <SelectValue>
+                        {selectedLocationId === 'all' ? 'All Locations' : (locations.find(l => l.id === selectedLocationId)?.name || 'Select Location')}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="bg-[#1C2D4E] text-white border-white/20 rounded-xl">
+                      {(isAdmin || isManager) && <SelectItem value="all">All Locations</SelectItem>}
+                      {locations.map(loc => (
+                        <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Offline / Synced Badge */}
+                {isOnline ? (
+                  <Badge variant="outline" className="h-7 bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[9px] font-extrabold px-2.5 rounded-full flex items-center gap-1.5">
+                    <Wifi className="w-3 h-3 text-emerald-400" />
+                    <span className="hidden xl:inline">SYNCED</span>
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="h-7 bg-amber-500/20 text-amber-300 border-amber-500/30 text-[9px] font-extrabold px-2.5 rounded-full flex items-center gap-1.5">
+                    <WifiOff className="w-3 h-3 text-amber-400" />
+                    <span className="hidden xl:inline">OFFLINE</span>
+                  </Badge>
+                )}
+
+                {/* User Dropdown / Logout */}
+                <div className="flex items-center gap-2 pl-2 border-l border-white/15">
+                  <div className="text-right hidden md:block">
+                    <p className="text-xs font-bold text-white truncate leading-tight max-w-[120px]">{profile?.name || user?.email?.split('@')[0]}</p>
+                    <p className="text-[9px] text-[#D4AF37] font-black uppercase tracking-wider">{isAdmin ? 'Admin' : (profile?.role || 'Staff')}</p>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-8 w-8 text-slate-300 hover:text-rose-300 hover:bg-rose-500/20 rounded-full transition-colors"
+                    onClick={handleLogout}
+                    title="Logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Mobile Menu Trigger */}
+              <div className="flex items-center gap-2 lg:hidden">
+                <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+                  <SheetTrigger render={<Button variant="ghost" className="text-white h-9 w-9 hover:bg-white/10 p-0 flex items-center justify-center rounded-full" />}>
+                    <Menu className="w-5 h-5" />
+                  </SheetTrigger>
+                  <SheetContent side="top" className="p-0 bg-[#1C2D4E] text-white border-b border-[#D4AF37]/30 max-h-[85vh] overflow-y-auto">
+                    <div className="p-4 space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                        <div className="flex items-center gap-2">
+                          <Waves className="w-5 h-5 text-[#D4AF37]" />
+                          <span className="font-extrabold text-lg font-heading text-white">AGOS ERP</span>
+                        </div>
+                        <Badge variant="outline" className="bg-white/10 text-[#D4AF37] border-white/20 text-xs font-bold rounded-full px-3">
+                          {profile?.role || 'Staff'}
+                        </Badge>
+                      </div>
+
+                      {/* Location Selector Mobile */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-white/50 font-bold uppercase tracking-wider">Store Location</label>
+                        <Select 
+                          value={selectedLocationId} 
+                          onValueChange={setSelectedLocationId}
+                          disabled={!isAdmin && !isManager}
+                        >
+                          <SelectTrigger className="w-full bg-white/10 border-white/10 text-xs text-white rounded-xl">
+                            <SelectValue>
+                              {selectedLocationId === 'all' ? 'All Locations' : (locations.find(l => l.id === selectedLocationId)?.name || 'Select Location')}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="bg-[#1C2D4E] text-white border-white/10">
+                            {(isAdmin || isManager) && <SelectItem value="all">All Locations</SelectItem>}
+                            {locations.map(loc => (
+                              <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Mobile Navigation Links */}
+                      <div className="grid grid-cols-2 gap-2 pt-2">
+                        {navItems
+                          .filter(item => {
+                            const currentRole = isAdmin ? 'admin' : (profile?.role || 'staff');
+                            return item.roles.includes(currentRole as any) || 
+                                   (isManager && item.roles.includes('manager')) ||
+                                   (isAdmin && item.roles.includes('admin'));
+                          })
+                          .map((item) => {
+                            const isActive = location.pathname === item.path;
+                            const displayName = (item.path === '/settings' && !isAdmin) ? 'Profile' : item.name;
+
+                            return (
+                              <Link
+                                key={item.path}
+                                to={item.path}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className={cn(
+                                  "flex items-center gap-2 px-3.5 py-2.5 rounded-full text-xs font-extrabold transition-colors",
+                                  isActive 
+                                    ? "bg-[#D4AF37] text-[#1C2D4E] shadow-md font-black" 
+                                    : "bg-white/5 text-white/80 hover:bg-white/10"
+                                )}
+                              >
+                                <item.icon className={cn("w-4 h-4", isActive ? "text-[#1C2D4E]" : "text-[#D4AF37]")} />
+                                <span>{displayName}</span>
+                              </Link>
+                            );
+                          })}
+                      </div>
+
+                      {/* Logout Button Mobile */}
+                      <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+                        <span className="text-xs text-slate-300 font-medium">{profile?.name || user?.email}</span>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-rose-300 hover:text-rose-100 hover:bg-rose-500/20 text-xs gap-1.5 rounded-full"
+                          onClick={handleLogout}
+                        >
+                          <LogOut className="w-3.5 h-3.5" /> Logout
+                        </Button>
+                      </div>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+
+            </div>
+          </div>
+        </header>
       )}
 
-      {/* Main Content */}
-      <div className={cn("flex-1 flex flex-col min-h-screen", !isHomePage && "md:pl-64")}>
-        {/* Mobile Header (Hidden on Home page) */}
-        {!isHomePage && (
-          <header className="md:hidden h-16 bg-primary border-b border-white/10 flex items-center justify-between px-4 sticky top-0 z-30">
-            <div className="flex items-center gap-2">
-              <Waves className="w-6 h-6 text-sidebar-primary" />
-              <span className="font-bold text-white font-heading text-xl">Agos</span>
-            </div>
-            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-              <SheetTrigger render={<Button variant="ghost" className="text-white h-11 w-11 hover:bg-white/10 flex items-center justify-center p-0" />}>
-                <Menu className="w-6 h-6" />
-              </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-64 border-none">
-                <NavContent />
-              </SheetContent>
-            </Sheet>
-          </header>
-        )}
-
-        <main className="flex-1 relative overflow-x-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className={cn("p-3 md:p-5 lg:p-6", isHomePage && "p-0 md:p-0 lg:p-0")}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
-        </main>
-      </div>
+      {/* Main Page Content */}
+      <main className="flex-1 relative">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -10, filter: 'blur(4px)' }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className={cn(
+              "w-full",
+              !isHomePage && "p-3 sm:p-5 lg:p-6 max-w-7xl mx-auto"
+            )}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
+      </main>
     </div>
   );
 };
