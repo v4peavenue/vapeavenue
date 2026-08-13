@@ -133,6 +133,7 @@ export const SalesHistory: React.FC = () => {
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
   const [activeTab, setActiveTab] = useState<'sales' | 'voids' | 'pending' | 'ledger'>('ledger');
+  const [ledgerLimit, setLedgerLimit] = useState<number>(300);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [rawFinancialTransactions, setRawFinancialTransactions] = useState<any[]>([]);
@@ -251,7 +252,7 @@ export const SalesHistory: React.FC = () => {
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'financialTransactions'), orderBy('timestamp', 'desc'), limit(300));
+    const q = query(collection(db, 'financialTransactions'), orderBy('timestamp', 'desc'), limit(ledgerLimit));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -265,7 +266,7 @@ export const SalesHistory: React.FC = () => {
       console.warn("Ledger error loading financial transactions:", error);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile?.id]);
+  }, [selectedLocationId, profile?.id, ledgerLimit]);
 
   const getPaymentMethodName = React.useCallback((id: string, splits?: any[]) => {
     if (!id) return '';

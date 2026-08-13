@@ -6,6 +6,7 @@ import {
   query, 
   orderBy, 
   limit,
+  where,
   Timestamp,
   doc,
   updateDoc,
@@ -105,6 +106,8 @@ export const Finance: React.FC = () => {
   }, [isAdmin]);
 
   // Expense tab form state
+  const [transLimit, setTransLimit] = useState<number>(300);
+  const [dateRange, setDateRange] = useState<{ startDate: string; endDate: string } | null>(null);
   const [expenseAmount, setExpenseAmount] = useState<number>(0);
   const [expenseAccountId, setExpenseAccountId] = useState<string>('');
   const [expenseLocationId, setExpenseLocationId] = useState<string>('');
@@ -153,11 +156,24 @@ export const Finance: React.FC = () => {
         console.warn("Finance: Error listening to accounts:", error);
       });
 
-      const qTrans = query(
-        collection(db, 'financialTransactions'),
-        orderBy('timestamp', 'desc'),
-        limit(300)
-      );
+      let qTrans;
+      if (dateRange?.startDate && dateRange?.endDate) {
+        const startTs = Timestamp.fromDate(new Date(`${dateRange.startDate}T00:00:00`));
+        const endTs = Timestamp.fromDate(new Date(`${dateRange.endDate}T23:59:59`));
+        qTrans = query(
+          collection(db, 'financialTransactions'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc'),
+          limit(2000)
+        );
+      } else {
+        qTrans = query(
+          collection(db, 'financialTransactions'),
+          orderBy('timestamp', 'desc'),
+          limit(transLimit)
+        );
+      }
       unsubTrans = onSnapshot(qTrans, (snapshot) => {
         const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
         
@@ -165,6 +181,12 @@ export const Finance: React.FC = () => {
         const seenKeys = new Set<string>();
 
         for (const t of list as any[]) {
+          // Keep all non-sale expense transactions by unique document ID
+          if (t.type === 'expense' && !t.saleId) {
+            deduplicated.push(t as Transaction);
+            continue;
+          }
+
           const refKey = (t.saleId || t.reference || t.description?.match(/#([a-zA-Z0-9]{8})/)?.[1] || '').substring(0, 8);
           const timeMin = t.timestamp?.seconds ? Math.floor(t.timestamp.seconds / 300) : 0;
           
@@ -222,7 +244,7 @@ export const Finance: React.FC = () => {
       unsubTrans();
       unsubLogs();
     };
-  }, [profile?.id, user?.uid, isAdmin, isManager]);
+  }, [profile?.id, user?.uid, isAdmin, isManager, transLimit, dateRange]);
 
   const getAccountIcon = (type: string) => {
     switch (type) {
@@ -954,7 +976,22 @@ export const Finance: React.FC = () => {
       )}
 
       {activeTab === 'expenses' && (
-        <ExpensesTab accounts={accounts} transactions={transactions} />
+        <ExpensesTab 
+          accounts={accounts} 
+          transactions={transactions} 
+          transLimit={transLimit}
+          dateRange={dateRange}
+          onApplyDateRange={(startDate, endDate) => setDateRange({ startDate, endDate })}
+          onResetDateRange={() => {
+            setDateRange(null);
+            setTransLimit(300);
+          }}
+          onExpandLimit={() => setTransLimit(1500)}
+          onResetLimit={() => {
+            setDateRange(null);
+            setTransLimit(300);
+          }}
+        />
       )}
 
       {activeTab === 'transfers' && isAdmin && (
