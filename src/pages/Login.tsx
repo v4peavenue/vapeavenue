@@ -125,10 +125,25 @@ export const Login: React.FC = () => {
       navigate('/');
     } catch (error: any) {
       console.error("Login failed:", error);
-      toast.error(`Login failed: ${error.message || 'Unknown error'}`);
-      if (error.code === 'auth/network-request-failed' || error.message?.includes('network') || error.message?.includes('auth/')) {
-        toast.info("Network error caught. You can easily bypass this by logging in using Offline Mode below.");
+      const isPopupClosed = error.code === 'auth/popup-closed-by-user' || 
+                            error.code === 'auth/cancelled-popup-request' || 
+                            error.message?.includes('popup-closed-by-user');
+      const isPopupBlocked = error.code === 'auth/popup-blocked' || 
+                             error.message?.includes('popup-blocked');
+      const isNetworkError = error.code === 'auth/network-request-failed' || 
+                             error.message?.toLowerCase().includes('network');
+
+      if (isPopupClosed) {
+        toast.info("Sign-in popup was closed before completing.");
+      } else if (isPopupBlocked) {
+        toast.warning("Sign-in popup was blocked by your browser. Please allow popups or try Offline Mode.");
         setShowOffline(true);
+      } else if (isNetworkError) {
+        toast.error("Network error connecting to authentication service.");
+        toast.info("You can easily bypass this by logging in using Offline Mode below.");
+        setShowOffline(true);
+      } else {
+        toast.error(`Login failed: ${error.message || 'Unknown error'}`);
       }
     } finally {
       setLoading(false);

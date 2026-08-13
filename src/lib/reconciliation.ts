@@ -274,22 +274,50 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
     let invOps = 0;
 
     for (const sale of sales) {
+      // Case A: Active sales that were marked as stockDeducted: false -> deduct inventory
       if ((!sale.status || sale.status === 'completed' || sale.status === 'returned' || sale.status === 'partially_returned') && sale.stockDeducted === false) {
         for (const item of sale.items || []) {
           if (!item.productId) continue;
           const productRef = doc(db, 'products', item.productId);
-          invBatch.update(productRef, {
+          const stockUpdates: Record<string, any> = {
             stock: increment(-item.quantity),
-            [`stocks.${sale.locationId}`]: increment(-item.quantity),
             updatedAt: Timestamp.now()
-          });
+          };
+          if (sale.locationId) {
+            stockUpdates[`stocks.${sale.locationId}`] = increment(-item.quantity);
+          }
+          invBatch.set(productRef, stockUpdates, { merge: true });
           invOps++;
         }
         const saleRef = doc(db, 'sales', sale.id);
-        invBatch.update(saleRef, {
+        invBatch.set(saleRef, {
           stockDeducted: true,
           updatedAt: Timestamp.now()
-        });
+        }, { merge: true });
+        invOps++;
+        repairedInventory++;
+      }
+      
+      // Case B: Voided sales that still have stockDeducted !== false -> restore inventory
+      if (sale.status === 'voided' && sale.stockDeducted !== false) {
+        for (const item of sale.items || []) {
+          if (!item.productId) continue;
+          const productRef = doc(db, 'products', item.productId);
+          const stockUpdates: Record<string, any> = {
+            stock: increment(item.quantity),
+            updatedAt: Timestamp.now()
+          };
+          if (sale.locationId) {
+            stockUpdates[`stocks.${sale.locationId}`] = increment(item.quantity);
+          }
+          invBatch.set(productRef, stockUpdates, { merge: true });
+          invOps++;
+        }
+        const saleRef = doc(db, 'sales', sale.id);
+        invBatch.set(saleRef, {
+          stockDeducted: false,
+          updatedAt: Timestamp.now()
+        }, { merge: true });
         invOps++;
         repairedInventory++;
       }

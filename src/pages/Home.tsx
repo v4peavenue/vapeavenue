@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'motion/react';
+import { cn } from '@/lib/utils';
 
 export const Home: React.FC = () => {
   const { profile, user } = useAuth();
@@ -318,11 +319,11 @@ export const Home: React.FC = () => {
           </div>
         </div>
 
-        {/* Operational Modules Directory Grid */}
-        <div className="space-y-4 pt-2">
+        {/* Operational Modules Horizontal Icon Strip */}
+        <div className="space-y-3 pt-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-xl font-extrabold text-slate-900 font-heading tracking-tight">
+              <h2 className="text-lg font-extrabold text-slate-900 font-heading tracking-tight">
                 Store Modules & Services
               </h2>
               <p className="text-xs text-slate-500">
@@ -331,46 +332,30 @@ export const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="bg-white/90 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-start lg:justify-center gap-3 sm:gap-6 overflow-x-auto custom-scrollbar">
             {availableModules.map((mod) => {
               const Icon = mod.icon;
               return (
-                <Card 
+                <button
                   key={mod.path}
-                  className="group relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl border border-slate-200/80 bg-white rounded-2xl"
+                  onClick={() => navigate(mod.path)}
+                  title={`${mod.title} - ${mod.description}`}
+                  className="group flex flex-col items-center gap-2 shrink-0 p-1.5 sm:p-2 rounded-2xl hover:bg-slate-100/80 transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1C2D4E]/20"
                 >
-                  {/* Subtle Accent Color Top Bar */}
-                  <div className={`h-1.5 w-full bg-gradient-to-r ${mod.accentColor}`} />
-
-                  <CardHeader className="pb-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className={`p-3 rounded-2xl bg-gradient-to-br ${mod.accentColor} text-white shadow-md`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      {mod.badge && (
-                        <Badge variant="outline" className="text-[10px] font-bold border-emerald-300 bg-emerald-50 text-emerald-800">
-                          {mod.badge}
-                        </Badge>
-                      )}
-                    </div>
-                    <CardTitle className="text-base font-extrabold text-slate-900 group-hover:text-[#1C2D4E] transition-colors">
-                      {mod.title}
-                    </CardTitle>
-                  </CardHeader>
-
-                  <CardContent className="space-y-4">
-                    <CardDescription className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                      {mod.description}
-                    </CardDescription>
-
-                    <Button 
-                      onClick={() => navigate(mod.path)}
-                      className="w-full rounded-xl bg-slate-100 hover:bg-[#1C2D4E] hover:text-white text-slate-800 font-bold text-xs gap-2 transition-all h-9"
-                    >
-                      Open Module <ArrowRight className="w-3.5 h-3.5" />
-                    </Button>
-                  </CardContent>
-                </Card>
+                  <div className={cn(
+                    "w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br",
+                    mod.accentColor,
+                    "text-white flex items-center justify-center shadow-md shadow-slate-200 group-hover:scale-110 group-hover:shadow-lg transition-all duration-200 relative"
+                  )}>
+                    <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
+                    {mod.badge && (
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" title={mod.badge} />
+                    )}
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-700 group-hover:text-[#1C2D4E] transition-colors max-w-[84px] text-center truncate">
+                    {mod.title}
+                  </span>
+                </button>
               );
             })}
           </div>
