@@ -45,6 +45,8 @@ import {
   SelectValue 
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { ProductForm } from '@/components/ProductForm';
 import { StockAdjustmentForm } from '@/components/StockAdjustmentForm';
 import { StockTransferForm } from '@/components/StockTransferForm';
@@ -72,6 +74,7 @@ export const Inventory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [brandFilter, setBrandFilter] = useState('all');
+  const [excludeZeroStock, setExcludeZeroStock] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isAdjustmentOpen, setIsAdjustmentOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
@@ -193,12 +196,24 @@ export const Inventory: React.FC = () => {
                             (p.locationIds && p.locationIds.includes(selectedLocationId)) ||
                             (p.stocks && p.stocks[selectedLocationId] !== undefined && Number(p.stocks[selectedLocationId]) > 0);
     
-    return matchesSearch && matchesCategory && matchesBrand && matchesLocation;
+    const stock = getDisplayStock(p);
+    const matchesZeroStock = !excludeZeroStock || stock > 0;
+    
+    return matchesSearch && matchesCategory && matchesBrand && matchesLocation && matchesZeroStock;
   });
+
+  const zeroStockCount = visibleProducts.filter(p => {
+    const matchesCategory = categoryFilter === 'all' || p.category === categoryFilter;
+    const matchesBrand = brandFilter === 'all' || p.brand === brandFilter;
+    const matchesLocation = selectedLocationId === 'all' || 
+                            (p.locationIds && p.locationIds.includes(selectedLocationId)) ||
+                            (p.stocks && p.stocks[selectedLocationId] !== undefined && Number(p.stocks[selectedLocationId]) > 0);
+    return matchesCategory && matchesBrand && matchesLocation && getDisplayStock(p) <= 0;
+  }).length;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, categoryFilter, brandFilter, selectedLocationId]);
+  }, [searchTerm, categoryFilter, brandFilter, selectedLocationId, excludeZeroStock]);
 
   const totalPages = Math.ceil(filteredProducts.length / pageSize) || 1;
   const paginatedProducts = filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -243,7 +258,7 @@ export const Inventory: React.FC = () => {
         )}
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center gap-3">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
@@ -253,9 +268,9 @@ export const Inventory: React.FC = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-full sm:w-[160px] bg-white/50 border-slate-200">
+            <SelectTrigger className="w-full sm:w-[150px] bg-white/50 border-slate-200">
               <SelectValue placeholder="Category">
                 {categoryFilter === 'all' ? 'All Categories' : categoryFilter}
               </SelectValue>
@@ -268,7 +283,7 @@ export const Inventory: React.FC = () => {
             </SelectContent>
           </Select>
           <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="w-full sm:w-[160px] bg-white/50 border-slate-200">
+            <SelectTrigger className="w-full sm:w-[150px] bg-white/50 border-slate-200">
               <SelectValue placeholder="Brand">
                 {brandFilter === 'all' ? 'All Brands' : brandFilter}
               </SelectValue>
@@ -280,6 +295,23 @@ export const Inventory: React.FC = () => {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-2.5 px-3 py-2 bg-white/70 border border-slate-200 rounded-md shadow-2xs shrink-0 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center gap-2">
+              <Switch 
+                id="exclude-zero-stock"
+                checked={excludeZeroStock}
+                onCheckedChange={setExcludeZeroStock}
+              />
+              <Label htmlFor="exclude-zero-stock" className="text-xs font-semibold text-slate-700 cursor-pointer whitespace-nowrap">
+                Exclude Zero Stock
+              </Label>
+            </div>
+            {zeroStockCount > 0 && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-bold bg-slate-100 text-slate-500 border border-slate-200/60 ml-auto sm:ml-0">
+                {zeroStockCount} out
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 
@@ -304,8 +336,27 @@ export const Inventory: React.FC = () => {
               </TableRow>
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-slate-500">
-                  {searchTerm ? 'No products found matching your search.' : 'No products in inventory yet.'}
+                <TableCell colSpan={8} className="h-32 text-center text-slate-500">
+                  <div className="flex flex-col items-center justify-center gap-2 py-4">
+                    <Package className="w-8 h-8 text-slate-300" />
+                    <p className="text-sm font-medium text-slate-600">
+                      {searchTerm 
+                        ? 'No products found matching your search.' 
+                        : excludeZeroStock && zeroStockCount > 0 
+                          ? 'No in-stock products found matching selected filters.' 
+                          : 'No products in inventory yet.'}
+                    </p>
+                    {excludeZeroStock && zeroStockCount > 0 && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-xs h-8 text-slate-700 hover:text-slate-900 border-slate-200 mt-1"
+                        onClick={() => setExcludeZeroStock(false)}
+                      >
+                        Show {zeroStockCount} out-of-stock {zeroStockCount === 1 ? 'item' : 'items'}
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -489,8 +540,25 @@ export const Inventory: React.FC = () => {
             Loading interactive inventory...
           </div>
         ) : filteredProducts.length === 0 ? (
-          <div className="bg-white/80 p-8 rounded-2xl border border-slate-200 text-center text-slate-500">
-            {searchTerm ? 'No products found matching search.' : 'No products in inventory yet.'}
+          <div className="bg-white/80 p-8 rounded-2xl border border-slate-200 text-center text-slate-500 flex flex-col items-center justify-center gap-2">
+            <Package className="w-8 h-8 text-slate-300" />
+            <p className="text-sm font-medium text-slate-600">
+              {searchTerm 
+                ? 'No products found matching search.' 
+                : excludeZeroStock && zeroStockCount > 0 
+                  ? 'No in-stock products found matching selected filters.' 
+                  : 'No products in inventory yet.'}
+            </p>
+            {excludeZeroStock && zeroStockCount > 0 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs h-8 text-slate-700 hover:text-slate-900 border-slate-200 mt-1"
+                onClick={() => setExcludeZeroStock(false)}
+              >
+                Show {zeroStockCount} out-of-stock {zeroStockCount === 1 ? 'item' : 'items'}
+              </Button>
+            )}
           </div>
         ) : (
           <>

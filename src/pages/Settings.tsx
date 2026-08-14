@@ -58,6 +58,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
 export const Settings: React.FC = () => {
@@ -1582,60 +1583,61 @@ export const Settings: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="users">
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="border-none shadow-sm bg-white/50 backdrop-blur-sm">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl">Invite User</CardTitle>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <Card className="lg:col-span-4 border-none shadow-sm bg-white/50 backdrop-blur-sm h-fit">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl font-bold text-slate-900">Invite User</CardTitle>
                 <CardDescription>Send an invitation to join the application.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSendInvite} className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Email Address</Label>
+                    <Label className="text-xs font-semibold text-slate-700">Email Address</Label>
                     <Input 
                       type="email"
                       value={newInvite.email}
                       onChange={(e) => setNewInvite({ ...newInvite, email: e.target.value })}
                       placeholder="e.g. colleague@example.com"
+                      className="bg-white border-slate-200"
                       required
                     />
                   </div>
-                    <div className="space-y-2">
-                      <Label>Role</Label>
-                      <Select 
-                        value={newInvite.role} 
-                        onValueChange={(v: 'admin' | 'manager' | 'staff') => setNewInvite({ ...newInvite, role: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Administrator</SelectItem>
-                          <SelectItem value="manager">Manager</SelectItem>
-                          <SelectItem value="staff">Staff</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Assigned Location</Label>
-                      <Select 
-                        value={newInvite.locationId} 
-                        onValueChange={(v) => setNewInvite({ ...newInvite, locationId: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a location">
-                            {newInvite.locationId === 'none' ? 'No specific location' : (locations.find(l => l.id === newInvite.locationId)?.name || 'Select a location')}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No specific location</SelectItem>
-                          {locations.map(loc => (
-                            <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  <Button type="submit" className="w-full gap-2">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-slate-700">Role</Label>
+                    <Select 
+                      value={newInvite.role} 
+                      onValueChange={(v: 'admin' | 'manager' | 'staff') => setNewInvite({ ...newInvite, role: v })}
+                    >
+                      <SelectTrigger className="bg-white border-slate-200">
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Administrator</SelectItem>
+                        <SelectItem value="manager">Manager</SelectItem>
+                        <SelectItem value="staff">Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-slate-700">Assigned Location</Label>
+                    <Select 
+                      value={newInvite.locationId} 
+                      onValueChange={(v) => setNewInvite({ ...newInvite, locationId: v })}
+                    >
+                      <SelectTrigger className="bg-white border-slate-200">
+                        <SelectValue placeholder="Select a location">
+                          {newInvite.locationId === 'none' ? 'No specific location' : (locations.find(l => l.id === newInvite.locationId)?.name || 'Select a location')}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No specific location</SelectItem>
+                        {locations.map(loc => (
+                          <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full gap-2 bg-[#1A2B4B] hover:bg-[#1A2B4B]/90 text-white font-medium">
                     <Mail className="w-4 h-4" />
                     Send Invitation
                   </Button>
@@ -1643,111 +1645,196 @@ export const Settings: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-none shadow-sm">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl">Active Users & Invites</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
+            <Card className="lg:col-span-8 border-none shadow-sm bg-white">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Users</h4>
-                    <div className="space-y-2">
-                      {users.map(u => (
-                        <div key={u.id} className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl border border-border">
-                          <div>
-                            <p className="font-bold text-primary">{u.name || 'Unnamed User'}</p>
-                            <p className="text-xs text-muted-foreground">{u.email}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Select 
-                              value={u.locationId || 'none'} 
-                              onValueChange={(v: string) => handleUpdateUser(u.id, { locationId: v === 'none' ? deleteField() as any : v })}
-                            >
-                              <SelectTrigger className="w-[120px] h-8 text-[10px] bg-white">
-                                <SelectValue placeholder="Location">
-                                  {u.locationId ? (locations.find(l => l.id === u.locationId)?.name || 'Location') : 'No Location'}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">No Location</SelectItem>
-                                {locations.map(loc => (
-                                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Select 
-                              value={u.role} 
-                              onValueChange={(v: 'admin' | 'manager' | 'staff') => handleUpdateUser(u.id, { role: v })}
-                              disabled={u.id === profile?.id}
-                            >
-                              <SelectTrigger className="w-[100px] h-8 text-[10px] bg-white">
-                                <SelectValue>
-                                  {u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : ''}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="manager">Manager</SelectItem>
-                                <SelectItem value="staff">Staff</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-8 text-xs font-bold gap-1 text-[#1A2B4B] hover:bg-slate-100"
-                              onClick={() => setEditingUser(u)}
-                            >
-                              <Edit2 className="w-3.5 h-3.5" /> Edit Account
-                            </Button>
-                            {u.id !== profile?.id && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete('users', u.id);
-                                }}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <CardTitle className="text-xl font-bold text-slate-900">Active Users & Invites</CardTitle>
+                    <CardDescription>Manage user permissions, roles, and branch assignments.</CardDescription>
+                  </div>
+                  <Badge variant="secondary" className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100">
+                    {users.length} {users.length === 1 ? 'User' : 'Users'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">System Users</h4>
+                  </div>
+                  <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-xs bg-white">
+                    <Table>
+                      <TableHeader className="bg-slate-50/90">
+                        <TableRow className="hover:bg-transparent border-slate-200/80">
+                          <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-3">User</TableHead>
+                          <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-3">Branch Location</TableHead>
+                          <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-3">Role</TableHead>
+                          <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-3 text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {users.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="h-24 text-center text-slate-500 italic">
+                              No users found.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          users.map(u => {
+                            const isCurrentUser = u.id === profile?.id;
+                            const initials = (u.name || u.email || 'U').slice(0, 2).toUpperCase();
+                            return (
+                              <TableRow key={u.id} className="hover:bg-slate-50/60 transition-colors border-slate-100">
+                                <TableCell className="py-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-700 shrink-0">
+                                      {initials}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="font-bold text-slate-900 text-sm truncate">{u.name || 'Unnamed User'}</span>
+                                        {isCurrentUser && (
+                                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 font-semibold">
+                                            You
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-xs text-slate-500 truncate">{u.email}</p>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                
+                                <TableCell className="py-3">
+                                  <Select 
+                                    value={u.locationId || 'none'} 
+                                    onValueChange={(v: string) => handleUpdateUser(u.id, { locationId: v === 'none' ? deleteField() as any : v })}
+                                  >
+                                    <SelectTrigger className="w-[150px] h-8 text-xs bg-white border-slate-200 font-medium">
+                                      <SelectValue placeholder="Location">
+                                        {u.locationId ? (locations.find(l => l.id === u.locationId)?.name || 'Location') : 'No Location'}
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">No Location</SelectItem>
+                                      {locations.map(loc => (
+                                        <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+
+                                <TableCell className="py-3">
+                                  <Select 
+                                    value={u.role} 
+                                    onValueChange={(v: 'admin' | 'manager' | 'staff') => handleUpdateUser(u.id, { role: v })}
+                                    disabled={isCurrentUser}
+                                  >
+                                    <SelectTrigger className="w-[110px] h-8 text-xs bg-white border-slate-200 font-medium">
+                                      <SelectValue>
+                                        {u.role ? u.role.charAt(0).toUpperCase() + u.role.slice(1) : ''}
+                                      </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                      <SelectItem value="manager">Manager</SelectItem>
+                                      <SelectItem value="staff">Staff</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </TableCell>
+
+                                <TableCell className="py-3 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 text-xs font-semibold gap-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 border-slate-200"
+                                      onClick={() => setEditingUser(u)}
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" /> Edit
+                                    </Button>
+                                    {!isCurrentUser && (
+                                      <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDelete('users', u.id);
+                                        }}
+                                        title="Delete User"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Invitations</h4>
+                    {invites.filter(i => i.status === 'pending').length > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {invites.filter(i => i.status === 'pending').length} Pending
+                      </Badge>
+                    )}
                   </div>
 
-                  <div>
-                    <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">Pending Invites</h4>
-                    <div className="space-y-2">
-                      {invites.filter(i => i.status === 'pending').length === 0 && <p className="text-sm text-muted-foreground italic">No pending invites.</p>}
-                      {invites.filter(i => i.status === 'pending').map(inv => (
-                        <div key={inv.id} className="flex items-center justify-between p-4 bg-secondary/50 rounded-xl border border-dashed border-border">
-                          <div>
-                            <p className="font-bold text-primary">{inv.email}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{inv.role}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                              Pending
-                            </Badge>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete('invites', inv.id);
-                              }}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                  {invites.filter(i => i.status === 'pending').length === 0 ? (
+                    <div className="p-5 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+                      <p className="text-xs text-slate-500 italic">No pending invitations.</p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-xs bg-white">
+                      <Table>
+                        <TableHeader className="bg-slate-50/90">
+                          <TableRow className="hover:bg-transparent border-slate-200/80">
+                            <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5">Email Address</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5">Role</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5">Status</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5 text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invites.filter(i => i.status === 'pending').map(inv => (
+                            <TableRow key={inv.id} className="hover:bg-slate-50/60 transition-colors border-slate-100">
+                              <TableCell className="py-2.5 font-medium text-slate-900 text-xs">
+                                {inv.email}
+                              </TableCell>
+                              <TableCell className="py-2.5 text-xs text-slate-600 capitalize">
+                                {inv.role}
+                              </TableCell>
+                              <TableCell className="py-2.5">
+                                <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] font-semibold">
+                                  Pending
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="py-2.5 text-right">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium gap-1"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete('invites', inv.id);
+                                  }}
+                                >
+                                  <X className="w-3.5 h-3.5" /> Revoke
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
