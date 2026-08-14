@@ -1185,33 +1185,39 @@ export const Settings: React.FC = () => {
 
         if (saleToVoid.items && saleToVoid.stockDeducted !== false) {
           for (const item of saleToVoid.items) {
-            if (!item.productId) continue;
-            const productRef = doc(db, 'products', item.productId);
+            const prodId = item.productId || (item as any).id;
+            if (!prodId) continue;
+            const returnedQty = item.returnedQuantity || 0;
+            const netQtyToReturn = Math.max(0, item.quantity - returnedQty);
+            if (netQtyToReturn <= 0) continue;
+
+            const productRef = doc(db, 'products', prodId);
             const stockUpdates: Record<string, any> = {
-              stock: increment(item.quantity)
+              stock: increment(netQtyToReturn),
+              updatedAt: Timestamp.now()
             };
             if (saleToVoid.locationId) {
-              stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(item.quantity);
+              stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(netQtyToReturn);
             }
-            batch.set(productRef, stockUpdates, { merge: true });
+            batch.update(productRef, stockUpdates);
           }
         }
 
         const saleRef = doc(db, 'sales', saleToVoid.id);
-        batch.set(saleRef, {
+        batch.update(saleRef, {
           status: 'voided',
           stockDeducted: false,
           updatedAt: Timestamp.now()
-        }, { merge: true });
+        });
 
         if (revertAccountId && saleToVoid.total > 0) {
           const account = accounts.find(a => a.id === revertAccountId);
           if (account) {
             const accountRef = doc(db, 'accounts', revertAccountId);
-            batch.set(accountRef, {
+            batch.update(accountRef, {
               balance: increment(-saleToVoid.total),
               lastUpdated: Timestamp.now()
-            }, { merge: true });
+            });
 
             const newTransRef = doc(collection(db, 'financialTransactions'));
             batch.set(newTransRef, {

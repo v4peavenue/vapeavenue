@@ -124,25 +124,36 @@ export const Login: React.FC = () => {
 
       navigate('/');
     } catch (error: any) {
-      console.error("Login failed:", error);
       const isPopupClosed = error.code === 'auth/popup-closed-by-user' || 
                             error.code === 'auth/cancelled-popup-request' || 
-                            error.message?.includes('popup-closed-by-user');
+                            error.code === 'auth/user-cancelled' ||
+                            error.message?.includes('popup-closed-by-user') ||
+                            error.message?.includes('cancelled-popup-request');
       const isPopupBlocked = error.code === 'auth/popup-blocked' || 
                              error.message?.includes('popup-blocked');
       const isNetworkError = error.code === 'auth/network-request-failed' || 
                              error.message?.toLowerCase().includes('network');
+      const isUnauthorizedDomain = error.code === 'auth/unauthorized-domain' ||
+                                    error.message?.includes('unauthorized-domain');
 
       if (isPopupClosed) {
-        toast.info("Sign-in popup was closed before completing.");
+        console.log("Login: User dismissed or closed the sign-in popup.");
+        toast.info("Sign-in cancelled. Click below to try again whenever you're ready.");
       } else if (isPopupBlocked) {
-        toast.warning("Sign-in popup was blocked by your browser. Please allow popups or try Offline Mode.");
+        console.warn("Login: Popup blocked by browser.", error);
+        toast.warning("Sign-in popup was blocked by your browser. Please allow popups or use Offline Mode.");
+        setShowOffline(true);
+      } else if (isUnauthorizedDomain) {
+        console.warn("Login: Unauthorized domain for OAuth.", error);
+        toast.error("This domain is not authorized for Google Sign-In. You can use Offline Mode to log in.");
         setShowOffline(true);
       } else if (isNetworkError) {
+        console.warn("Login: Network error during authentication.", error);
         toast.error("Network error connecting to authentication service.");
         toast.info("You can easily bypass this by logging in using Offline Mode below.");
         setShowOffline(true);
       } else {
+        console.error("Login failed:", error);
         toast.error(`Login failed: ${error.message || 'Unknown error'}`);
       }
     } finally {

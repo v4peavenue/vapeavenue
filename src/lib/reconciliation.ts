@@ -1,4 +1,4 @@
-import { collection, getDocs, doc, writeBatch, Timestamp, addDoc, deleteDoc, increment } from 'firebase/firestore';
+import { collection, getDocs, doc, writeBatch, Timestamp, addDoc, deleteDoc, increment, deleteField } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 export interface ReconciliationResult {
@@ -33,14 +33,15 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
   isReconcilingInProgress = true;
 
   try {
-    const [salesSnap, finSnap, auditSnap, accountsSnap, locsSnap, poSnap, returnsSnap] = await Promise.all([
+    const [salesSnap, finSnap, auditSnap, accountsSnap, locsSnap, poSnap, returnsSnap, productsSnap] = await Promise.all([
       getDocs(collection(db, 'sales')),
       getDocs(collection(db, 'financialTransactions')),
       getDocs(collection(db, 'audit_logs')),
       getDocs(collection(db, 'accounts')),
       getDocs(collection(db, 'locations')),
       getDocs(collection(db, 'purchaseOrders')),
-      getDocs(collection(db, 'returnTransactions'))
+      getDocs(collection(db, 'returnTransactions')),
+      getDocs(collection(db, 'products'))
     ]);
 
     let financials = finSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
@@ -277,23 +278,28 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       // Case A: Active sales that were marked as stockDeducted: false -> deduct inventory
       if ((!sale.status || sale.status === 'completed' || sale.status === 'returned' || sale.status === 'partially_returned') && sale.stockDeducted === false) {
         for (const item of sale.items || []) {
-          if (!item.productId) continue;
-          const productRef = doc(db, 'products', item.productId);
+          const prodId = item.productId || item.id;
+          if (!prodId) continue;
+          const returnedQty = item.returnedQuantity || 0;
+          const netQty = Math.max(0, item.quantity - returnedQty);
+          if (netQty <= 0) continue;
+
+          const productRef = doc(db, 'products', prodId);
           const stockUpdates: Record<string, any> = {
-            stock: increment(-item.quantity),
+            stock: increment(-netQty),
             updatedAt: Timestamp.now()
           };
           if (sale.locationId) {
-            stockUpdates[`stocks.${sale.locationId}`] = increment(-item.quantity);
+            stockUpdates[`stocks.${sale.locationId}`] = increment(-netQty);
           }
-          invBatch.set(productRef, stockUpdates, { merge: true });
+          invBatch.update(productRef, stockUpdates);
           invOps++;
         }
         const saleRef = doc(db, 'sales', sale.id);
-        invBatch.set(saleRef, {
+        invBatch.update(saleRef, {
           stockDeducted: true,
           updatedAt: Timestamp.now()
-        }, { merge: true });
+        });
         invOps++;
         repairedInventory++;
       }
@@ -301,23 +307,60 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       // Case B: Voided sales that still have stockDeducted !== false -> restore inventory
       if (sale.status === 'voided' && sale.stockDeducted !== false) {
         for (const item of sale.items || []) {
-          if (!item.productId) continue;
-          const productRef = doc(db, 'products', item.productId);
+          const prodId = item.productId || item.id;
+          if (!prodId) continue;
+          const returnedQty = item.returnedQuantity || 0;
+          const netQty = Math.max(0, item.quantity - returnedQty);
+          if (netQty <= 0) continue;
+
+          const productRef = doc(db, 'products', prodId);
           const stockUpdates: Record<string, any> = {
-            stock: increment(item.quantity),
+            stock: increment(netQty),
             updatedAt: Timestamp.now()
           };
           if (sale.locationId) {
-            stockUpdates[`stocks.${sale.locationId}`] = increment(item.quantity);
+            stockUpdates[`stocks.${sale.locationId}`] = increment(netQty);
           }
-          invBatch.set(productRef, stockUpdates, { merge: true });
+          invBatch.update(productRef, stockUpdates);
           invOps++;
         }
         const saleRef = doc(db, 'sales', sale.id);
-        invBatch.set(saleRef, {
+        invBatch.update(saleRef, {
           stockDeducted: false,
           updatedAt: Timestamp.now()
-        }, { merge: true });
+        });
+        invOps++;
+        repairedInventory++;
+      }
+    }
+
+    // 5. Clean up and restore any corrupted orphaned 'stocks.<locId>' root fields on product documents
+    for (const prodDoc of productsSnap.docs) {
+      const prodData = prodDoc.data();
+      const corruptedKeys = Object.keys(prodData).filter(k => k.startsWith('stocks.'));
+      if (corruptedKeys.length > 0) {
+        const prodRef = doc(db, 'products', prodDoc.id);
+        const fixPayload: Record<string, any> = {
+          updatedAt: Timestamp.now()
+        };
+        const currentStocks = { ...(prodData.stocks || {}) };
+        let hasStocksChange = false;
+
+        for (const badKey of corruptedKeys) {
+          const locId = badKey.replace('stocks.', '');
+          const orphanVal = Number(prodData[badKey]) || 0;
+          if (locId && orphanVal > 0) {
+            currentStocks[locId] = (Number(currentStocks[locId]) || 0) + orphanVal;
+            hasStocksChange = true;
+          }
+          fixPayload[badKey] = deleteField();
+        }
+
+        if (hasStocksChange) {
+          fixPayload.stocks = currentStocks;
+        }
+
+        invBatch.update(prodRef, fixPayload);
         invOps++;
         repairedInventory++;
       }

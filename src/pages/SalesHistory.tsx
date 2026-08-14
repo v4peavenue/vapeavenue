@@ -639,35 +639,42 @@ export const SalesHistory: React.FC = () => {
       const wasStockDeducted = saleToVoid.stockDeducted !== false;
       if (wasStockDeducted) {
         for (const item of saleToVoid.items || []) {
-          if (!item.productId) continue;
-          const productRef = doc(db, 'products', item.productId);
+          const prodId = item.productId || (item as any).id;
+          if (!prodId) continue;
+          
+          const returnedQty = item.returnedQuantity || 0;
+          const netQtyToReturn = Math.max(0, item.quantity - returnedQty);
+          if (netQtyToReturn <= 0) continue;
+
+          const productRef = doc(db, 'products', prodId);
           const stockUpdates: Record<string, any> = {
-            stock: increment(item.quantity)
+            stock: increment(netQtyToReturn),
+            updatedAt: Timestamp.now()
           };
           if (saleToVoid.locationId) {
-            stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(item.quantity);
+            stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(netQtyToReturn);
           }
-          batch.set(productRef, stockUpdates, { merge: true });
+          batch.update(productRef, stockUpdates);
         }
       }
 
       // Update sale status
       const saleRef = doc(db, 'sales', saleToVoid.id);
-      batch.set(saleRef, {
+      batch.update(saleRef, {
         status: 'voided',
         stockDeducted: false,
         updatedAt: Timestamp.now()
-      }, { merge: true });
+      });
 
       // Update chosen financial account
       const currentBalance = account.balance || 0;
       const newBalance = currentBalance - saleToVoid.total;
 
       const accountRef = doc(db, 'accounts', voidAccountId);
-      batch.set(accountRef, {
+      batch.update(accountRef, {
         balance: increment(-saleToVoid.total),
         lastUpdated: Timestamp.now()
-      }, { merge: true });
+      });
 
       // Create financial transaction record (reversed income / expense)
       const newTransRef = doc(collection(db, 'financialTransactions'));
@@ -751,15 +758,17 @@ export const SalesHistory: React.FC = () => {
 
       // 2. Reverse stock levels for restocked items (decrement stock back since they are no longer returned)
       for (const item of returnToReverse.items) {
-        if (item.restock && item.productId) {
-          const productRef = doc(db, 'products', item.productId);
+        const prodId = item.productId || (item as any).id;
+        if (item.restock && prodId) {
+          const productRef = doc(db, 'products', prodId);
           const stockUpdates: Record<string, any> = {
-            stock: increment(-item.quantity)
+            stock: increment(-item.quantity),
+            updatedAt: Timestamp.now()
           };
           if (returnToReverse.locationId) {
             stockUpdates[`stocks.${returnToReverse.locationId}`] = increment(-item.quantity);
           }
-          batch.set(productRef, stockUpdates, { merge: true });
+          batch.update(productRef, stockUpdates);
         }
       }
 
@@ -768,8 +777,8 @@ export const SalesHistory: React.FC = () => {
       const saleSnap = await getDoc(saleRef);
       if (saleSnap.exists()) {
         const saleData = saleSnap.data() as Sale;
-        const updatedItems = saleData.items.map(item => {
-          const returnedItem = returnToReverse.items?.find((i: any) => i.productId === item.productId);
+        const updatedItems = (saleData.items || []).map(item => {
+          const returnedItem = returnToReverse.items?.find((i: any) => (i.productId || i.id) === (item.productId || (item as any).id));
           if (returnedItem) {
             const currentReturned = item.returnedQuantity || 0;
             return {
@@ -783,24 +792,24 @@ export const SalesHistory: React.FC = () => {
         const hasAnyReturnsLeft = updatedItems.some(i => (i.returnedQuantity || 0) > 0);
         const newStatus = hasAnyReturnsLeft ? 'partially_returned' : 'completed';
 
-        batch.set(saleRef, {
+        batch.update(saleRef, {
           items: updatedItems,
           status: newStatus,
           updatedAt: Timestamp.now()
-        }, { merge: true });
+        });
       } else {
-        batch.set(saleRef, {
+        batch.update(saleRef, {
           status: 'completed',
           updatedAt: Timestamp.now()
-        }, { merge: true });
+        });
       }
 
       // 4. Update return transaction record status to voided
       const returnRef = doc(db, 'returnTransactions', returnToReverse.id);
-      batch.set(returnRef, {
+      batch.update(returnRef, {
         status: 'voided',
         updatedAt: Timestamp.now()
-      }, { merge: true });
+      });
 
       await batch.commit();
 
@@ -2578,8 +2587,28 @@ export const SalesHistory: React.FC = () => {
                 </Select>
               </div>
 
-              <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded border border-slate-100">
-                Voiding this transaction will return all items to inventory, mark the sale status as <strong>Voided</strong>, and deduct the refund amount from the selected finance account.
+              <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between font-bold text-slate-700 pb-1 border-b border-slate-200/60">
+                  <span className="text-[11px] uppercase tracking-wider text-slate-500">Items Returning to Stock:</span>
+                  <span className="text-[11px] text-slate-600">
+                    {saleToVoid.locationId ? (locations.find(l => l.id === saleToVoid.locationId)?.name || 'Branch') : 'Assigned Location'}
+                  </span>
+                </div>
+                <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                  {(saleToVoid.items || []).map((item, idx) => {
+                    const returned = item.returnedQuantity || 0;
+                    const net = Math.max(0, item.quantity - returned);
+                    return (
+                      <div key={idx} className="flex justify-between items-center text-xs">
+                        <span className="text-slate-700 truncate max-w-[200px]">{item.name}</span>
+                        <span className="font-bold text-emerald-600 shrink-0">+{net} pcs</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
+                  Voiding marks this sale as <strong>Voided</strong>, returns product units back into live inventory, and deducts the refund from the selected account.
+                </p>
               </div>
             </div>
           )}
