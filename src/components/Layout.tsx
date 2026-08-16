@@ -266,7 +266,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isHomePage = location.pathname === '/' || location.pathname === '/home';
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-100/80 font-sans relative overflow-x-hidden">
+    <div className={cn(
+      "flex flex-col bg-slate-100/80 font-sans relative",
+      isHomePage ? "h-screen max-h-screen overflow-hidden" : "min-h-screen overflow-x-hidden"
+    )}>
       {/* Background Stylized Agos Shapes (Navy & Gold ambient theme glow) */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#1C2D4E] rounded-full mix-blend-multiply opacity-20 filter blur-2xl" />
@@ -491,7 +494,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       )}
 
       {/* Main Page Content */}
-      <main className={cn("flex-1 relative", isHomePage && "flex flex-col min-h-screen")}>
+      <main className={cn("flex-1 relative", isHomePage ? "h-screen max-h-screen overflow-hidden flex flex-col" : "")}>
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
@@ -501,7 +504,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className={cn(
               "w-full",
-              isHomePage ? "flex-1 flex flex-col min-h-screen" : "p-3 sm:p-5 lg:p-6 max-w-7xl mx-auto"
+              isHomePage ? "flex-1 h-full max-h-screen flex flex-col overflow-hidden" : "p-3 sm:p-5 lg:p-6 max-w-7xl mx-auto"
             )}
           >
             {children}
