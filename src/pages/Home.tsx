@@ -128,10 +128,17 @@ export const Home: React.FC = () => {
         {/* Upper Floating Master Card */}
         <div className="flex-1 min-h-0 flex flex-col justify-between neu-flat-lg rounded-2xl p-5 sm:p-6 lg:p-8 relative overflow-hidden bg-[#E6ECF5]">
           
+          {/* Vape Avenue Background Logo Watermark (Centered in middle, below texts & buttons) */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-0 opacity-15 sm:opacity-20 flex items-center justify-center">
+            <div className="w-[280px] h-[280px] sm:w-[420px] sm:h-[420px] lg:w-[520px] lg:h-[520px] flex items-center justify-center">
+              <VapeAvenueLogo className="w-full h-full max-w-full max-h-full" />
+            </div>
+          </div>
+
           {/* Top Navbar */}
-          <header className="flex items-center justify-between gap-4 pb-3 sm:pb-4 border-b border-[#D1D9E6]/70 shrink-0">
+          <header className="relative z-10 flex items-center justify-between gap-4 pb-3 sm:pb-4 border-b border-[#D1D9E6]/70 shrink-0">
             
-            {/* Left: Brand Identity with Waves Icon & Vape Avenue Crest */}
+            {/* Left: Brand Identity with Waves Icon & Pill */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 neu-btn rounded-xl flex items-center justify-center cursor-pointer text-emerald-600">
                 <Waves className="w-6 h-6" />
@@ -141,17 +148,6 @@ export const Home: React.FC = () => {
                 <span className="text-[10px] sm:text-[11px] font-black text-emerald-700 px-2.5 py-0.5 neu-inset rounded-md tracking-wider uppercase">
                   RETAIL ERP
                 </span>
-              </div>
-
-              {/* Vape Avenue Crest Badge beside AGOS */}
-              <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-[#D1D9E6]/70">
-                <div className="w-9 h-9 neu-flat rounded-full p-0.5 flex items-center justify-center shadow-xs">
-                  <VapeAvenueLogo className="w-full h-full rounded-full" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-black text-slate-900 tracking-tight leading-none uppercase">Vape Avenue</span>
-                  <span className="text-[9px] font-black text-emerald-700 tracking-widest uppercase">Denward</span>
-                </div>
               </div>
             </div>
 
@@ -224,7 +220,7 @@ export const Home: React.FC = () => {
           </header>
 
           {/* Hero Main Content Split */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 xl:gap-12 items-center flex-1 min-h-0 my-auto py-3">
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 xl:gap-12 items-center flex-1 min-h-0 my-auto py-3">
             
             {/* Left Column: Heading & Primary Triggers */}
             <div className="lg:col-span-7 space-y-4 sm:space-y-5">

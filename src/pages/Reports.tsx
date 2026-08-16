@@ -14,7 +14,11 @@ import {
   PieChart as PieChartIcon,
   BarChart3,
   ArrowLeftRight,
-  TrendingDown
+  TrendingDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -92,6 +96,15 @@ export const Reports: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [selectedProduct, setSelectedProduct] = useState<string>('all');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
+
+  // Reset to page 1 whenever tab or filter criteria change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCategory, selectedBrand, selectedProduct, selectedLocationId]);
 
   const getPaymentMethodName = (methodId: string) => {
     if (!methodId) return 'N/A';
@@ -682,6 +695,66 @@ export const Reports: React.FC = () => {
     return filteredSales.reduce((sum, s) => sum + s.netProfit, 0);
   }, [filteredSales]);
 
+  // Current active data list based on reportType and view
+  const currentTotalRecords = useMemo(() => {
+    switch (reportType) {
+      case 'sales':
+        return filteredSales.length;
+      case 'sales-by-seller':
+        return salesBySellerData.length;
+      case 'inventory':
+        return filteredProducts.length;
+      case 'profit':
+        return profitabilityData.length;
+      case 'stock-adjustments':
+        return filteredAdjustments.length;
+      case 'product-movement':
+        return movementSubView === 'detailed' ? filteredMovementEvents.length : productMovementSummary.length;
+      default:
+        return 0;
+    }
+  }, [reportType, movementSubView, filteredSales.length, salesBySellerData.length, filteredProducts.length, profitabilityData.length, filteredAdjustments.length, filteredMovementEvents.length, productMovementSummary.length]);
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(currentTotalRecords / pageSize));
+  }, [currentTotalRecords, pageSize]);
+
+  // Paginated slices for each dataset
+  const paginatedSales = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return filteredSales.slice(startIdx, startIdx + pageSize);
+  }, [filteredSales, currentPage, pageSize]);
+
+  const paginatedSalesBySeller = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return salesBySellerData.slice(startIdx, startIdx + pageSize);
+  }, [salesBySellerData, currentPage, pageSize]);
+
+  const paginatedProducts = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(startIdx, startIdx + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
+
+  const paginatedProfitability = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return profitabilityData.slice(startIdx, startIdx + pageSize);
+  }, [profitabilityData, currentPage, pageSize]);
+
+  const paginatedAdjustments = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return filteredAdjustments.slice(startIdx, startIdx + pageSize);
+  }, [filteredAdjustments, currentPage, pageSize]);
+
+  const paginatedMovementEvents = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return filteredMovementEvents.slice(startIdx, startIdx + pageSize);
+  }, [filteredMovementEvents, currentPage, pageSize]);
+
+  const paginatedMovementSummary = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return productMovementSummary.slice(startIdx, startIdx + pageSize);
+  }, [productMovementSummary, currentPage, pageSize]);
+
   const inventoryValue = useMemo(() => {
     return filteredProducts.reduce((sum, p) => {
       const stock = selectedLocationId === 'all' ? p.stock : (p.stocks?.[selectedLocationId] || 0);
@@ -1065,12 +1138,12 @@ export const Reports: React.FC = () => {
               <TableBody>
                 {filteredSales.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-slate-400 italic">
+                    <TableCell colSpan={selectedLocationId === 'all' ? 6 : 5} className="text-center py-12 text-slate-400 italic">
                       No sales records found for this period
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredSales.map((sale) => (
+                  paginatedSales.map((sale) => (
                     <TableRow key={sale.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-mono text-[10px] text-slate-500">#{sale.id.slice(0, 8)}</TableCell>
                       <TableCell className="text-xs font-medium">
@@ -1132,7 +1205,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  salesBySellerData.map((data) => (
+                  paginatedSalesBySeller.map((data) => (
                     <TableRow key={data.sellerId} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-semibold text-slate-900">{data.sellerName}</TableCell>
                       <TableCell>
@@ -1199,7 +1272,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredProducts.map((product) => {
+                  paginatedProducts.map((product) => {
                     const currentStock = selectedLocationId === 'all' 
                       ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
                       : Number(product.stocks?.[selectedLocationId] || 0);
@@ -1275,7 +1348,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  profitabilityData.map(({ product, unitsSold, revenue, cost, profit }) => (
+                  paginatedProfitability.map(({ product, unitsSold, revenue, cost, profit }) => (
                     <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="font-medium">{product.name}</TableCell>
                       <TableCell className="text-xs">{unitsSold}</TableCell>
@@ -1334,7 +1407,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAdjustments.map((adj) => (
+                  paginatedAdjustments.map((adj) => (
                     <TableRow key={adj.id} className="hover:bg-slate-50/50 transition-colors">
                       <TableCell className="text-xs">
                         {format(adj.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}
@@ -1472,7 +1545,7 @@ export const Reports: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredMovementEvents.map((ev) => (
+                      paginatedMovementEvents.map((ev) => (
                         <TableRow key={ev.id} className="hover:bg-slate-50/50 transition-colors">
                           <TableCell className="text-xs font-medium text-slate-600">
                             {format(ev.timestamp, 'MMM dd, yyyy HH:mm')}
@@ -1536,7 +1609,7 @@ export const Reports: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      productMovementSummary.map((item) => (
+                      paginatedMovementSummary.map((item) => (
                         <TableRow key={item.productId} className="hover:bg-slate-50/50 transition-colors">
                           <TableCell className="font-semibold text-xs text-slate-900">{item.productName}</TableCell>
                           <TableCell>
@@ -1589,6 +1662,85 @@ export const Reports: React.FC = () => {
                   )}
                 </Table>
               )}
+            </div>
+          )}
+
+          {/* Pagination Controls Footer */}
+          {currentTotalRecords > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-3 text-xs text-slate-600">
+                <span>
+                  Showing <strong className="text-slate-900">{Math.min((currentPage - 1) * pageSize + 1, currentTotalRecords)}</strong> to{' '}
+                  <strong className="text-slate-900">{Math.min(currentPage * pageSize, currentTotalRecords)}</strong> of{' '}
+                  <strong className="text-slate-900">{currentTotalRecords}</strong> records
+                </span>
+
+                <div className="flex items-center gap-1.5 pl-3 border-l border-slate-200">
+                  <span className="text-slate-500">Per page:</span>
+                  <Select value={String(pageSize)} onValueChange={(val) => {
+                    setPageSize(Number(val));
+                    setCurrentPage(1);
+                  }}>
+                    <SelectTrigger className="h-7 w-[68px] text-xs bg-white border-slate-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 bg-white border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage <= 1}
+                  title="First Page"
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 bg-white border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage <= 1}
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <div className="flex items-center gap-1 px-2 text-xs font-semibold text-slate-700">
+                  <span>Page {currentPage} of {totalPages}</span>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 bg-white border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage >= totalPages}
+                  title="Next Page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 bg-white border-slate-200 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage >= totalPages}
+                  title="Last Page"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

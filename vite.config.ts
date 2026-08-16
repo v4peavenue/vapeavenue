@@ -12,8 +12,10 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        manifestFilename: 'manifest.json',
         workbox: {
-          maximumFileSizeToCacheInBytes: 5000000,
+          maximumFileSizeToCacheInBytes: 6000000,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,json}'],
         },
         manifest: {
           name: 'Agos: Inventory Management',
@@ -36,11 +38,27 @@ export default defineConfig(({mode}) => {
       })
     ],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+      },
+    },
+    build: {
+      outDir: 'dist',
+      emptyOutDir: true,
+      sourcemap: false,
+      chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            'vendor-charts': ['recharts'],
+            'vendor-icons': ['lucide-react'],
+          },
+        },
       },
     },
     server: {
