@@ -278,127 +278,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   });
 
   return (
-    <div className="grid lg:grid-cols-3 gap-6">
-      {/* Record Expense Form */}
-      <Card className="lg:col-span-1 border-none shadow-md bg-white rounded-xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 rounded-t-xl">
-          <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <TrendingDown className="w-5 h-5 text-rose-500" />
-            Record New Expense
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Log purchases, utilities, or operating expenses directly.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-5">
-          <form onSubmit={handleAddExpense} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="expense-amount" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Amount ({settings.currency})</Label>
-              <Input 
-                id="expense-amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                className="h-10 text-lg font-black bg-slate-50 border-slate-200 text-[#1A2B4B]"
-                placeholder="0.00"
-                value={expenseAmount || ''}
-                onChange={(e) => setExpenseAmount(Number(e.target.value))}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="expense-account" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Source of Funds (Paid From)</Label>
-              <Select 
-                required
-                value={expenseAccountId} 
-                onValueChange={setExpenseAccountId}
-              >
-                <SelectTrigger id="expense-account" className="h-10 bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Select account">
-                    {accounts.find(a => a.id === expenseAccountId)?.name || 'Select account'}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.filter(acc => acc.active !== false).map(acc => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.name}{isAdmin ? ` (${settings.currency}${(acc.balance || 0).toLocaleString()})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="expense-category" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Category</Label>
-                <Select 
-                  required
-                  value={expenseCategory} 
-                  onValueChange={setExpenseCategory}
-                >
-                  <SelectTrigger id="expense-category" className="h-10 bg-slate-50 border-slate-200 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Supplies">Supplies</SelectItem>
-                    <SelectItem value="Utilities">Utilities</SelectItem>
-                    <SelectItem value="Rent">Rent</SelectItem>
-                    <SelectItem value="Salary">Salary</SelectItem>
-                    <SelectItem value="Maintenance">Maintenance</SelectItem>
-                    <SelectItem value="Marketing">Marketing</SelectItem>
-                    <SelectItem value="Taxes">Taxes</SelectItem>
-                    <SelectItem value="Delivery/Shipping Fee">Delivery/Shipping Fee</SelectItem>
-                    <SelectItem value="General">General / Others</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="expense-location" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Branch / Location</Label>
-                <Select 
-                  disabled={!isAdmin && !!profile?.locationId}
-                  value={expenseLocationId || "central"} 
-                  onValueChange={(v) => setExpenseLocationId(v === "central" ? "" : v)}
-                >
-                  <SelectTrigger id="expense-location" className="h-10 bg-slate-50 border-slate-200 text-xs">
-                    <SelectValue placeholder="Select location">
-                      {expenseLocationId 
-                        ? (locations.find(l => l.id === expenseLocationId)?.name || 'Central') 
-                        : 'None / Central'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="central">None / Central</SelectItem>
-                    {locations.map(loc => (
-                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="expense-description" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Description / Purpose</Label>
-              <Input 
-                id="expense-description"
-                className="h-10 bg-slate-50 border-slate-200"
-                placeholder="Brief details about this expense"
-                value={expenseDescription}
-                onChange={(e) => setExpenseDescription(e.target.value)}
-                required
-              />
-            </div>
-
-            <Button type="submit" className="w-full h-11 bg-[#1A2B4B] hover:bg-[#2C3E50] text-white font-bold rounded-xl shadow-lg shadow-[#1A2B4B]/10 transition-all mt-2">
-              Record Expense
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
+    <div className="space-y-6">
       {/* Date Range Query Guardrail & Estimator Card */}
-      <Card className="lg:col-span-3 border border-slate-200 shadow-sm bg-gradient-to-r from-slate-50 via-white to-amber-50/20 rounded-xl">
+      <Card className="w-full border border-slate-200/80 shadow-xs bg-gradient-to-r from-slate-50 via-white to-amber-50/20 rounded-xl">
         <CardContent className="p-4">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-1">
@@ -507,109 +389,230 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* Expense History Table */}
-      <Card className="lg:col-span-2 border-none shadow-md bg-white rounded-xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 rounded-t-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-lg font-bold text-slate-800">Expense History Ledger</CardTitle>
+      {/* Main Containers: Form + History Table */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Record Expense Form */}
+        <Card className="lg:col-span-4 border border-slate-200/80 shadow-xs bg-white rounded-xl overflow-hidden h-fit">
+          <CardHeader className="bg-slate-50/60 pb-4 border-b border-slate-100 rounded-t-xl">
+            <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <TrendingDown className="w-5 h-5 text-rose-500" />
+              Record New Expense
+            </CardTitle>
             <CardDescription className="text-xs">
-              {isAdmin ? "Verified logs of outgoing cash and expense entries across all staff." : "Verified logs of your submitted outgoing cash and expense entries."}
+              Log purchases, utilities, or operating expenses directly.
             </CardDescription>
-          </div>
-          <div className="relative w-full sm:w-64">
-            <Input
-              className="h-8 text-xs pl-3.5 bg-white border-slate-200 rounded-lg"
-              placeholder="Search description, category..."
-              value={expenseSearch}
-              onChange={(e) => setExpenseSearch(e.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-slate-100 bg-slate-50/30">
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Expense / Memo</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Category</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Paid From</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Amount</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Recorded By</TableHead>
-                  <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Date</TableHead>
-                  {isAdmin && <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400 text-right">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredExpenses.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={isAdmin ? 7 : 6} className="h-32 text-center text-slate-400">
-                      No matching expense records found.
-                    </TableCell>
+          </CardHeader>
+          <CardContent className="p-5">
+            <form onSubmit={handleAddExpense} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="expense-amount" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Amount ({settings.currency})</Label>
+                <Input 
+                  id="expense-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  className="h-10 text-lg font-black bg-slate-50 border-slate-200 text-[#1A2B4B]"
+                  placeholder="0.00"
+                  value={expenseAmount || ''}
+                  onChange={(e) => setExpenseAmount(Number(e.target.value))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="expense-account" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Source of Funds (Paid From)</Label>
+                <Select 
+                  required
+                  value={expenseAccountId} 
+                  onValueChange={setExpenseAccountId}
+                >
+                  <SelectTrigger id="expense-account" className="h-10 bg-slate-50 border-slate-200">
+                    <SelectValue placeholder="Select account">
+                      {accounts.find(a => a.id === expenseAccountId)?.name || 'Select account'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.filter(acc => acc.active !== false).map(acc => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name}{isAdmin ? ` (${settings.currency}${(acc.balance || 0).toLocaleString()})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="expense-category" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Category</Label>
+                  <Select 
+                    required
+                    value={expenseCategory} 
+                    onValueChange={setExpenseCategory}
+                  >
+                    <SelectTrigger id="expense-category" className="h-10 bg-slate-50 border-slate-200 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Supplies">Supplies</SelectItem>
+                      <SelectItem value="Utilities">Utilities</SelectItem>
+                      <SelectItem value="Rent">Rent</SelectItem>
+                      <SelectItem value="Salary">Salary</SelectItem>
+                      <SelectItem value="Maintenance">Maintenance</SelectItem>
+                      <SelectItem value="Marketing">Marketing</SelectItem>
+                      <SelectItem value="Taxes">Taxes</SelectItem>
+                      <SelectItem value="Delivery/Shipping Fee">Delivery/Shipping Fee</SelectItem>
+                      <SelectItem value="General">General / Others</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="expense-location" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Branch / Location</Label>
+                  <Select 
+                    disabled={!isAdmin && !!profile?.locationId}
+                    value={expenseLocationId || "central"} 
+                    onValueChange={(v) => setExpenseLocationId(v === "central" ? "" : v)}
+                  >
+                    <SelectTrigger id="expense-location" className="h-10 bg-slate-50 border-slate-200 text-xs">
+                      <SelectValue placeholder="Select location">
+                        {expenseLocationId 
+                          ? (locations.find(l => l.id === expenseLocationId)?.name || 'Central') 
+                          : 'None / Central'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="central">None / Central</SelectItem>
+                      {locations.map(loc => (
+                        <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="expense-description" className="text-xs font-bold text-slate-700 uppercase tracking-wider">Description / Purpose</Label>
+                <Input 
+                  id="expense-description"
+                  className="h-10 bg-slate-50 border-slate-200"
+                  placeholder="Brief details about this expense"
+                  value={expenseDescription}
+                  onChange={(e) => setExpenseDescription(e.target.value)}
+                  required
+                />
+              </div>
+
+              <Button type="submit" className="w-full h-11 bg-[#1A2B4B] hover:bg-[#2C3E50] text-white font-bold rounded-xl shadow-lg shadow-[#1A2B4B]/10 transition-all mt-2">
+                Record Expense
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Expense History Table */}
+        <Card className="lg:col-span-8 border border-slate-200/80 shadow-xs bg-white rounded-xl overflow-hidden">
+          <CardHeader className="bg-slate-50/60 pb-4 border-b border-slate-100 rounded-t-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg font-bold text-slate-800">Expense History Ledger</CardTitle>
+              <CardDescription className="text-xs">
+                {isAdmin ? "Verified logs of outgoing cash and expense entries across all staff." : "Verified logs of your submitted outgoing cash and expense entries."}
+              </CardDescription>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Input
+                className="h-8 text-xs pl-3.5 bg-white border-slate-200 rounded-lg"
+                placeholder="Search description, category..."
+                value={expenseSearch}
+                onChange={(e) => setExpenseSearch(e.target.value)}
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-slate-100 bg-slate-50/30">
+                    <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Expense / Memo</TableHead>
+                    <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Category</TableHead>
+                    <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Paid From</TableHead>
+                    <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Amount</TableHead>
+                    <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Recorded By</TableHead>
+                    <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400">Date</TableHead>
+                    {isAdmin && <TableHead className="text-[10px] uppercase font-black tracking-widest text-slate-400 text-right">Actions</TableHead>}
                   </TableRow>
-                ) : (
-                  filteredExpenses
-                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
-                    .map((exp) => (
-                    <TableRow key={exp.id} className="hover:bg-slate-50/50 border-slate-50">
-                      <TableCell className="font-bold text-slate-700 text-xs">
-                        {exp.description}
-                        {exp.locationName && (
-                          <span className="block text-[10px] text-slate-400 font-normal">
-                            • {exp.locationName}
-                          </span>
-                        )}
+                </TableHeader>
+                <TableBody>
+                  {filteredExpenses.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={isAdmin ? 7 : 6} className="h-32 text-center text-slate-400">
+                        No matching expense records found.
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[9px] font-black uppercase px-2 py-0.5 border-slate-200 text-slate-500 bg-slate-50">
-                          {exp.category}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs font-semibold text-slate-600">
-                        {exp.accountName}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs font-black text-rose-600">
-                        -{settings.currency}{(exp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-500">
-                        {exp.createdByName || 'System'}
-                      </TableCell>
-                      <TableCell className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
-                        {exp.timestamp ? format(typeof exp.timestamp.toDate === 'function' ? exp.timestamp.toDate() : new Date(exp.timestamp), 'MMM dd, yyyy p') : '--'}
-                      </TableCell>
-                      {isAdmin && (
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
-                            onClick={() => handleDeleteExpense(exp.id, exp.amount, exp.accountId, exp.description)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </TableCell>
-                      )}
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-            <DataTablePagination
-              currentPage={currentPage}
-              totalPages={Math.ceil(filteredExpenses.length / pageSize) || 1}
-              pageSize={pageSize}
-              totalItems={filteredExpenses.length}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={size => {
-                setPageSize(size);
-                setCurrentPage(1);
-              }}
-            />
-          </div>
-        </CardContent>
-      </Card>
+                  ) : (
+                    filteredExpenses
+                      .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                      .map((exp) => (
+                      <TableRow key={exp.id} className="hover:bg-slate-50/50 border-slate-50">
+                        <TableCell className="font-bold text-slate-700 text-xs">
+                          {exp.description}
+                          {exp.locationName && (
+                            <span className="block text-[10px] text-slate-400 font-normal">
+                              • {exp.locationName}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[9px] font-black uppercase px-2 py-0.5 border-slate-200 text-slate-500 bg-slate-50">
+                            {exp.category}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-slate-600">
+                          {exp.accountName}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs font-black text-rose-600">
+                          -{settings.currency}{(exp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-slate-500">
+                          {exp.createdByName || 'System'}
+                        </TableCell>
+                        <TableCell className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
+                          {exp.timestamp ? format(typeof exp.timestamp.toDate === 'function' ? exp.timestamp.toDate() : new Date(exp.timestamp), 'MMM dd, yyyy p') : '--'}
+                        </TableCell>
+                        {isAdmin && (
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
+                              onClick={() => handleDeleteExpense(exp.id, exp.amount, exp.accountId, exp.description)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+              <DataTablePagination
+                currentPage={currentPage}
+                totalPages={Math.ceil(filteredExpenses.length / pageSize) || 1}
+                pageSize={pageSize}
+                totalItems={filteredExpenses.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={size => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Firestore Read Guardrail Notice & Status */}
-      <div className="lg:col-span-3 p-4 rounded-xl border bg-white shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="w-full p-4 rounded-xl border border-slate-200/80 bg-white shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg ${dateRange ? 'bg-indigo-100 text-indigo-800' : transLimit > 300 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
             <Database className="w-4 h-4" />

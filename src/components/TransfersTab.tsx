@@ -107,10 +107,10 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ accounts, transactio
   const transferTransactions = transactions.filter(t => t.type === 'transfer');
 
   return (
-    <div className="grid lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* New Fund Transfer Form */}
-      <Card className="lg:col-span-1 border-none shadow-md bg-white rounded-xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 rounded-t-xl">
+      <Card className="lg:col-span-4 border border-slate-200/80 shadow-xs bg-white rounded-xl overflow-hidden h-fit">
+        <CardHeader className="bg-slate-50/60 pb-4 border-b border-slate-100 rounded-t-xl">
           <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <ArrowLeftRight className="w-5 h-5 text-indigo-500" />
             Transfer Funds
@@ -198,8 +198,8 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ accounts, transactio
       </Card>
 
       {/* Transfer History Table */}
-      <Card className="lg:col-span-2 border-none shadow-md bg-white rounded-xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 rounded-t-xl">
+      <Card className="lg:col-span-8 border border-slate-200/80 shadow-xs bg-white rounded-xl overflow-hidden">
+        <CardHeader className="bg-slate-50/60 pb-4 border-b border-slate-100 rounded-t-xl">
           <CardTitle className="text-lg font-bold text-slate-800">Transfer History Ledger</CardTitle>
           <CardDescription className="text-xs">Recent internal transfers recorded between financial accounts.</CardDescription>
         </CardHeader>
