@@ -13,32 +13,6 @@ import { useAuth } from '../contexts/AuthContext';
 export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { loginOffline } = useAuth();
-
-  const [offlineEmail, setOfflineEmail] = useState('');
-  const [offlineName, setOfflineName] = useState('');
-  const [offlineRole, setOfflineRole] = useState('admin');
-  const [showOffline, setShowOffline] = useState(false);
-
-  const handleOfflineLogin = async () => {
-    if (!offlineEmail.trim() || !offlineName.trim()) {
-      toast.error("Please enter both email and name");
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      await loginOffline(offlineEmail.trim(), offlineName.trim(), offlineRole);
-      toast.success(`Logged in as ${offlineName} (${offlineRole.toUpperCase()})`);
-      
-      // Refresh page redirect or navigate
-      window.location.href = '/pos';
-    } catch (err: any) {
-      toast.error(`Offline login failed: ${err.message || err}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleGoogleLogin = async () => {
     console.log("Login: Starting Google Login process...");
@@ -141,17 +115,13 @@ export const Login: React.FC = () => {
         toast.info("Sign-in cancelled. Click below to try again whenever you're ready.");
       } else if (isPopupBlocked) {
         console.warn("Login: Popup blocked by browser.", error);
-        toast.warning("Sign-in popup was blocked by your browser. Please allow popups or use Offline Mode.");
-        setShowOffline(true);
+        toast.warning("Sign-in popup was blocked by your browser. Please allow popups to continue.");
       } else if (isUnauthorizedDomain) {
         console.warn("Login: Unauthorized domain for OAuth.", error);
-        toast.error("This domain is not authorized for Google Sign-In. You can use Offline Mode to log in.");
-        setShowOffline(true);
+        toast.error("This domain is not authorized for Google Sign-In. Please check your Firebase authorized domains.");
       } else if (isNetworkError) {
         console.warn("Login: Network error during authentication.", error);
-        toast.error("Network error connecting to authentication service.");
-        toast.info("You can easily bypass this by logging in using Offline Mode below.");
-        setShowOffline(true);
+        toast.error("Network error connecting to authentication service. Please check your connection.");
       } else {
         console.error("Login failed:", error);
         toast.error(`Login failed: ${error.message || 'Unknown error'}`);
@@ -176,23 +146,13 @@ export const Login: React.FC = () => {
           <div>
             <CardTitle className="text-3xl font-extrabold tracking-tight text-[#1C2D4E] font-heading">AGOS ERP</CardTitle>
             <CardDescription className="text-slate-500 mt-1 font-medium">
-              Smart Local-First Store & Inventory Portal
+              Smart Store & Inventory Portal
             </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-6 pt-2">
           <div className="text-center text-xs text-slate-600 font-medium leading-relaxed">
-            Sign in to access store operations, barcodes, cash registers, and multi-location management.
-          </div>
-
-          <div className="bg-[#F5F2ED] border border-[#E5E1DA] rounded-2xl p-3.5 text-xs text-[#1C2D4E] flex items-start gap-2.5">
-            <AlertCircle className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="font-bold text-[11px] uppercase tracking-wider text-[#A0522D]">Sandbox Environment Note</p>
-              <p className="leading-relaxed text-slate-600">
-                If Firebase is not yet fully configured with your live custom credentials, click the <strong className="underline cursor-pointer text-[#1C2D4E]" onClick={() => setShowOffline(true)}>Offline Local Mode</strong> link below to launch a secure local session.
-              </p>
-            </div>
+            Sign in with your authorized Google account to access store operations, barcodes, cash registers, and multi-location management.
           </div>
 
           <Button 
@@ -203,87 +163,6 @@ export const Login: React.FC = () => {
             <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
             <span>Continue with Google</span>
           </Button>
-
-          {!showOffline ? (
-            <div className="text-center">
-              <button 
-                type="button"
-                onClick={() => setShowOffline(true)}
-                className="text-xs text-[#1C2D4E] hover:text-[#2B4570] underline font-bold"
-              >
-                Or sign in using Offline Local Mode
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4 border border-amber-200/80 bg-amber-50/40 p-4 rounded-2xl mt-4 text-left">
-              <div className="flex items-center gap-2 text-[#1C2D4E] font-bold text-sm">
-                <Database className="w-4 h-4 text-[#D4AF37]" />
-                <span>Local-First Offline Session</span>
-              </div>
-              <p className="text-xs text-slate-600 leading-normal">
-                No internet or Firebase connection is required. Data is stored locally on this workstation.
-              </p>
-              
-              <div className="space-y-3 pt-1">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Email Address
-                  </label>
-                  <input 
-                    type="email" 
-                    value={offlineEmail}
-                    onChange={(e) => setOfflineEmail(e.target.value)}
-                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1C2D4E] text-slate-800"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Display Name
-                  </label>
-                  <input 
-                    type="text" 
-                    value={offlineName}
-                    onChange={(e) => setOfflineName(e.target.value)}
-                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1C2D4E] text-slate-800"
-                    placeholder="e.g. Administrator"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Access Role
-                  </label>
-                  <select 
-                    value={offlineRole}
-                    onChange={(e) => setOfflineRole(e.target.value)}
-                    className="w-full text-sm px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1C2D4E] text-slate-800"
-                  >
-                    <option value="admin">Administrator (Full Access)</option>
-                    <option value="manager">Manager (Intermediate Access)</option>
-                    <option value="staff">Staff (POS / Attendance Access)</option>
-                  </select>
-                </div>
-
-                <Button 
-                  onClick={handleOfflineLogin}
-                  className="w-full h-11 bg-gradient-to-r from-[#1C2D4E] to-[#2B4570] hover:opacity-95 text-[#D4AF37] font-bold rounded-xl shadow-lg shadow-[#1C2D4E]/20 transition-all mt-2"
-                >
-                  Launch Offline ERP
-                </Button>
-                
-                <div className="text-center pt-1">
-                  <button 
-                    type="button"
-                    onClick={() => setShowOffline(false)}
-                    className="text-[10px] text-slate-400 hover:text-slate-600 underline font-medium"
-                  >
-                    Back to Google Sign-in
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </CardContent>
         <CardFooter className="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/50 rounded-b-[28px] pt-4 pb-6">
           <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">

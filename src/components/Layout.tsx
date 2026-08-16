@@ -119,11 +119,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }, []);
 
   const handleLogout = async () => {
-    localStorage.removeItem('agos_offline_session');
     try {
       await auth.signOut();
     } catch (e) {
-      console.warn("Auth signout skipped or failed during offline logout:", e);
+      console.warn("Auth signout error:", e);
     }
     window.location.href = '/login';
   };
@@ -492,7 +491,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       )}
 
       {/* Main Page Content */}
-      <main className="flex-1 relative">
+      <main className={cn("flex-1 relative", isHomePage && "flex flex-col min-h-screen")}>
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
@@ -502,7 +501,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className={cn(
               "w-full",
-              !isHomePage && "p-3 sm:p-5 lg:p-6 max-w-7xl mx-auto"
+              isHomePage ? "flex-1 flex flex-col min-h-screen" : "p-3 sm:p-5 lg:p-6 max-w-7xl mx-auto"
             )}
           >
             {children}
