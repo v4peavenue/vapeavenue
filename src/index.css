@@ -41,44 +41,44 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+    --radius-sm: calc(var(--radius) * 0.75);
+    --radius-md: var(--radius);
+    --radius-lg: calc(var(--radius) * 1.25);
+    --radius-xl: calc(var(--radius) * 1.5);
+    --radius-2xl: calc(var(--radius) * 1.75);
+    --radius-3xl: calc(var(--radius) * 2.0);
+    --radius-4xl: calc(var(--radius) * 2.25);
 }
 
 :root {
-    --background: #FDFCF8; /* Warm off-white */
-    --foreground: #1C2D4E; /* Agos Navy */
-    --card: #FFFFFF;
-    --card-foreground: #1C2D4E;
-    --popover: #FFFFFF;
-    --popover-foreground: #1C2D4E;
-    --primary: #1C2D4E; /* Agos Navy */
-    --primary-foreground: #FDFCF8;
-    --secondary: #F5F2ED;
-    --secondary-foreground: #D4AF37; /* Agos Gold */
-    --muted: #F5F2ED;
+    --background: #E6ECF5; /* Soft Neumorphic Canvas */
+    --foreground: #1E293B;
+    --card: #E6ECF5;
+    --card-foreground: #1E293B;
+    --popover: #E6ECF5;
+    --popover-foreground: #1E293B;
+    --primary: #15803D; /* Vape Avenue Forest Green */
+    --primary-foreground: #FFFFFF;
+    --secondary: #E0E7ED;
+    --secondary-foreground: #1E293B;
+    --muted: #DFE6EF;
     --muted-foreground: #64748B;
-    --accent: #FDFCF8;
-    --accent-foreground: #1C2D4E;
-    --destructive: #991B1B;
-    --border: #E5E1DA;
-    --input: #E5E1DA;
-    --ring: #1C2D4E;
-    --radius: 0.75rem;
+    --accent: #E6ECF5;
+    --accent-foreground: #15803D;
+    --destructive: #EF4444;
+    --border: #D1D9E6;
+    --input: #D8E0EC;
+    --ring: #16A34A;
+    --radius: 0.5rem;
     
-    --sidebar: #1C2D4E;
-    --sidebar-foreground: #FDFCF8;
-    --sidebar-primary: #D4AF37; /* Gold/Brass */
-    --sidebar-primary-foreground: #1C2D4E;
-    --sidebar-accent: rgba(255, 255, 255, 0.1);
-    --sidebar-accent-foreground: #FDFCF8;
-    --sidebar-border: rgba(255, 255, 255, 0.1);
-    --sidebar-ring: #D4AF37;
+    --sidebar: #E6ECF5;
+    --sidebar-foreground: #1E293B;
+    --sidebar-primary: #15803D;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #D8E0EC;
+    --sidebar-accent-foreground: #1E293B;
+    --sidebar-border: #D1D9E6;
+    --sidebar-ring: #16A34A;
 }
 
 @layer base {
@@ -86,7 +86,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground antialiased font-sans;
+    @apply bg-[#E6ECF5] text-foreground antialiased font-sans;
     font-feature-settings: "ss01", "ss02", "cv01", "cv02";
   }
   h1, h2, h3, h4, h5, h6 {
@@ -96,6 +96,58 @@
 }
 
 @layer utilities {
+  /* Neumorphism Shadow Utilities */
+  .neu-flat {
+    background-color: #E6ECF5;
+    box-shadow: 6px 6px 14px #c2c9d6, -6px -6px 14px #ffffff;
+  }
+  .neu-flat-sm {
+    background-color: #E6ECF5;
+    box-shadow: 3px 3px 7px #c2c9d6, -3px -3px 7px #ffffff;
+  }
+  .neu-flat-lg {
+    background-color: #E6ECF5;
+    box-shadow: 9px 9px 20px #c2c9d6, -9px -9px 20px #ffffff;
+  }
+  .neu-inset {
+    background-color: #E6ECF5;
+    box-shadow: inset 4px 4px 8px #c2c9d6, inset -4px -4px 8px #ffffff;
+  }
+  .neu-inset-sm {
+    background-color: #E6ECF5;
+    box-shadow: inset 2px 2px 5px #c2c9d6, inset -2px -2px 5px #ffffff;
+  }
+  .neu-btn {
+    background-color: #E6ECF5;
+    box-shadow: 5px 5px 12px #c2c9d6, -5px -5px 12px #ffffff;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .neu-btn:hover {
+    box-shadow: 3px 3px 8px #c2c9d6, -3px -3px 8px #ffffff;
+    transform: translateY(1px);
+  }
+  .neu-btn:active, .neu-btn.active {
+    box-shadow: inset 3px 3px 7px #c2c9d6, inset -3px -3px 7px #ffffff;
+    transform: translateY(2px);
+  }
+  .neu-primary-btn {
+    background: #15803D;
+    color: #FFFFFF;
+    box-shadow: 5px 5px 14px rgba(21, 128, 61, 0.4), -4px -4px 10px #ffffff;
+    transition: all 0.2s ease;
+  }
+  .neu-primary-btn:hover {
+    background: #166534;
+    box-shadow: 3px 3px 10px rgba(21, 128, 61, 0.5), -2px -2px 6px #ffffff;
+    transform: translateY(1px);
+  }
+  .neu-primary-btn:active {
+    box-shadow: inset 3px 3px 7px rgba(0, 0, 0, 0.25), inset -3px -3px 7px rgba(255, 255, 255, 0.3);
+  }
+  .neu-pill {
+    border-radius: 9999px;
+  }
+
   .glass {
     @apply bg-white/70 backdrop-blur-md border border-white/20;
   }
@@ -109,7 +161,7 @@
     @apply bg-transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+    @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
   }
 }
 

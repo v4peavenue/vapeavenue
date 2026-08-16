@@ -9,6 +9,7 @@ import { TrendingUp, LogIn, AlertCircle, Database, Waves } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '@/lib/audit';
 import { useAuth } from '../contexts/AuthContext';
+import { VapeAvenueLogo } from '@/components/VapeAvenueLogo';
 
 export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -132,45 +133,49 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-slate-100/90 p-4 overflow-hidden font-sans">
-      {/* Background Stylized Agos Shapes */}
-      <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#1C2D4E] rounded-full mix-blend-multiply opacity-25 filter blur-2xl pointer-events-none" />
-      <div className="absolute top-1/3 -right-20 w-80 h-80 bg-[#D4AF37] rounded-full mix-blend-multiply opacity-20 filter blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-28 left-1/4 w-[500px] h-[500px] bg-indigo-900/20 rounded-full filter blur-3xl pointer-events-none" />
-
-      <Card className="max-w-md w-full shadow-2xl border-slate-200/90 bg-white/95 backdrop-blur-md rounded-[28px] relative z-10">
-        <CardHeader className="text-center space-y-4 pt-8">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-[#1C2D4E] to-[#15233D] rounded-2xl flex items-center justify-center shadow-lg shadow-[#1C2D4E]/20 border border-[#D4AF37]/30">
-            <Waves className="w-9 h-9 text-[#D4AF37]" />
+    <div className="relative min-h-screen flex items-center justify-center bg-[#E6ECF5] p-4 font-sans text-slate-800">
+      <div className="max-w-md w-full neu-flat-lg rounded-2xl p-6 sm:p-8 bg-[#E6ECF5] text-slate-800 space-y-6 relative z-10 border-0">
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-14 h-14 neu-btn rounded-2xl flex items-center justify-center text-emerald-600 shadow-none">
+              <Waves className="w-7 h-7" />
+            </div>
+            <div className="w-14 h-14 neu-flat rounded-full p-1 flex items-center justify-center shadow-xs">
+              <VapeAvenueLogo className="w-full h-full rounded-full" />
+            </div>
           </div>
           <div>
-            <CardTitle className="text-3xl font-extrabold tracking-tight text-[#1C2D4E] font-heading">AGOS ERP</CardTitle>
-            <CardDescription className="text-slate-500 mt-1 font-medium">
-              Smart Store & Inventory Portal
-            </CardDescription>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 font-heading">AGOS STORE PORTAL</h1>
+            <p className="text-xs font-black text-emerald-700 uppercase tracking-widest mt-1">
+              Vape Avenue • Denward
+            </p>
+            <p className="text-slate-500 mt-1 text-xs font-semibold">
+              Multi-Store Retail POS & Inventory Operations
+            </p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-2">
-          <div className="text-center text-xs text-slate-600 font-medium leading-relaxed">
+        </div>
+
+        <div className="space-y-4">
+          <div className="neu-inset rounded-xl p-3.5 text-center text-xs text-slate-600 font-semibold leading-relaxed">
             Sign in with your authorized Google account to access store operations, barcodes, cash registers, and multi-location management.
           </div>
 
           <Button 
             onClick={handleGoogleLogin} 
             disabled={loading}
-            className="w-full h-12 gap-3 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 shadow-sm rounded-xl font-bold text-sm"
+            variant="outline"
+            className="w-full h-12 gap-2.5 neu-btn rounded-xl font-black text-sm text-slate-800 hover:text-emerald-700 cursor-pointer"
           >
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-4.5 h-4.5" />
             <span>Continue with Google</span>
           </Button>
-        </CardContent>
-        <CardFooter className="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/50 rounded-b-[28px] pt-4 pb-6">
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-            <LogIn className="w-3.5 h-3.5 text-[#D4AF37]" />
-            <span>Secure Enterprise Authentication</span>
-          </div>
-        </CardFooter>
-      </Card>
+        </div>
+
+        <div className="pt-3 border-t border-[#D1D9E6]/60 flex items-center justify-center gap-2 text-xs text-slate-500 font-bold">
+          <LogIn className="w-3.5 h-3.5 text-emerald-600" />
+          <span>EST. 2022 • Cloud Sync Active</span>
+        </div>
+      </div>
     </div>
   );
 };

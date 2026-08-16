@@ -42,24 +42,24 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
   const endItem = Math.min(currentPage * pageSize, totalItems);
 
   return (
-    <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3 border-t border-slate-200/80 bg-white/50 text-xs text-slate-600 rounded-b-xl", className)}>
+    <div className={cn("flex flex-col sm:flex-row items-center justify-between gap-2.5 px-3 py-2.5 neu-inset rounded-lg bg-[#E6ECF5] text-xs text-slate-600 border-0 mt-3", className)}>
       {/* Left: Info text & page size selector */}
       <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
-        <span className="font-medium text-slate-500">
-          Showing <strong className="font-semibold text-slate-800">{startItem}–{endItem}</strong> of <strong className="font-semibold text-slate-800">{totalItems}</strong> entries
+        <span className="font-semibold text-slate-500">
+          Showing <strong className="font-black text-slate-800">{startItem}–{endItem}</strong> of <strong className="font-black text-slate-800">{totalItems}</strong> entries
         </span>
 
         {onPageSizeChange && (
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-slate-400 font-medium hidden md:inline">Rows per page:</span>
+            <span className="text-slate-400 font-bold hidden md:inline">Rows:</span>
             <Select 
               value={pageSize.toString()} 
               onValueChange={(val) => onPageSizeChange(Number(val))}
             >
-              <SelectTrigger className="h-7 w-16 text-xs bg-white border-slate-200">
+              <SelectTrigger className="h-7 w-16 text-xs neu-btn bg-[#E6ECF5] border-0">
                 <SelectValue>{pageSize}</SelectValue>
               </SelectTrigger>
-              <SelectContent className="bg-white">
+              <SelectContent className="bg-[#E6ECF5]">
                 {pageSizeOptions.map((opt) => (
                   <SelectItem key={opt} value={opt.toString()} className="text-xs">
                     {opt}
@@ -73,14 +73,14 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
 
       {/* Right: Pagination Controls */}
       <div className="flex items-center gap-1.5 w-full sm:w-auto justify-center sm:justify-end">
-        <span className="font-bold text-slate-700 mr-2">
+        <span className="font-extrabold text-slate-700 mr-2">
           Page {currentPage} of {Math.max(1, totalPages)}
         </span>
 
         <Button
           variant="outline"
-          size="icon"
-          className="h-7 w-7 text-slate-600 hover:text-slate-900 border-slate-200 disabled:opacity-40"
+          size="icon-sm"
+          className="h-7 w-7 rounded-lg text-slate-600 hover:text-blue-600 disabled:opacity-30"
           onClick={() => onPageChange(1)}
           disabled={currentPage <= 1}
           title="First Page"
@@ -89,8 +89,8 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
         </Button>
         <Button
           variant="outline"
-          size="icon"
-          className="h-7 w-7 text-slate-600 hover:text-slate-900 border-slate-200 disabled:opacity-40"
+          size="icon-sm"
+          className="h-7 w-7 rounded-lg text-slate-600 hover:text-blue-600 disabled:opacity-30"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
           title="Previous Page"
@@ -100,8 +100,8 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
 
         <Button
           variant="outline"
-          size="icon"
-          className="h-7 w-7 text-slate-600 hover:text-slate-900 border-slate-200 disabled:opacity-40"
+          size="icon-sm"
+          className="h-7 w-7 rounded-lg text-slate-600 hover:text-blue-600 disabled:opacity-30"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
           title="Next Page"
@@ -110,8 +110,8 @@ export const DataTablePagination: React.FC<DataTablePaginationProps> = ({
         </Button>
         <Button
           variant="outline"
-          size="icon"
-          className="h-7 w-7 text-slate-600 hover:text-slate-900 border-slate-200 disabled:opacity-40"
+          size="icon-sm"
+          className="h-7 w-7 rounded-lg text-slate-600 hover:text-blue-600 disabled:opacity-30"
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage >= totalPages}
           title="Last Page"

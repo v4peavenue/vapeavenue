@@ -11,352 +11,409 @@ import {
   Clock, 
   Settings, 
   Building2, 
-  ArrowRight,
   Waves,
-  Zap,
   CheckCircle2,
   Sparkles,
-  BarChart3,
-  Layers,
   ShieldCheck,
-  UserCheck
+  Layers,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLocations } from '../contexts/LocationContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { VapeAvenueLogo } from '@/components/VapeAvenueLogo';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export const Home: React.FC = () => {
-  const { profile, user } = useAuth();
-  const { selectedLocation } = useLocations();
+  const { profile, isAdmin, isManager } = useAuth();
+  const { locations, selectedLocationId, setSelectedLocationId, selectedLocation } = useLocations();
   const navigate = useNavigate();
 
   const activeLocationName = selectedLocation ? selectedLocation.name : 'All Store Locations';
+  const userName = profile?.name ? profile.name.split(' ')[0] : (profile?.email ? profile.email.split('@')[0] : 'Van');
+  const userRole = (profile?.role || 'admin').toUpperCase();
 
   const modules = [
     {
       title: 'POS Register',
-      description: 'Fast barcode scanning, multi-payment checkout, and instant print receipt processing.',
+      fullName: 'POS Register',
       icon: ShoppingCart,
       path: '/pos',
-      accentColor: 'from-emerald-500 to-teal-600',
-      badge: 'Active Workstation',
+      bg: 'bg-[#10B981]',
+      badge: true,
       roles: ['admin', 'manager', 'staff']
     },
     {
-      title: 'Inventory Catalog',
-      description: 'Stock management, low stock warnings, barcode assignment, and pricing tiers.',
+      title: 'Inventory Cat...',
+      fullName: 'Inventory Catalog',
       icon: Package,
       path: '/inventory',
-      accentColor: 'from-[#1C2D4E] to-[#2B4570]',
+      bg: 'bg-[#1E293B]',
       roles: ['admin', 'manager', 'staff']
     },
     {
-      title: 'Directory & Loyalty',
-      description: 'Customer profiles, VIP loyalty cards, supplier index, and staff roster.',
+      title: 'Directory & L...',
+      fullName: 'Directory & Loyalty',
       icon: BookOpen,
       path: '/directory',
-      accentColor: 'from-purple-600 to-indigo-700',
+      bg: 'bg-[#9333EA]',
       roles: ['admin', 'manager', 'staff']
     },
     {
       title: 'Sales History',
-      description: 'Daily transaction records, refund manager, discounts log, and receipt reprints.',
+      fullName: 'Sales History',
       icon: History,
       path: '/sales',
-      accentColor: 'from-amber-500 to-amber-700',
+      bg: 'bg-[#F59E0B]',
       roles: ['admin', 'manager', 'staff']
     },
     {
-      title: 'Financial Ledger',
-      description: 'Cash registers, store accounts, daily expense entries, and cash flow audit.',
+      title: 'Financial Led...',
+      fullName: 'Financial Ledger',
       icon: Wallet,
       path: '/finance',
-      accentColor: 'from-blue-600 to-cyan-700',
+      bg: 'bg-[#2563EB]',
       roles: ['admin', 'manager', 'staff']
     },
     {
-      title: 'Timeclock & Schedule',
-      description: 'Staff shift schedules, daily timekeeping, and attendance reports.',
+      title: 'Timeclock & ...',
+      fullName: 'Timeclock & Schedule',
       icon: Clock,
       path: '/attendance',
-      accentColor: 'from-teal-600 to-emerald-700',
+      bg: 'bg-[#0D9488]',
       roles: ['admin', 'manager', 'staff']
     },
     {
-      title: 'Executive Dashboard',
-      description: 'Store analytics, hourly revenue velocity, top sellers, and margin tracking.',
+      title: 'Executive Da...',
+      fullName: 'Executive Dashboard',
       icon: LayoutDashboard,
       path: '/dashboard',
-      accentColor: 'from-rose-600 to-pink-700',
+      bg: 'bg-[#E11D48]',
       roles: ['admin']
     },
     {
-      title: 'Reports & Analytics',
-      description: 'Custom financial audits, stock valuations, and historical export tools.',
+      title: 'Reports & An...',
+      fullName: 'Reports & Analytics',
       icon: TrendingUp,
       path: '/reports',
-      accentColor: 'from-orange-500 to-amber-600',
+      bg: 'bg-[#EA580C]',
       roles: ['admin']
     },
     {
-      title: 'System Settings',
-      description: 'Store locations, security roles, printer setup, and system configuration.',
+      title: 'System Setti...',
+      fullName: 'System Settings',
       icon: Settings,
       path: '/settings',
-      accentColor: 'from-slate-700 to-slate-900',
+      bg: 'bg-[#1E293B]',
       roles: ['admin', 'manager', 'staff']
     }
   ];
 
-  const userRole = profile?.role || 'staff';
-  const availableModules = modules.filter(m => m.roles.includes(userRole));
+  const currentRole = (profile?.role || 'staff').toLowerCase();
+  const availableModules = modules.filter(m => {
+    return m.roles.includes(currentRole as any) || (isAdmin && m.roles.includes('admin')) || (isManager && m.roles.includes('manager'));
+  });
 
   return (
-    <div className="relative h-screen max-h-screen w-full flex-1 flex flex-col justify-between bg-slate-100/80 p-2.5 sm:p-4 lg:p-5 overflow-hidden font-sans box-border">
-      {/* Background Stylized Agos Shapes */}
-      <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#1C2D4E] rounded-full mix-blend-multiply opacity-25 filter blur-2xl pointer-events-none" />
-      <div className="absolute top-1/3 -right-20 w-80 h-80 bg-[#D4AF37] rounded-full mix-blend-multiply opacity-20 filter blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-28 left-1/4 w-[500px] h-[500px] bg-indigo-900/20 rounded-full filter blur-3xl pointer-events-none" />
-
-      {/* Elevated 100% Maximized Container */}
-      <div className="relative z-10 w-full max-w-[1720px] mx-auto flex-1 min-h-0 flex flex-col">
+    <div className="h-screen max-h-screen w-full flex flex-col justify-between bg-[#E6ECF5] p-3.5 sm:p-5 lg:p-6 overflow-hidden font-sans box-border text-slate-700 select-none">
+      
+      {/* Centered Main Stage Container */}
+      <div className="w-full max-w-[1640px] mx-auto flex-1 min-h-0 flex flex-col justify-between gap-3.5 sm:gap-5">
         
-        {/* Main Floating Landing Panel with generous internal padding */}
-        <div className="flex-1 min-h-0 flex flex-col justify-between bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 lg:p-6 shadow-xl border border-slate-200/90 relative overflow-hidden">
+        {/* Upper Floating Master Card */}
+        <div className="flex-1 min-h-0 flex flex-col justify-between neu-flat-lg rounded-2xl p-5 sm:p-6 lg:p-8 relative overflow-hidden bg-[#E6ECF5]">
           
-          {/* Top Embedded Navbar inside Hero Card */}
-          <header className="flex flex-col sm:flex-row items-center justify-between gap-2 pb-3 mb-2 border-b border-slate-100 shrink-0">
+          {/* Top Navbar */}
+          <header className="flex items-center justify-between gap-4 pb-3 sm:pb-4 border-b border-[#D1D9E6]/70 shrink-0">
+            
+            {/* Left: Brand Identity with Waves Icon & Vape Avenue Crest */}
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-br from-[#1C2D4E] to-[#15233D] rounded-xl flex items-center justify-center shadow-md shadow-[#1C2D4E]/20">
-                <Waves className="w-5 h-5 text-[#D4AF37]" />
+              <div className="w-11 h-11 neu-btn rounded-xl flex items-center justify-center cursor-pointer text-emerald-600">
+                <Waves className="w-6 h-6" />
               </div>
-              <div>
-                <span className="text-base sm:text-lg font-extrabold tracking-tight text-[#1C2D4E] font-heading">AGOS</span>
-                <span className="text-[9px] sm:text-[10px] text-[#D4AF37] font-black tracking-widest uppercase ml-2 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200">
-                  Retail ERP
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 font-heading">AGOS</span>
+                <span className="text-[10px] sm:text-[11px] font-black text-emerald-700 px-2.5 py-0.5 neu-inset rounded-md tracking-wider uppercase">
+                  RETAIL ERP
                 </span>
+              </div>
+
+              {/* Vape Avenue Crest Badge beside AGOS */}
+              <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-[#D1D9E6]/70">
+                <div className="w-9 h-9 neu-flat rounded-full p-0.5 flex items-center justify-center shadow-xs">
+                  <VapeAvenueLogo className="w-full h-full rounded-full" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-black text-slate-900 tracking-tight leading-none uppercase">Vape Avenue</span>
+                  <span className="text-[9px] font-black text-emerald-700 tracking-widest uppercase">Denward</span>
+                </div>
               </div>
             </div>
 
-            {/* Quick Links inside Card Header */}
-            <nav className="hidden md:flex items-center gap-5 text-xs font-semibold text-slate-600">
-              <button onClick={() => navigate('/pos')} className="hover:text-[#1C2D4E] transition-colors cursor-pointer">POS Register</button>
-              <button onClick={() => navigate('/inventory')} className="hover:text-[#1C2D4E] transition-colors cursor-pointer">Inventory</button>
-              <button onClick={() => navigate('/sales')} className="hover:text-[#1C2D4E] transition-colors cursor-pointer">Sales History</button>
-              <button onClick={() => navigate('/directory')} className="hover:text-[#1C2D4E] transition-colors cursor-pointer">Directory</button>
+            {/* Center: Navigation Links */}
+            <nav className="hidden md:flex items-center gap-7 lg:gap-10">
+              <button 
+                onClick={() => navigate('/pos')}
+                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+              >
+                POS Register
+              </button>
+              <button 
+                onClick={() => navigate('/inventory')}
+                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+              >
+                Inventory
+              </button>
+              <button 
+                onClick={() => navigate('/sales')}
+                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+              >
+                Sales History
+              </button>
+              <button 
+                onClick={() => navigate('/directory')}
+                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+              >
+                Directory
+              </button>
             </nav>
 
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-              <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-slate-50 text-slate-700 border-slate-200 text-xs font-medium">
-                <Building2 className="w-3.5 h-3.5 text-[#D4AF37]" />
-                {activeLocationName}
-              </Badge>
-              <Button 
+            {/* Right: Location Pill & Launch POS Button */}
+            <div className="flex items-center gap-3">
+              {/* Location Selector Pill */}
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-2 px-3.5 sm:px-4 py-2 neu-btn rounded-lg text-xs sm:text-sm font-bold text-slate-700 hover:text-slate-900 cursor-pointer outline-none">
+                  <Building2 className="w-4 h-4 text-amber-500" />
+                  <span>{activeLocationName}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-[#E6ECF5] text-slate-800 rounded-lg border-0 neu-flat-lg p-1.5">
+                  {(isAdmin || isManager) && (
+                    <DropdownMenuItem 
+                      onClick={() => setSelectedLocationId('all')}
+                      className={cn("text-xs sm:text-sm font-bold rounded-md cursor-pointer py-2 px-3", selectedLocationId === 'all' && "text-emerald-700 font-black")}
+                    >
+                      All Store Locations
+                    </DropdownMenuItem>
+                  )}
+                  {locations.map((loc) => (
+                    <DropdownMenuItem 
+                      key={loc.id} 
+                      onClick={() => setSelectedLocationId(loc.id)}
+                      className={cn("text-xs sm:text-sm font-bold rounded-md cursor-pointer py-2 px-3", selectedLocationId === loc.id && "text-emerald-700 font-black")}
+                    >
+                      {loc.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Launch POS Button */}
+              <button 
                 onClick={() => navigate('/pos')}
-                className="bg-[#1C2D4E] hover:bg-[#15233D] text-[#D4AF37] font-bold rounded-full px-5 h-8 sm:h-9 shadow-md shadow-[#1C2D4E]/20 text-xs tracking-wide cursor-pointer"
+                className="neu-btn rounded-lg px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-slate-800 hover:text-emerald-700 cursor-pointer transition-all active:scale-95 shadow-xs"
               >
                 Launch POS
-              </Button>
+              </button>
             </div>
           </header>
 
           {/* Hero Main Content Split */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-8 items-center flex-1 min-h-0 my-auto py-1">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 xl:gap-12 items-center flex-1 min-h-0 my-auto py-3">
             
-            {/* Left Column: Heading & Copy */}
-            <div className="lg:col-span-6 space-y-2.5 sm:space-y-3 lg:space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-900 text-xs font-bold">
-                <Sparkles className="w-3.5 h-3.5 text-[#D4AF37]" />
-                Store Operations Workstation
+            {/* Left Column: Heading & Primary Triggers */}
+            <div className="lg:col-span-7 space-y-4 sm:space-y-5">
+              
+              {/* Eyebrow Pill */}
+              <div className="inline-flex items-center gap-2 px-3 py-1 neu-inset rounded-md text-emerald-700 text-xs sm:text-sm font-bold">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>Store Operations Workstation</span>
               </div>
 
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-black text-slate-900 tracking-tight leading-[1.12] font-heading">
+              {/* Giant Heading */}
+              <h1 className="text-3xl sm:text-5xl lg:text-[48px] xl:text-[54px] font-black text-slate-900 leading-[1.12] font-heading tracking-tight">
                 Smart Retail & <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#1C2D4E] via-indigo-900 to-[#D4AF37]">
-                  Inventory Management
-                </span>
+                Inventory Manage<span className="text-emerald-700">ment</span>
               </h1>
 
-              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed max-w-xl line-clamp-3 sm:line-clamp-none">
-                Welcome back, <span className="font-bold text-slate-900">{profile?.name || user?.email?.split('@')[0]}</span>. Process checkouts, manage product stock, track sales history, and oversee cash registers from your Agos portal.
+              {/* Description Subtitle */}
+              <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-medium">
+                Welcome back, <strong className="text-slate-900 font-bold">{userName}</strong>. Process checkouts, manage product stock, track sales history, and oversee cash registers from your Agos portal.
               </p>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3 pt-0.5">
-                <Button 
+              {/* Primary Pill Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3.5 pt-1">
+                {/* Start POS Checkout (Dark Forest Green Button) */}
+                <button 
                   onClick={() => navigate('/pos')}
-                  size="default"
-                  className="bg-gradient-to-r from-[#1C2D4E] to-[#2B4570] text-white hover:opacity-95 font-bold rounded-xl px-5 h-10 sm:h-11 shadow-md shadow-[#1C2D4E]/20 text-xs sm:text-sm gap-2 cursor-pointer"
+                  className="bg-[#0D2818] hover:bg-[#143D25] text-white px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2.5 shadow-lg shadow-emerald-950/20 cursor-pointer transition-all active:scale-95 border border-emerald-900/40"
                 >
-                  <ShoppingCart className="w-4 h-4 text-[#D4AF37]" /> Start POS Checkout
-                </Button>
-                <Button 
+                  <ShoppingCart className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-emerald-400" />
+                  <span>Start POS Checkout</span>
+                </button>
+
+                {/* Manage Stock (Light Neumorphic Button) */}
+                <button 
                   onClick={() => navigate('/inventory')}
-                  variant="outline"
-                  size="default"
-                  className="rounded-xl px-4 h-10 sm:h-11 border-slate-200 text-slate-700 font-semibold text-xs sm:text-sm hover:bg-slate-50 cursor-pointer"
+                  className="neu-btn px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl text-sm sm:text-base font-bold text-slate-800 hover:text-emerald-700 flex items-center gap-2.5 cursor-pointer transition-all active:scale-95"
                 >
-                  <Package className="w-4 h-4 mr-2 text-slate-500" /> Manage Stock
-                </Button>
+                  <Package className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-slate-600" />
+                  <span>Manage Stock</span>
+                </button>
               </div>
 
-              {/* Quick Status Tags */}
-              <div className="pt-0.5 flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-medium text-slate-500">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Store sync active
+              {/* Cloud Sync & Role Indicators */}
+              <div className="pt-2 flex items-center gap-5 sm:gap-7 text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+                  <span>Real-time cloud sync</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> Role: <span className="capitalize font-bold text-slate-800">{userRole}</span>
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4.5 h-4.5 text-emerald-600" />
+                  <span>Role: <strong className="uppercase font-black text-slate-900">{userRole}</strong></span>
                 </div>
               </div>
             </div>
 
-            {/* Right Column: Agos Isometric Store Operations Illustration Stage */}
-            <div className="lg:col-span-6 relative flex items-center justify-center min-h-0">
-              <div className="relative w-full h-full max-h-[240px] sm:max-h-[270px] lg:max-h-[290px] rounded-2xl bg-gradient-to-tr from-slate-50 via-indigo-50/50 to-amber-50/30 p-3 sm:p-4 border border-slate-100 flex flex-col justify-between overflow-hidden shadow-inner">
+            {/* Right Column: Console Hub Stage */}
+            <div className="lg:col-span-5 flex items-center justify-center min-h-0">
+              <div className="w-full max-w-[480px] neu-flat-lg rounded-2xl p-4 sm:p-5 lg:p-6 bg-[#E6ECF5] space-y-4">
                 
-                {/* Decorative Glowing Rings on Graphic Stage */}
-                <div className="absolute w-64 h-64 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-                <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-[#D4AF37]/15 rounded-full blur-2xl pointer-events-none" />
-
-                {/* Top Floating Badge */}
-                <div className="flex justify-between items-center relative z-10">
-                  <motion.div 
-                    initial={{ y: -6, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-lg shadow-xs border border-slate-200/80 flex items-center gap-1.5 text-xs font-bold text-slate-800"
-                  >
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                {/* Top Status Indicators */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 px-3 py-1.5 neu-inset rounded-lg text-xs sm:text-sm font-bold text-slate-700">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span>POS Terminal Active</span>
-                  </motion.div>
+                  </div>
 
-                  <div className="bg-[#1C2D4E] text-[#D4AF37] px-2 py-0.5 rounded-md shadow text-[10px] font-black tracking-wider uppercase flex items-center gap-1">
-                    <BarChart3 className="w-3 h-3" /> AGOS LIVE
+                  <div className="bg-[#0F1E36] text-white px-3 py-1.5 rounded-md text-xs font-black tracking-wider flex items-center gap-1.5 shadow-xs">
+                    <span className="text-cyan-400 text-sm">📶</span>
+                    <span>AGOS LIVE</span>
                   </div>
                 </div>
 
-                {/* Isometric Graphic Cards Grid */}
-                <div className="grid grid-cols-3 gap-2 my-auto relative z-10 py-1">
+                {/* 3 Square-Icon Feature Pedestals */}
+                <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5">
                   
-                  {/* Pedestal 1: POS Checkout */}
-                  <motion.div 
-                    whileHover={{ y: -2 }}
+                  {/* Checkout */}
+                  <div 
                     onClick={() => navigate('/pos')}
-                    className="cursor-pointer bg-gradient-to-b from-white to-emerald-50/60 p-2 sm:p-2.5 rounded-xl shadow-xs border border-emerald-100 flex flex-col items-center text-center space-y-1 group transition-all"
+                    className="neu-btn rounded-xl p-3 sm:p-3.5 flex flex-col items-center text-center space-y-1.5 cursor-pointer group hover:scale-[1.02] transition-transform"
                   >
-                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center shadow-xs shadow-emerald-500/30 group-hover:scale-105 transition-transform">
-                      <ShoppingCart className="w-4 h-4" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#10B981] rounded-xl flex items-center justify-center text-white shadow-sm shadow-emerald-500/25">
+                      <ShoppingCart className="w-6 h-6 sm:w-7 sm:h-7" />
                     </div>
                     <div>
-                      <p className="text-[11px] sm:text-xs font-extrabold text-slate-900">Checkout</p>
-                      <p className="text-[9px] text-slate-500 font-medium">Barcode POS</p>
+                      <p className="text-xs sm:text-sm font-black text-slate-900">Checkout</p>
+                      <p className="text-[10px] sm:text-xs text-slate-400 font-bold">Barcode POS</p>
                     </div>
-                    <span className="text-[8px] sm:text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded-full">
+                    <span className="text-[9px] sm:text-[10px] font-black text-blue-600 px-2.5 py-0.5 neu-inset rounded-md">
                       Ready
                     </span>
-                  </motion.div>
+                  </div>
 
-                  {/* Pedestal 2: Stock Inventory */}
-                  <motion.div 
-                    whileHover={{ y: -2 }}
+                  {/* Stock Items */}
+                  <div 
                     onClick={() => navigate('/inventory')}
-                    className="cursor-pointer bg-gradient-to-b from-white to-indigo-50/60 p-2 sm:p-2.5 rounded-xl shadow-xs border border-indigo-100 flex flex-col items-center text-center space-y-1 group transition-all"
+                    className="neu-btn rounded-xl p-3 sm:p-3.5 flex flex-col items-center text-center space-y-1.5 cursor-pointer group hover:scale-[1.02] transition-transform"
                   >
-                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#1C2D4E] text-[#D4AF37] flex items-center justify-center shadow-xs shadow-[#1C2D4E]/30 group-hover:scale-105 transition-transform">
-                      <Package className="w-4 h-4" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#1E293B] rounded-xl flex items-center justify-center text-amber-400 shadow-sm shadow-slate-900/25">
+                      <Package className="w-6 h-6 sm:w-7 sm:h-7" />
                     </div>
                     <div>
-                      <p className="text-[11px] sm:text-xs font-extrabold text-slate-900">Stock Items</p>
-                      <p className="text-[9px] text-slate-500 font-medium">Catalog Hub</p>
+                      <p className="text-xs sm:text-sm font-black text-slate-900">Stock Items</p>
+                      <p className="text-[10px] sm:text-xs text-slate-400 font-bold">Catalog Hub</p>
                     </div>
-                    <span className="text-[8px] sm:text-[9px] font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.2 rounded-full">
+                    <span className="text-[9px] sm:text-[10px] font-black text-blue-600 px-2.5 py-0.5 neu-inset rounded-md">
                       Tracked
                     </span>
-                  </motion.div>
+                  </div>
 
-                  {/* Pedestal 3: Financial Accounts */}
-                  <motion.div 
-                    whileHover={{ y: -2 }}
+                  {/* Ledger */}
+                  <div 
                     onClick={() => navigate('/finance')}
-                    className="cursor-pointer bg-gradient-to-b from-white to-amber-50/60 p-2 sm:p-2.5 rounded-xl shadow-xs border border-amber-100 flex flex-col items-center text-center space-y-1 group transition-all"
+                    className="neu-btn rounded-xl p-3 sm:p-3.5 flex flex-col items-center text-center space-y-1.5 cursor-pointer group hover:scale-[1.02] transition-transform"
                   >
-                    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs shadow-amber-500/30 group-hover:scale-105 transition-transform">
-                      <Wallet className="w-4 h-4" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-[#F59E0B] rounded-xl flex items-center justify-center text-white shadow-sm shadow-amber-500/25">
+                      <Wallet className="w-6 h-6 sm:w-7 sm:h-7" />
                     </div>
                     <div>
-                      <p className="text-[11px] sm:text-xs font-extrabold text-slate-900">Ledger</p>
-                      <p className="text-[9px] text-slate-500 font-medium">Cash Register</p>
+                      <p className="text-xs sm:text-sm font-black text-slate-900">Ledger</p>
+                      <p className="text-[10px] sm:text-xs text-slate-400 font-bold">Cash Register</p>
                     </div>
-                    <span className="text-[8px] sm:text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full">
+                    <span className="text-[9px] sm:text-[10px] font-black text-amber-600 px-2.5 py-0.5 neu-inset rounded-md">
                       Audited
                     </span>
-                  </motion.div>
+                  </div>
 
                 </div>
 
-                {/* Bottom Floating Stats Strip */}
-                <div className="bg-slate-900/90 text-white p-2 rounded-xl backdrop-blur-md flex items-center justify-between text-[11px] border border-slate-800 relative z-10">
-                  <div className="flex items-center gap-1.5">
-                    <Layers className="w-3 h-3 text-[#D4AF37]" />
-                    <span className="font-medium text-slate-300">Operations Hub</span>
+                {/* Operations Hub Dark Capsule */}
+                <div className="bg-[#0F1E36] rounded-xl px-4 py-2.5 sm:py-3 text-white flex items-center justify-between shadow-inner">
+                  <div className="flex items-center gap-2.5 text-xs sm:text-sm font-bold text-white">
+                    <Layers className="w-4.5 h-4.5 text-amber-400" />
+                    <span>Operations Hub</span>
                   </div>
-                  <div className="flex items-center gap-1 text-emerald-400 font-bold">
-                    <span>Online & Synced</span>
-                  </div>
+                  <span className="text-xs font-bold text-emerald-400 tracking-wide">
+                    Online & Synced
+                  </span>
                 </div>
 
               </div>
             </div>
 
-          </div>
-
-          {/* Operational Modules Horizontal Grid / Strip - Integrated inside the main panel */}
-          <div className="shrink-0 pt-3 border-t border-slate-100">
-            <div className="flex items-center justify-between px-1 mb-2">
-              <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 font-heading tracking-tight">
-                Store Modules & Services
-              </h2>
-              <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium">
-                Authorized for <span className="font-bold text-[#1C2D4E] uppercase">{userRole}</span>
-              </span>
-            </div>
-
-            <div className="bg-slate-50/80 p-2.5 sm:p-3.5 rounded-2xl border border-slate-200/70 flex items-center justify-between gap-2 sm:gap-3 overflow-x-auto custom-scrollbar">
-              {availableModules.map((mod) => {
-                const Icon = mod.icon;
-                return (
-                  <button
-                    key={mod.path}
-                    onClick={() => navigate(mod.path)}
-                    title={`${mod.title} - ${mod.description}`}
-                    className="group flex-1 min-w-[70px] sm:min-w-[85px] max-w-[140px] flex flex-col items-center gap-1.5 p-1.5 sm:p-2 rounded-xl hover:bg-white hover:shadow-xs transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1C2D4E]/20"
-                  >
-                    <div className={cn(
-                      "w-11 h-11 sm:w-13 sm:h-13 rounded-xl sm:rounded-2xl bg-gradient-to-br",
-                      mod.accentColor,
-                      "text-white flex items-center justify-center shadow-md shadow-slate-300/50 group-hover:scale-110 group-hover:shadow-lg transition-all duration-200 relative"
-                    )}>
-                      <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
-                      {mod.badge && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" title={mod.badge} />
-                      )}
-                    </div>
-                    <span className="text-[11px] sm:text-xs font-bold text-slate-700 group-hover:text-[#1C2D4E] transition-colors w-full text-center truncate">
-                      {mod.title}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
         </div>
 
+        {/* Lower Section: Store Modules & Services Strip */}
+        <div className="shrink-0 space-y-2">
+          {/* Header */}
+          <div className="px-1">
+            <h2 className="text-sm sm:text-base font-black text-slate-900 font-heading tracking-tight">
+              Store Modules & Services
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">
+              Authorized tools for <span className="font-black text-slate-800 uppercase">{userRole}</span> account
+            </p>
+          </div>
+
+          {/* Neumorphic Inset Module Tray */}
+          <div className="neu-inset p-3 sm:p-4 lg:p-4.5 rounded-2xl flex items-center justify-between gap-2 sm:gap-3.5 overflow-x-auto custom-scrollbar">
+            {availableModules.map((mod) => {
+              const Icon = mod.icon;
+              return (
+                <button
+                  key={mod.path}
+                  onClick={() => navigate(mod.path)}
+                  title={`${mod.fullName}`}
+                  className="group flex-1 min-w-[76px] sm:min-w-[90px] max-w-[155px] flex flex-col items-center gap-1.5 p-1 cursor-pointer focus:outline-none transition-all"
+                >
+                  <div className={cn(
+                    "w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-md shadow-black/10 group-hover:scale-105 transition-transform relative",
+                    mod.bg
+                  )}>
+                    <Icon className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5" />
+                    {mod.badge && (
+                      <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white shadow-xs" />
+                    )}
+                  </div>
+                  <span className="text-xs sm:text-sm font-bold text-slate-700 group-hover:text-emerald-700 transition-colors w-full text-center truncate">
+                    {mod.title}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
+
     </div>
   );
 };

@@ -1,5 +1,8 @@
 {
   "name": "Remix: Agos: Sales, Inventory, Attendance",
-  "description": "A premium, Filipino-inspired inventory and sales management system. Agos (Flow) streamlines your business operations with elegant real-time tracking, multi-location support, and intelligent reporting.",
-  "requestFramePermissions": []
+  "description": "A premium neumorphic inventory and sales management ERP. Agos streamlines store operations with real-time tracking, multi-location support, POS checkout, and comprehensive reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
