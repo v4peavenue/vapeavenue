@@ -119,10 +119,14 @@ export interface Sale {
   paymentSplits: PaymentSplit[];
   status: 'completed' | 'returned' | 'partially_returned' | 'voided' | 'pending' | 'pending_promo_approval' | 'pending_total_approval';
   staffId: string;
+  staffName?: string;
   locationId: string;
+  locationName?: string;
   customerId: string;
   customerDetails: Omit<Customer, 'id' | 'createdAt'>;
   timestamp: Timestamp;
+  updatedAt?: Timestamp;
+  stockDeducted?: boolean;
   saleType?: 'in-store' | 'online';
   deliveryFee?: number;
   isTotalEdited?: boolean;
@@ -186,10 +190,12 @@ export interface AuditLog {
   details: string;
   entityId?: string;
   entityType?: string;
+  locationId?: string;
+  locationName?: string;
   timestamp: Timestamp;
 }
 
-export type POStatus = 'draft' | 'ordered' | 'received' | 'cancelled';
+export type POStatus = 'draft' | 'ordered' | 'partially_received' | 'received' | 'cancelled';
 
 export interface POItem {
   productId: string;
@@ -218,6 +224,8 @@ export interface PurchaseOrder {
   status: POStatus;
   paymentAccountId?: string;
   paymentMethod?: string;
+  paymentCategory?: string;
+  paymentReference?: string;
   paymentSplits?: PaymentSplit[];
   isSplitPayment?: boolean;
   notes?: string;

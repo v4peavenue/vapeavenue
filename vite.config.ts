@@ -24,14 +24,14 @@ export default defineConfig(({mode}) => {
           theme_color: '#1A2B4B',
           icons: [
             {
-              src: 'https://raw.githubusercontent.com/lucide-react/lucide/main/icons/package.svg',
+              src: '/vape_avenue_logo.png',
               sizes: '192x192',
-              type: 'image/svg+xml'
+              type: 'image/png'
             },
             {
-              src: 'https://raw.githubusercontent.com/lucide-react/lucide/main/icons/package.svg',
+              src: '/vape_avenue_logo.png',
               sizes: '512x512',
-              type: 'image/svg+xml'
+              type: 'image/png'
             }
           ]
         }
@@ -49,14 +49,13 @@ export default defineConfig(({mode}) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: false,
-      chunkSizeWarningLimit: 1500,
+      chunkSizeWarningLimit: 2000,
       rollupOptions: {
         output: {
           manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
             'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
             'vendor-charts': ['recharts'],
-            'vendor-icons': ['lucide-react'],
+            'vendor-qrcode': ['html5-qrcode'],
           },
         },
       },

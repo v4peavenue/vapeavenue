@@ -32,7 +32,6 @@ import { MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
-import { VapeAvenueLogo } from './VapeAvenueLogo';
 
 const navItems = [
   { name: 'Home', path: '/home', icon: HomeIcon, roles: ['admin', 'manager', 'staff'] },
@@ -278,7 +277,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           <div className="w-full px-3 sm:px-4 lg:px-6 py-2.5">
             <div className="flex items-center justify-between gap-3">
               
-              {/* Left: Brand Logo & Store Badge (kept exactly as preferred) */}
+              {/* Left: Brand Logo & Store Badge */}
               <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                 <Link to="/home" className="flex items-center gap-2.5 group">
                   <div className="w-9 h-9 neu-btn rounded-xl flex items-center justify-center text-emerald-600 group-hover:scale-105 transition-transform">
@@ -289,17 +288,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     <span className="text-[8px] text-emerald-700 font-black tracking-wider uppercase mt-0.5 whitespace-nowrap">Store Portal</span>
                   </div>
                 </Link>
-
-                {/* Vape Avenue Crest Badge beside AGOS */}
-                <div className="hidden sm:flex items-center gap-2 pl-2.5 border-l border-[#D1D9E6]/70">
-                  <div className="w-8 h-8 neu-flat rounded-full p-0.5 flex items-center justify-center shadow-xs">
-                    <VapeAvenueLogo className="w-full h-full rounded-full" />
-                  </div>
-                  <div className="hidden xl:flex flex-col">
-                    <span className="text-[11px] font-black text-slate-800 tracking-tight leading-none uppercase">Vape Avenue</span>
-                    <span className="text-[8px] font-black text-emerald-700 tracking-widest uppercase">Denward</span>
-                  </div>
-                </div>
               </div>
 
               {/* Center: Inset Navigation Tray matching screenshot */}

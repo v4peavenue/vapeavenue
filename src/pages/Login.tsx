@@ -9,7 +9,6 @@ import { TrendingUp, LogIn, AlertCircle, Database, Waves } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '@/lib/audit';
 import { useAuth } from '../contexts/AuthContext';
-import { VapeAvenueLogo } from '@/components/VapeAvenueLogo';
 
 export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -136,12 +135,9 @@ export const Login: React.FC = () => {
     <div className="relative min-h-screen flex items-center justify-center bg-[#E6ECF5] p-4 font-sans text-slate-800">
       <div className="max-w-md w-full neu-flat-lg rounded-2xl p-6 sm:p-8 bg-[#E6ECF5] text-slate-800 space-y-6 relative z-10 border-0">
         <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center">
             <div className="w-14 h-14 neu-btn rounded-2xl flex items-center justify-center text-emerald-600 shadow-none">
               <Waves className="w-7 h-7" />
-            </div>
-            <div className="w-14 h-14 neu-flat rounded-full p-1 flex items-center justify-center shadow-xs">
-              <VapeAvenueLogo className="w-full h-full rounded-full" />
             </div>
           </div>
           <div>

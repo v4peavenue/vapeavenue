@@ -21,7 +21,6 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useLocations } from '../contexts/LocationContext';
 import { cn } from '@/lib/utils';
-import { VapeAvenueLogo } from '@/components/VapeAvenueLogo';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -128,13 +127,6 @@ export const Home: React.FC = () => {
         {/* Upper Floating Master Card */}
         <div className="flex-1 min-h-0 flex flex-col justify-between neu-flat-lg rounded-2xl p-5 sm:p-6 lg:p-8 relative overflow-hidden bg-[#E6ECF5]">
           
-          {/* Vape Avenue Background Logo Watermark (Centered in middle, below texts & buttons) */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-0 opacity-15 sm:opacity-20 flex items-center justify-center">
-            <div className="w-[280px] h-[280px] sm:w-[420px] sm:h-[420px] lg:w-[520px] lg:h-[520px] flex items-center justify-center">
-              <VapeAvenueLogo className="w-full h-full max-w-full max-h-full" />
-            </div>
-          </div>
-
           {/* Top Navbar */}
           <header className="relative z-10 flex items-center justify-between gap-4 pb-3 sm:pb-4 border-b border-[#D1D9E6]/70 shrink-0">
             

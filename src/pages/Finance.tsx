@@ -1128,8 +1128,9 @@ export const Finance: React.FC = () => {
               {[
                 ...transactions.map(t => ({ 
                   id: t.id, 
-                  type: 'TRANSACTION', 
+                  type: 'TRANSACTION' as const, 
                   transType: t.type, 
+                  action: '',
                   details: t.description, 
                   category: t.category, 
                   accountName: t.accountName, 
@@ -1140,11 +1141,16 @@ export const Finance: React.FC = () => {
                 })),
                 ...logs.map(l => ({ 
                   id: l.id, 
-                  type: 'LOG', 
+                  type: 'LOG' as const, 
+                  transType: '' as const,
                   action: l.action, 
                   details: l.details, 
+                  category: '',
+                  accountName: '',
+                  locationName: '',
                   timestamp: l.timestamp,
-                  amount: 0
+                  amount: 0,
+                  accountBalance: undefined
                 }))
               ]
               .sort((a, b) => {
@@ -1221,7 +1227,12 @@ export const Finance: React.FC = () => {
 
                     <div className="text-[10px] text-slate-400 font-semibold text-right">
                       {item.timestamp ? (
-                        format(typeof item.timestamp.toDate === 'function' ? item.timestamp.toDate() : new Date(item.timestamp), 'MMM dd, yyyy - p')
+                        format(
+                          item.timestamp && typeof (item.timestamp as any).toDate === 'function' 
+                            ? (item.timestamp as any).toDate() 
+                            : new Date(item.timestamp as any), 
+                          'MMM dd, yyyy - p'
+                        )
                       ) : (
                         '--:--'
                       )}

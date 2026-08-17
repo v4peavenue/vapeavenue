@@ -526,8 +526,8 @@ export const Inventory: React.FC = () => {
           pageSize={pageSize}
           totalItems={filteredProducts.length}
           onPageChange={setCurrentPage}
-          onPageSizeChange={setCurrentPage => {
-            setPageSize(setCurrentPage);
+          onPageSizeChange={newSize => {
+            setPageSize(newSize);
             setCurrentPage(1);
           }}
         />
