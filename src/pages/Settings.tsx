@@ -32,8 +32,9 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { migrateCustomerLoyaltyCounts, MigrationResult } from '@/lib/loyalty-migrations';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit, getDocs, writeBatch, Timestamp, setDoc, deleteField, getDoc, increment, where } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit, getDocs, writeBatch, Timestamp, setDoc, deleteField, getDoc, increment, where, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
 import { Category, Supplier, UserProfile, Location, Invite, AuditLog, Customer, Product, PromoCode, PaymentOption, Sale } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -105,6 +106,25 @@ export const Settings: React.FC = () => {
   const [auditSearch, setAuditSearch] = useState('');
   const [auditStartDate, setAuditStartDate] = useState('');
   const [auditEndDate, setAuditEndDate] = useState('');
+  const [guardrailAuditStart, setGuardrailAuditStart] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [guardrailAuditEnd, setGuardrailAuditEnd] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isAuditGuardrailApplied, setIsAuditGuardrailApplied] = useState(false);
+
+  const calculateAuditDocs = async (startStr: string, endStr: string): Promise<number> => {
+    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
+    const q = query(
+      collection(db, 'audit_logs'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
+    const snap = await getCountFromServer(q);
+    return snap.data().count || 0;
+  };
   const [isRevertDialogOpen, setIsRevertDialogOpen] = useState(false);
   const [revertLog, setRevertLog] = useState<AuditLog | null>(null);
   const [revertEntityData, setRevertEntityData] = useState<any | null>(null);
@@ -195,7 +215,19 @@ export const Settings: React.FC = () => {
       }, (error) => {
         console.warn("Settings: Error listening to invites:", error);
       });
-      unsubscribeAudit = onSnapshot(query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(100)), (snapshot) => {
+      let auditQuery = query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(100));
+      if (auditStartDate && auditEndDate) {
+        const startTs = Timestamp.fromDate(new Date(`${auditStartDate}T00:00:00`));
+        const endTs = Timestamp.fromDate(new Date(`${auditEndDate}T23:59:59`));
+        auditQuery = query(
+          collection(db, 'audit_logs'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc'),
+          limit(500)
+        );
+      }
+      unsubscribeAudit = onSnapshot(auditQuery, (snapshot) => {
         setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AuditLog)));
       }, (error) => {
         console.warn("Settings: Error listening to audit_logs:", error);
@@ -213,7 +245,7 @@ export const Settings: React.FC = () => {
       unsubscribeInvites();
       unsubscribeAudit();
     };
-  }, [profile?.id, isAdmin]);
+  }, [profile?.id, isAdmin, auditStartDate, auditEndDate]);
 
   useEffect(() => {
     if (profile) setProfileName(profile.name || '');
@@ -2004,142 +2036,73 @@ export const Settings: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Searchbar and Date Filters */}
-              <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  {/* Search Input */}
-                  <div className="md:col-span-5 space-y-1.5">
-                    <Label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                      <Search className="w-3.5 h-3.5 text-slate-400" /> Search Audit Logs
-                    </Label>
-                    <div className="relative">
-                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        placeholder="Search user, action, details, or product..."
-                        value={auditSearch}
-                        onChange={e => setAuditSearch(e.target.value)}
-                        className="pl-9 pr-8 bg-white border-slate-200 h-9 text-xs focus-visible:ring-1 focus-visible:ring-slate-400"
-                      />
-                      {auditSearch && (
-                        <button
-                          type="button"
-                          onClick={() => setAuditSearch('')}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
+              {/* Guardrail Component */}
+              <DateRangeQueryGuardrail
+                title="AUDIT LOG QUERY GUARDRAIL"
+                badgeLabel="Firestore Read Optimization"
+                description="Query specific historical audit trail logs by date range. Estimates document count before fetching to optimize database reads."
+                startDate={guardrailAuditStart}
+                endDate={guardrailAuditEnd}
+                onStartDateChange={setGuardrailAuditStart}
+                onEndDateChange={setGuardrailAuditEnd}
+                calculateDocCount={calculateAuditDocs}
+                targetEntityLabel="audit log entries"
+                isQueryApplied={isAuditGuardrailApplied}
+                activeLoadedRange={isAuditGuardrailApplied && auditStartDate && auditEndDate ? { start: auditStartDate, end: auditEndDate } : null}
+                onApplyQuery={(sDate, eDate) => {
+                  setAuditStartDate(sDate);
+                  setAuditEndDate(eDate);
+                  setIsAuditGuardrailApplied(true);
+                }}
+                onReset={() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - 30);
+                  const s = d.toISOString().split('T')[0];
+                  const e = new Date().toISOString().split('T')[0];
+                  setGuardrailAuditStart(s);
+                  setGuardrailAuditEnd(e);
+                  setAuditStartDate('');
+                  setAuditEndDate('');
+                  setIsAuditGuardrailApplied(false);
+                }}
+                presets={[
+                  { label: 'Today', key: 'today' },
+                  { label: 'Last 7 Days', key: 'last_7_days' },
+                  { label: 'Last 30 Days', key: 'last_30_days' },
+                  { label: 'This Month', key: 'this_month' }
+                ]}
+              />
 
-                  {/* Date Range Inputs */}
-                  <div className="md:col-span-5 grid grid-cols-2 gap-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" /> Start Date
-                      </Label>
-                      <Input
-                        type="date"
-                        value={auditStartDate}
-                        onChange={e => setAuditStartDate(e.target.value)}
-                        className="bg-white border-slate-200 h-9 text-xs"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" /> End Date
-                      </Label>
-                      <Input
-                        type="date"
-                        value={auditEndDate}
-                        onChange={e => setAuditEndDate(e.target.value)}
-                        className="bg-white border-slate-200 h-9 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Clear Button */}
-                  <div className="md:col-span-2 flex items-center justify-end">
-                    {(auditSearch || auditStartDate || auditEndDate) ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setAuditSearch('');
-                          setAuditStartDate('');
-                          setAuditEndDate('');
-                        }}
-                        className="h-9 px-3 text-xs font-semibold border-slate-200 hover:bg-slate-100 text-slate-600 flex items-center gap-1.5 w-full md:w-auto justify-center"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" /> Reset Filters
-                      </Button>
-                    ) : (
-                      <div className="hidden md:block h-9" />
-                    )}
-                  </div>
+              {/* Search Bar */}
+              <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-200/80 flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    placeholder="Filter loaded logs by user, action, details, or product..."
+                    value={auditSearch}
+                    onChange={e => setAuditSearch(e.target.value)}
+                    className="pl-9 pr-8 bg-white border-slate-200 h-9 text-xs focus-visible:ring-1 focus-visible:ring-slate-400"
+                  />
+                  {auditSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setAuditSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
-
-                {/* Quick Date Presets */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200/60 text-xs">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
-                    <Filter className="w-3 h-3" /> Quick Presets:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const today = new Date().toISOString().split('T')[0];
-                      setAuditStartDate(today);
-                      setAuditEndDate(today);
-                    }}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
-                      auditStartDate === new Date().toISOString().split('T')[0] && auditEndDate === new Date().toISOString().split('T')[0]
-                        ? 'bg-[#1A2B4B] text-white border-[#1A2B4B]'
-                        : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
-                    }`}
+                {auditSearch && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAuditSearch('')}
+                    className="h-9 px-2.5 text-xs text-slate-600"
                   >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const end = new Date();
-                      const start = new Date();
-                      start.setDate(end.getDate() - 7);
-                      setAuditStartDate(start.toISOString().split('T')[0]);
-                      setAuditEndDate(end.toISOString().split('T')[0]);
-                    }}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white border border-slate-200 hover:border-slate-300 text-slate-600 transition-all"
-                  >
-                    Last 7 Days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const end = new Date();
-                      const start = new Date();
-                      start.setDate(end.getDate() - 30);
-                      setAuditStartDate(start.toISOString().split('T')[0]);
-                      setAuditEndDate(end.toISOString().split('T')[0]);
-                    }}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-white border border-slate-200 hover:border-slate-300 text-slate-600 transition-all"
-                  >
-                    Last 30 Days
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuditStartDate('');
-                      setAuditEndDate('');
-                    }}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
-                      !auditStartDate && !auditEndDate
-                        ? 'bg-[#1A2B4B] text-white border-[#1A2B4B]'
-                        : 'bg-white border-slate-200 hover:border-slate-300 text-slate-600'
-                    }`}
-                  >
-                    All Time
-                  </button>
-                </div>
+                    Clear Search
+                  </Button>
+                )}
               </div>
 
               {/* Table Section */}

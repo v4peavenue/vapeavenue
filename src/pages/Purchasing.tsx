@@ -14,11 +14,14 @@ import {
   increment,
   getDoc,
   writeBatch,
-  arrayUnion
+  arrayUnion,
+  where,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { PurchaseOrder, Product, Location, Supplier, PaymentOption } from '@/types';
 import { Button } from '@/components/ui/button';
+import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
 import { 
   Table, 
   TableBody, 
@@ -74,6 +77,25 @@ export const Purchasing: React.FC = () => {
   const [isReceiving, setIsReceiving] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
 
+  // Date Range Guardrail states
+  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'));
+  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [appliedDateRange, setAppliedDateRange] = useState<{ start: string; end: string } | null>(null);
+
+  const calculatePurchasingDocs = async (startStr: string, endStr: string): Promise<number> => {
+    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
+
+    const q = query(
+      collection(db, 'purchaseOrders'),
+      where('createdAt', '>=', startTs),
+      where('createdAt', '<=', endTs)
+    );
+
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count || 0;
+  };
+
   useEffect(() => {
     if (!profile) return;
 
@@ -86,7 +108,20 @@ export const Purchasing: React.FC = () => {
       return;
     }
 
-    const q = query(collection(db, 'purchaseOrders'), orderBy('createdAt', 'desc'), limit(200));
+    let q;
+    if (appliedDateRange) {
+      const startTs = Timestamp.fromDate(new Date(`${appliedDateRange.start}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${appliedDateRange.end}T23:59:59`));
+      q = query(
+        collection(db, 'purchaseOrders'),
+        where('createdAt', '>=', startTs),
+        where('createdAt', '<=', endTs),
+        orderBy('createdAt', 'desc')
+      );
+    } else {
+      q = query(collection(db, 'purchaseOrders'), orderBy('createdAt', 'desc'), limit(200));
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseOrder)));
       setLoading(false);
@@ -402,6 +437,37 @@ export const Purchasing: React.FC = () => {
           New Purchase Order
         </Button>
       </div>
+
+      {/* Date Range Query Guardrail */}
+      <DateRangeQueryGuardrail
+        title="PURCHASE ORDERS DATE RANGE GUARDRAIL"
+        badgeLabel="Firestore Cost Protection"
+        description="Filter purchase orders by date range. Run a server count before fetching PO records from Firestore."
+        startDate={guardrailStartDate}
+        endDate={guardrailEndDate}
+        onStartDateChange={setGuardrailStartDate}
+        onEndDateChange={setGuardrailEndDate}
+        calculateDocCount={calculatePurchasingDocs}
+        targetEntityLabel="purchase orders"
+        isQueryApplied={!!appliedDateRange}
+        activeLoadedRange={appliedDateRange}
+        onApplyQuery={(sDate, eDate) => {
+          setAppliedDateRange({ start: sDate, end: eDate });
+        }}
+        onReset={() => {
+          const now = new Date();
+          const startStr = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
+          const endStr = format(now, 'yyyy-MM-dd');
+          setGuardrailStartDate(startStr);
+          setGuardrailEndDate(endStr);
+          setAppliedDateRange(null);
+        }}
+        presets={[
+          { label: 'Today', key: 'today' },
+          { label: 'This Month', key: 'this_month' },
+          { label: 'Last 30 Days', key: 'last_30_days' }
+        ]}
+      />
 
       <Card>
         <CardHeader className="pb-3">

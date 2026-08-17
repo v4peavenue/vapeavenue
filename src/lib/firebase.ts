@@ -1,6 +1,10 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 console.log("Firebase: Initializing with config for project:", firebaseConfig.projectId);
@@ -8,8 +12,11 @@ console.log("Firebase: Initializing with config for project:", firebaseConfig.pr
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore directly with live cloud connection (offline local mode removed)
+// Initialize Firestore with persistent IndexedDB multi-tab offline cache
 export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
   experimentalAutoDetectLongPolling: true,
 }, firebaseConfig.firestoreDatabaseId || '(default)');
 

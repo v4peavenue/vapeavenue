@@ -48,10 +48,12 @@ import {
   getDocs,
   getDoc,
   limit,
-  writeBatch
+  writeBatch,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { DataTablePagination } from '@/components/DataTablePagination';
+import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocations } from '@/contexts/LocationContext';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -198,6 +200,19 @@ export const Attendance: React.FC = () => {
   
   const [reportStartDate, setReportStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [reportEndDate, setReportEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [guardrailReportStart, setGuardrailReportStart] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [guardrailReportEnd, setGuardrailReportEnd] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [isReportGuardrailApplied, setIsReportGuardrailApplied] = useState(false);
+
+  const calculateAttendanceDocs = async (startStr: string, endStr: string): Promise<number> => {
+    const q = query(
+      collection(db, 'attendance'),
+      where('date', '>=', startStr),
+      where('date', '<=', endStr)
+    );
+    const snap = await getCountFromServer(q);
+    return snap.data().count || 0;
+  };
   
   const [editingLog, setEditingLog] = useState<{
     userId: string;
@@ -1015,7 +1030,7 @@ export const Attendance: React.FC = () => {
 
       const payload: any = {
         userId: targetUser.id || editingLog.userId,
-        userName: targetUser.name || targetUser.email || editingLog.userName,
+        userName: targetUser.name || (targetUser as any).email || editingLog.userName,
         date: editingLog.date,
         timeIn: timeInTimestamp,
         timeInBackup: timeInBackup,
@@ -1158,7 +1173,7 @@ export const Attendance: React.FC = () => {
           ...requestData,
           startDate: newRequest.startDate || format(new Date(), 'yyyy-MM-dd'),
           type: newRequest.type || 'leave'
-        });
+        } as any);
       }
 
       toast.success(initialStatus === 'approved' ? 'Request submitted and approved successfully' : 'Request submitted successfully');
@@ -1934,36 +1949,40 @@ export const Attendance: React.FC = () => {
 
             <TabsContent value="report">
               <div className="space-y-6">
-                <Card className="border-none shadow-sm bg-gradient-to-r from-[#1A2B4B] to-[#2C3E50] text-white border-b-2 border-[#D4AF37]/30">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                      <div>
-                        <h3 className="text-lg font-black italic tracking-wide">Attendance Reports</h3>
-                        <p className="text-white/80 text-sm font-medium">Summary of staff hours, tardiness, and absences.</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-white/60 uppercase font-bold">Start Date</Label>
-                          <Input 
-                            type="date" 
-                            className="bg-white/10 border-white/20 text-white h-9 text-xs"
-                            value={reportStartDate}
-                            onChange={(e) => setReportStartDate(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-white/60 uppercase font-bold">End Date</Label>
-                          <Input 
-                            type="date" 
-                            className="bg-white/10 border-white/20 text-white h-9 text-xs"
-                            value={reportEndDate}
-                            onChange={(e) => setReportEndDate(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <DateRangeQueryGuardrail
+                  title="ATTENDANCE REPORT DATE GUARDRAIL"
+                  badgeLabel="Firestore Cost Protection"
+                  description="Filter staff working hours, tardiness, and absence metrics by date range. Run a server count before fetching company-wide attendance logs."
+                  startDate={guardrailReportStart}
+                  endDate={guardrailReportEnd}
+                  onStartDateChange={setGuardrailReportStart}
+                  onEndDateChange={setGuardrailReportEnd}
+                  calculateDocCount={calculateAttendanceDocs}
+                  targetEntityLabel="attendance logs"
+                  isQueryApplied={isReportGuardrailApplied}
+                  activeLoadedRange={isReportGuardrailApplied ? { start: reportStartDate, end: reportEndDate } : null}
+                  onApplyQuery={(sDate, eDate) => {
+                    setReportStartDate(sDate);
+                    setReportEndDate(eDate);
+                    setIsReportGuardrailApplied(true);
+                  }}
+                  onReset={() => {
+                    const now = new Date();
+                    const s = format(startOfMonth(now), 'yyyy-MM-dd');
+                    const e = format(endOfMonth(now), 'yyyy-MM-dd');
+                    setGuardrailReportStart(s);
+                    setGuardrailReportEnd(e);
+                    setReportStartDate(s);
+                    setReportEndDate(e);
+                    setIsReportGuardrailApplied(false);
+                  }}
+                  presets={[
+                    { label: 'Today', key: 'today' },
+                    { label: 'This Month', key: 'this_month' },
+                    { label: 'Last Month', key: 'last_month' },
+                    { label: 'Last 30 Days', key: 'last_30_days' }
+                  ]}
+                />
 
                 <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl">
                   <table className="w-full text-left border-collapse">

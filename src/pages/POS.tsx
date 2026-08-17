@@ -2244,7 +2244,7 @@ export const POS: React.FC = () => {
                           <Select 
                             value={split.methodId} 
                             onValueChange={(v) => {
-                              const opt = paymentOptions.find(o => o.id === v);
+                              const opt = paymentOptions.find(o => o.id === v) || accounts.find(a => a.id === v);
                               const newSplits = [...paymentSplits];
                               newSplits[index].methodId = v;
                               newSplits[index].methodName = v === 'cash' ? 'Cash' : v === 'card' ? 'Card' : opt?.name || v;
@@ -2255,7 +2255,10 @@ export const POS: React.FC = () => {
                               <SelectValue placeholder="Method">
                                 {split.methodId === 'cash' ? 'Cash' : 
                                  split.methodId === 'card' ? 'Card' : 
-                                 (paymentOptions.find(o => o.id === split.methodId)?.name || split.methodId)}
+                                 (paymentOptions.find(o => o.id === split.methodId)?.name || 
+                                  accounts.find(a => a.id === split.methodId)?.name || 
+                                  split.methodName || 
+                                  'Method')}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>

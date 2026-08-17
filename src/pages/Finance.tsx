@@ -594,7 +594,7 @@ export const Finance: React.FC = () => {
            (t.createdByName || '').toLowerCase().includes(searchLower);
   });
 
-  const transferTransactions = transactions.filter(t => t.type === 'transfer');
+  const transferTransactions = (transactions as any[]).filter(t => t.type === 'transfer');
 
   return (
     <div className="space-y-5 p-1">
@@ -1055,7 +1055,8 @@ export const Finance: React.FC = () => {
                   return getMillis(b.timestamp) - getMillis(a.timestamp);
                 })
                 .slice(0, 50)
-                .map((item) => {
+                .map((historyItem) => {
+                  const item = historyItem as any;
                   const isIncome = item.type === 'TRANSACTION' 
                     ? item.transType === 'income' 
                     : (item.action === 'CREATE_SALE' || item.action === 'ITEM_RETURN');
@@ -1165,7 +1166,8 @@ export const Finance: React.FC = () => {
                 return getMillis(b.timestamp) - getMillis(a.timestamp);
               })
               .slice(0, 50)
-              .map((item, index) => {
+              .map((historyItem, index) => {
+                const item = historyItem as any;
                 const isIncome = item.type === 'TRANSACTION' 
                   ? item.transType === 'income' 
                   : (item.action === 'CREATE_SALE' || item.action === 'ITEM_RETURN');

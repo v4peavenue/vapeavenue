@@ -38,10 +38,11 @@ import {
   doc, 
   addDoc,
   increment, 
-  Timestamp,
+  Timestamp, 
   setDoc,
   getDoc,
-  where 
+  where,
+  getCountFromServer
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,6 +55,7 @@ import { logAction } from '@/lib/audit';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
 import { 
   Table, 
   TableBody, 
@@ -126,6 +128,9 @@ export const SalesHistory: React.FC = () => {
   };
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => getTodayDateRange());
+  const [queryDateRange, setQueryDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [paymentFilter, setPaymentFilter] = useState('cash');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
@@ -145,6 +150,60 @@ export const SalesHistory: React.FC = () => {
   const [isReverseDialogOpen, setIsReverseDialogOpen] = useState(false);
   const [isReversing, setIsReversing] = useState(false);
 
+  const calculateSalesHistoryDocs = async (startStr: string, endStr: string): Promise<number> => {
+    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
+
+    let qSales;
+    let qTrans;
+
+    if (selectedLocationId && selectedLocationId !== 'all') {
+      qSales = query(
+        collection(db, 'sales'),
+        where('locationId', '==', selectedLocationId),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      qTrans = query(
+        collection(db, 'financialTransactions'),
+        where('locationId', '==', selectedLocationId),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+    } else {
+      qSales = query(
+        collection(db, 'sales'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      qTrans = query(
+        collection(db, 'financialTransactions'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+    }
+
+    const [snapSales, snapTrans] = await Promise.all([
+      getCountFromServer(qSales),
+      getCountFromServer(qTrans)
+    ]);
+
+    return (snapSales.data().count || 0) + (snapTrans.data().count || 0);
+  };
+
+  const handleApplyGuardedDateRange = (sDate: string, eDate: string) => {
+    setQueryDateRange({ start: sDate, end: eDate });
+    setDateRange({ start: sDate, end: eDate });
+  };
+
+  const handleResetGuardedDateRange = () => {
+    setQueryDateRange(null);
+    const today = getTodayDateRange();
+    setDateRange(today);
+    setGuardrailStartDate(today.start);
+    setGuardrailEndDate(today.end);
+  };
+
   useEffect(() => {
     if (!profile) return;
 
@@ -160,17 +219,11 @@ export const SalesHistory: React.FC = () => {
       console.warn("SalesHistory: Error listening to paymentOptions:", error);
     });
 
-    let unsubscribeAccounts = () => {};
-    const isStaffUser = ['admin', 'manager', 'staff'].includes(profile.role) || 
-                        ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'].includes(user?.email?.toLowerCase() || '');
-
-    if (isStaffUser) {
-      unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
-        setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => {
-        console.warn("SalesHistory: Error listening to accounts:", error);
-      });
-    }
+    const unsubscribeAccounts = onSnapshot(collection(db, 'accounts'), (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("SalesHistory: Error listening to accounts:", error);
+    });
 
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setUsersList(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -188,7 +241,21 @@ export const SalesHistory: React.FC = () => {
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(300));
+    let q;
+    if (queryDateRange?.start && queryDateRange?.end) {
+      const startTs = Timestamp.fromDate(new Date(`${queryDateRange.start}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${queryDateRange.end}T23:59:59`));
+      q = query(
+        collection(db, 'sales'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs),
+        orderBy('timestamp', 'desc'),
+        limit(2000)
+      );
+    } else {
+      q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(300));
+    }
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let salesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
       
@@ -204,7 +271,7 @@ export const SalesHistory: React.FC = () => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile?.id]);
+  }, [selectedLocationId, profile?.id, queryDateRange]);
 
   useEffect(() => {
     if (!profile) return;
@@ -234,7 +301,20 @@ export const SalesHistory: React.FC = () => {
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'), limit(200));
+    let q;
+    if (queryDateRange?.start && queryDateRange?.end) {
+      const startTs = Timestamp.fromDate(new Date(`${queryDateRange.start}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${queryDateRange.end}T23:59:59`));
+      q = query(
+        collection(db, 'returnTransactions'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs),
+        orderBy('timestamp', 'desc'),
+        limit(500)
+      );
+    } else {
+      q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'), limit(200));
+    }
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let returnsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -248,11 +328,24 @@ export const SalesHistory: React.FC = () => {
       console.warn("SalesHistory: Error listening to returnTransactions:", error);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile?.id]);
+  }, [selectedLocationId, profile?.id, queryDateRange]);
 
   useEffect(() => {
     if (!profile) return;
-    const q = query(collection(db, 'financialTransactions'), orderBy('timestamp', 'desc'), limit(ledgerLimit));
+    let q;
+    if (queryDateRange?.start && queryDateRange?.end) {
+      const startTs = Timestamp.fromDate(new Date(`${queryDateRange.start}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${queryDateRange.end}T23:59:59`));
+      q = query(
+        collection(db, 'financialTransactions'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs),
+        orderBy('timestamp', 'desc'),
+        limit(2000)
+      );
+    } else {
+      q = query(collection(db, 'financialTransactions'), orderBy('timestamp', 'desc'), limit(ledgerLimit));
+    }
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
@@ -266,31 +359,63 @@ export const SalesHistory: React.FC = () => {
       console.warn("Ledger error loading financial transactions:", error);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile?.id, ledgerLimit]);
+  }, [selectedLocationId, profile?.id, ledgerLimit, queryDateRange]);
 
   const getPaymentMethodName = React.useCallback((id: string, splits?: any[]) => {
     if (!id) return '';
-    const idLower = id.toLowerCase().trim();
+    const idTrimmed = id.trim();
+    const idLower = idTrimmed.toLowerCase();
     if (idLower === 'cash') return 'Cash';
     if (idLower === 'card') return 'Card';
-    if (idLower === 'digital') return 'Digital Payment';
+    if (idLower === 'digital' || idLower === 'ewallet') return 'Digital / E-Wallet';
+    if (idLower === 'bank') return 'Bank Transfer';
     if (idLower === 'pending') return 'Pending/Unpaid';
     if (idLower === 'split') return 'Split Payment';
 
-    const acc = accounts.find(a => a.id === id || a.name.toLowerCase() === idLower);
-    if (acc) return acc.name;
+    // 1. Match from paymentOptions
+    const opt = paymentOptions.find(o => o.id === idTrimmed || o.name?.toLowerCase().trim() === idLower);
+    if (opt && opt.name) return opt.name;
 
-    const opt = paymentOptions.find(o => o.id === id || o.name.toLowerCase() === idLower);
-    if (opt) return opt.name;
+    // 2. Match from accounts
+    const acc = accounts.find(a => a.id === idTrimmed || a.name?.toLowerCase().trim() === idLower);
+    if (acc && acc.name) return acc.name;
 
+    // 3. Match from supplied splits
     if (splits && splits.length > 0) {
-      const matchingSplit = splits.find(split => split.methodId === id || split.methodName?.toLowerCase() === idLower);
-      if (matchingSplit && matchingSplit.methodName) {
+      const matchingSplit = splits.find(split => 
+        (split.methodId && split.methodId.trim() === idTrimmed) || 
+        (split.methodName && split.methodName.toLowerCase().trim() === idLower)
+      );
+      if (matchingSplit && matchingSplit.methodName && matchingSplit.methodName !== matchingSplit.methodId) {
         return matchingSplit.methodName;
       }
     }
-    return id.charAt(0).toUpperCase() + id.slice(1);
-  }, [accounts, paymentOptions]);
+
+    // 4. Match from loaded sales splits
+    for (const s of sales) {
+      if (s.paymentSplits && s.paymentSplits.length > 0) {
+        const matchingSplit = s.paymentSplits.find(split => split.methodId === idTrimmed);
+        if (matchingSplit && matchingSplit.methodName && matchingSplit.methodName !== matchingSplit.methodId) {
+          return matchingSplit.methodName;
+        }
+      }
+    }
+
+    // 5. Match from loaded rawFinancialTransactions
+    for (const t of rawFinancialTransactions) {
+      if (t.accountId === idTrimmed && t.accountName) {
+        return t.accountName;
+      }
+      if (t.toAccountId === idTrimmed && t.toAccountName) {
+        return t.toAccountName;
+      }
+    }
+
+    if (idTrimmed.length < 15 && !idTrimmed.startsWith('acc_') && !idTrimmed.startsWith('opt_')) {
+      return idTrimmed.charAt(0).toUpperCase() + idTrimmed.slice(1);
+    }
+    return idTrimmed;
+  }, [accounts, paymentOptions, sales, rawFinancialTransactions]);
 
   const financeCashAccount = React.useMemo(() => {
     return accounts.find(a => a.name?.trim().toLowerCase() === 'cash') ||
@@ -1004,44 +1129,81 @@ export const SalesHistory: React.FC = () => {
   };
 
   const dynamicPaymentOptions = React.useMemo(() => {
-    const unifiedMethodsInUse = new Set<string>();
-    unifiedMethodsInUse.add(financeCashId);
+    const list: { id: string; name: string }[] = [];
+    const seenIds = new Set<string>();
 
+    const addOption = (id: string, name?: string) => {
+      if (!id || id === 'split' || id === 'pending') return;
+      const cleanId = id.trim();
+      const unifiedId = getUnifiedMethodId(cleanId) || cleanId;
+      if (seenIds.has(unifiedId)) return;
+
+      let resolvedName = name?.trim();
+      if (!resolvedName || resolvedName === unifiedId) {
+        resolvedName = getPaymentMethodName(unifiedId);
+      }
+      if ((!resolvedName || resolvedName === unifiedId) && cleanId !== unifiedId) {
+        resolvedName = getPaymentMethodName(cleanId);
+      }
+      if (!resolvedName || resolvedName === unifiedId) {
+        if (unifiedId === financeCashId) {
+          resolvedName = financeCashAccount?.name || 'Cash';
+        } else if (unifiedId.length < 15 && !unifiedId.startsWith('acc_') && !unifiedId.startsWith('opt_')) {
+          resolvedName = unifiedId.charAt(0).toUpperCase() + unifiedId.slice(1);
+        } else {
+          resolvedName = unifiedId;
+        }
+      }
+
+      seenIds.add(unifiedId);
+      list.push({ id: unifiedId, name: resolvedName });
+    };
+
+    // 1. Cash option
+    if (financeCashId) {
+      addOption(financeCashId, financeCashAccount?.name || 'Cash');
+    }
+
+    // 2. All paymentOptions
+    paymentOptions.forEach(opt => {
+      if (opt.id) {
+        addOption(opt.id, opt.name);
+      }
+    });
+
+    // 3. All accounts
+    accounts.forEach(acc => {
+      if (acc.id) {
+        addOption(acc.id, acc.name);
+      }
+    });
+
+    // 4. Sales
     sales.forEach(sale => {
       if (sale.paymentMethod) {
-        unifiedMethodsInUse.add(getUnifiedMethodId(sale.paymentMethod));
+        addOption(sale.paymentMethod);
       }
       if (sale.paymentSplits && sale.paymentSplits.length > 0) {
         sale.paymentSplits.forEach(split => {
           if (split.methodId) {
-            unifiedMethodsInUse.add(getUnifiedMethodId(split.methodId));
+            addOption(split.methodId, split.methodName);
           }
         });
       }
     });
 
-    paymentOptions.forEach(opt => {
-      unifiedMethodsInUse.add(getUnifiedMethodId(opt.id));
-    });
-
-    const list: { id: string; name: string }[] = [];
-    const seenIds = new Set<string>();
-
-    unifiedMethodsInUse.forEach(unifiedId => {
-      if (unifiedId === 'split' || unifiedId === 'pending') return;
-      if (seenIds.has(unifiedId)) return;
-      seenIds.add(unifiedId);
-
-      if (unifiedId === financeCashId) {
-        list.push({ id: financeCashId, name: financeCashAccount?.name || 'Cash' });
-      } else {
-        const name = getPaymentMethodName(unifiedId, sales.flatMap(s => s.paymentSplits || []));
-        list.push({ id: unifiedId, name });
+    // 5. Raw Financial Transactions
+    rawFinancialTransactions.forEach(t => {
+      if (t.accountId) {
+        addOption(t.accountId, t.accountName);
+      }
+      if (t.toAccountId) {
+        addOption(t.toAccountId, t.toAccountName);
       }
     });
 
     return list;
-  }, [sales, paymentOptions, getPaymentMethodName, getUnifiedMethodId, financeCashId, financeCashAccount]);
+  }, [sales, paymentOptions, accounts, rawFinancialTransactions, getPaymentMethodName, getUnifiedMethodId, financeCashId, financeCashAccount]);
 
   const isMethodMatch = React.useCallback((
     mId?: string | null,
@@ -1303,7 +1465,18 @@ export const SalesHistory: React.FC = () => {
       if (unifiedId === financeCashId) {
         return; // Merge/avoid duplicate 'Cash' options in KPI list
       }
-      totals[opt.id] = { name: opt.name, amount: 0, type: opt.type };
+      totals[unifiedId] = { name: opt.name, amount: 0, type: opt.type };
+    });
+
+    // Initialize configured accounts
+    accounts.forEach(acc => {
+      const unifiedId = getUnifiedMethodId(acc.id);
+      if (unifiedId === financeCashId) {
+        return;
+      }
+      if (!totals[unifiedId]) {
+        totals[unifiedId] = { name: acc.name, amount: 0, type: acc.type || 'ewallet' };
+      }
     });
 
     const activeSales = filteredSales.filter(s => s.status !== 'voided');
@@ -1315,8 +1488,9 @@ export const SalesHistory: React.FC = () => {
           if (!rawId) return;
           const mId = getUnifiedMethodId(rawId) || rawId;
           if (!totals[mId]) {
+            const resolvedName = mId === financeCashId ? cashName : (split.methodName || getPaymentMethodName(mId));
             totals[mId] = { 
-              name: mId === financeCashId ? cashName : (split.methodName || mId), 
+              name: resolvedName, 
               amount: 0, 
               type: mId === financeCashId ? 'cash' : 'ewallet' 
             };
@@ -1330,8 +1504,9 @@ export const SalesHistory: React.FC = () => {
         if (!totals[mId]) {
           const opt = paymentOptions.find(o => o.id === mId);
           const acc = accounts.find(a => a.id === mId);
+          const resolvedName = mId === financeCashId ? cashName : (opt?.name || acc?.name || getPaymentMethodName(mId));
           totals[mId] = { 
-            name: mId === financeCashId ? cashName : (opt?.name || acc?.name || mId), 
+            name: resolvedName, 
             amount: 0, 
             type: mId === financeCashId ? 'cash' : (opt?.type || acc?.type || 'ewallet') 
           };
@@ -1355,6 +1530,28 @@ export const SalesHistory: React.FC = () => {
           Export CSV
         </Button>
       </div>
+
+      {/* Date Range Query Guardrail & Cost Estimator */}
+      <DateRangeQueryGuardrail
+        title="DATE RANGE QUERY GUARDRAIL"
+        badgeLabel="Firestore Cost Protection"
+        description="Select a historical date range for Sales, Voids, and Ledgers. Calculates exact matching document reads prior to fetching data to avoid unexpected charges."
+        startDate={guardrailStartDate}
+        endDate={guardrailEndDate}
+        onStartDateChange={setGuardrailStartDate}
+        onEndDateChange={setGuardrailEndDate}
+        calculateDocCount={calculateSalesHistoryDocs}
+        targetEntityLabel="sales & ledger records"
+        isQueryApplied={!!queryDateRange}
+        activeLoadedRange={queryDateRange}
+        onApplyQuery={handleApplyGuardedDateRange}
+        onReset={handleResetGuardedDateRange}
+        presets={[
+          { label: 'Today', key: 'today' },
+          { label: 'This Month', key: 'this_month' },
+          { label: 'Last 30 Days', key: 'last_30_days' }
+        ]}
+      />
 
       <div className="flex flex-col sm:flex-row items-center gap-4">
         <div className="relative flex-1 w-full">
@@ -2076,7 +2273,13 @@ export const SalesHistory: React.FC = () => {
               <Label className="text-xs uppercase font-black text-slate-400 tracking-widest">Payment Method</Label>
               <Select value={paymentFilter} onValueChange={setPaymentFilter}>
                 <SelectTrigger className="h-12 rounded-xl">
-                  <SelectValue placeholder="Select method" />
+                  <SelectValue placeholder="Select method">
+                    {paymentFilter === 'all' 
+                      ? 'All Methods' 
+                      : (dynamicPaymentOptions.find(opt => opt.id === paymentFilter || opt.id === getUnifiedMethodId(paymentFilter))?.name || 
+                         getPaymentMethodName(paymentFilter) || 
+                         'Select method')}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Methods</SelectItem>
@@ -2392,19 +2595,20 @@ export const SalesHistory: React.FC = () => {
                     <Label className="text-[10px] font-bold uppercase text-slate-400">Payment Method</Label>
                     <Select 
                       value={paymentDetails.methodId} 
-                      onValueChange={(v) => setPaymentDetails({ ...paymentDetails, methodId: v })}
+                      onValueChange={(v) => {
+                        const opt = dynamicPaymentOptions.find(o => o.id === v);
+                        setPaymentDetails({ ...paymentDetails, methodId: v });
+                      }}
                     >
                       <SelectTrigger className="h-10">
                         <SelectValue placeholder="Select Method">
-                          {paymentDetails.methodId === 'cash' ? 'Cash' : 
-                          paymentDetails.methodId === 'card' ? 'Card' : 
-                          (paymentOptions.find(o => o.id === paymentDetails.methodId)?.name || 'Select Method')}
+                          {dynamicPaymentOptions.find(o => o.id === paymentDetails.methodId)?.name || 
+                           getPaymentMethodName(paymentDetails.methodId) || 
+                           'Select Method'}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="card">Card</SelectItem>
-                        {paymentOptions.map(opt => (
+                        {dynamicPaymentOptions.map(opt => (
                           <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2430,24 +2634,23 @@ export const SalesHistory: React.FC = () => {
                           <Select 
                             value={split.methodId} 
                             onValueChange={(v) => {
-                              const opt = paymentOptions.find(o => o.id === v);
+                              const opt = dynamicPaymentOptions.find(o => o.id === v);
                               const newSplits = [...paymentSplits];
                               newSplits[index].methodId = v;
-                              newSplits[index].methodName = v === 'cash' ? 'Cash' : v === 'card' ? 'Card' : opt?.name || v;
+                              newSplits[index].methodName = opt?.name || getPaymentMethodName(v);
                               setPaymentSplits(newSplits);
                             }}
                           >
                             <SelectTrigger className="h-9 text-xs bg-white">
                               <SelectValue placeholder="Method">
-                                {split.methodId === 'cash' ? 'Cash' : 
-                                 split.methodId === 'card' ? 'Card' : 
-                                 (paymentOptions.find(o => o.id === split.methodId)?.name || split.methodId)}
+                                {dynamicPaymentOptions.find(o => o.id === split.methodId)?.name || 
+                                 getPaymentMethodName(split.methodId) || 
+                                 split.methodName || 
+                                 'Method'}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="cash">Cash</SelectItem>
-                              <SelectItem value="card">Card</SelectItem>
-                              {paymentOptions.map(o => (
+                              {dynamicPaymentOptions.map(o => (
                                 <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
                               ))}
                             </SelectContent>

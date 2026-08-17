@@ -104,7 +104,7 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ accounts, transactio
     }
   };
 
-  const transferTransactions = transactions.filter(t => t.type === 'transfer');
+  const transferTransactions = (transactions as any[]).filter(t => t.type === 'transfer');
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -223,27 +223,30 @@ export const TransfersTab: React.FC<TransfersTabProps> = ({ accounts, transactio
                     </TableCell>
                   </TableRow>
                 ) : (
-                  transferTransactions.map((tx) => (
-                    <TableRow key={tx.id} className="hover:bg-slate-50/50 border-slate-50">
-                      <TableCell className="font-bold text-slate-700 text-xs">
-                        {tx.description || 'Internal Fund Transfer'}
-                      </TableCell>
-                      <TableCell className="text-xs font-semibold text-slate-600">
-                        <span className="text-rose-600 font-bold">{tx.accountName}</span>
-                        <span className="mx-1.5 text-slate-400">→</span>
-                        <span className="text-emerald-600 font-bold">{tx.toAccountName || 'Destination'}</span>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs font-black text-[#1A2B4B]">
-                        {settings.currency}{(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-500">
-                        {tx.createdByName || 'System'}
-                      </TableCell>
-                      <TableCell className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
-                        {tx.timestamp ? format(typeof tx.timestamp.toDate === 'function' ? tx.timestamp.toDate() : new Date(tx.timestamp), 'MMM dd, yyyy p') : '--'}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  transferTransactions.map((txItem) => {
+                    const tx = txItem as any;
+                    return (
+                      <TableRow key={tx.id} className="hover:bg-slate-50/50 border-slate-50">
+                        <TableCell className="font-bold text-slate-700 text-xs">
+                          {tx.description || 'Internal Fund Transfer'}
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-slate-600">
+                          <span className="text-rose-600 font-bold">{tx.accountName}</span>
+                          <span className="mx-1.5 text-slate-400">→</span>
+                          <span className="text-emerald-600 font-bold">{tx.toAccountName || 'Destination'}</span>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs font-black text-[#1A2B4B]">
+                          {settings.currency}{(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-slate-500">
+                          {tx.createdByName || 'System'}
+                        </TableCell>
+                        <TableCell className="text-[11px] font-mono text-slate-400 whitespace-nowrap">
+                          {tx.timestamp ? format(typeof tx.timestamp?.toDate === 'function' ? tx.timestamp.toDate() : new Date(tx.timestamp as any), 'MMM dd, yyyy p') : '--'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

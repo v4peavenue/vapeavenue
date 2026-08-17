@@ -20,7 +20,7 @@ import {
   ChevronsLeft,
   ChevronsRight
 } from 'lucide-react';
-import { collection, onSnapshot, query, where, Timestamp, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, Timestamp, orderBy, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocations } from '@/contexts/LocationContext';
@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-utils';
+import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
 import { 
   Select, 
   SelectContent, 
@@ -86,9 +87,66 @@ export const Reports: React.FC = () => {
   const [reportType, setReportType] = useState<ReportType>('sales');
   const [movementSubView, setMovementSubView] = useState<'detailed' | 'summary'>('detailed');
   const [dateRange, setDateRange] = useState<string>('month');
-  const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+  const [customStartDate, setCustomStartDate] = useState<string>(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [isGuardrailApplied, setIsGuardrailApplied] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const calculateReportDocs = async (startStr: string, endStr: string): Promise<number> => {
+    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
+
+    let qSales;
+    let qAdj;
+    let qReturns;
+
+    if (selectedLocationId && selectedLocationId !== 'all') {
+      qSales = query(
+        collection(db, 'sales'),
+        where('locationId', '==', selectedLocationId),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      qAdj = query(
+        collection(db, 'stockAdjustments'),
+        where('locationId', '==', selectedLocationId),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      qReturns = query(
+        collection(db, 'returnTransactions'),
+        where('locationId', '==', selectedLocationId),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+    } else {
+      qSales = query(
+        collection(db, 'sales'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      qAdj = query(
+        collection(db, 'stockAdjustments'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      qReturns = query(
+        collection(db, 'returnTransactions'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+    }
+
+    const [snapSales, snapAdj, snapReturns] = await Promise.all([
+      getCountFromServer(qSales),
+      getCountFromServer(qAdj),
+      getCountFromServer(qReturns)
+    ]);
+
+    return (snapSales.data().count || 0) + (snapAdj.data().count || 0) + (snapReturns.data().count || 0);
+  };
 
   // New states for the requested seller, category, brand, and product filters
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -869,6 +927,44 @@ export const Reports: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Date Range Query Guardrail & Estimator */}
+      <DateRangeQueryGuardrail
+        title="REPORTS DATE RANGE QUERY GUARDRAIL"
+        badgeLabel="Firestore Cost Protection"
+        description="Filter reports by date range. Before running the query, the system calculates exact matching documents (sales, adjustments, returns) to prevent excessive Firestore read costs."
+        startDate={guardrailStartDate}
+        endDate={guardrailEndDate}
+        onStartDateChange={setGuardrailStartDate}
+        onEndDateChange={setGuardrailEndDate}
+        calculateDocCount={calculateReportDocs}
+        targetEntityLabel="report records"
+        isQueryApplied={isGuardrailApplied}
+        activeLoadedRange={isGuardrailApplied ? { start: customStartDate, end: customEndDate } : null}
+        onApplyQuery={(sDate, eDate) => {
+          setCustomStartDate(sDate);
+          setCustomEndDate(eDate);
+          setDateRange('custom');
+          setIsGuardrailApplied(true);
+        }}
+        onReset={() => {
+          const now = new Date();
+          const startStr = format(startOfMonth(now), 'yyyy-MM-dd');
+          const endStr = format(now, 'yyyy-MM-dd');
+          setGuardrailStartDate(startStr);
+          setGuardrailEndDate(endStr);
+          setCustomStartDate(startStr);
+          setCustomEndDate(endStr);
+          setDateRange('month');
+          setIsGuardrailApplied(false);
+        }}
+        presets={[
+          { label: 'Today', key: 'today' },
+          { label: 'Last 7 Days', key: '7days' },
+          { label: 'This Month', key: 'this_month' },
+          { label: 'Last 30 Days', key: 'last_30_days' }
+        ]}
+      />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-slate-200/60 overflow-hidden">

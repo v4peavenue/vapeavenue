@@ -7,9 +7,11 @@ import {
   limit, 
   onSnapshot,
   Timestamp,
-  getDocs
+  getDocs,
+  getCountFromServer
 } from 'firebase/firestore';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
+import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
 import { 
   TrendingUp, 
   Package, 
@@ -122,7 +124,34 @@ export const Dashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState<string>('7days');
   const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
+  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
+  const [isGuardrailApplied, setIsGuardrailApplied] = useState<boolean>(false);
   const [groupBy, setGroupBy] = useState<'day' | 'month' | 'year'>('day');
+
+  const calculateDashboardDocs = async (startStr: string, endStr: string): Promise<number> => {
+    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
+
+    let qSales;
+    if (selectedLocationId && selectedLocationId !== 'all') {
+      qSales = query(
+        collection(db, 'sales'),
+        where('locationId', '==', selectedLocationId),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+    } else {
+      qSales = query(
+        collection(db, 'sales'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+    }
+
+    const snapSales = await getCountFromServer(qSales);
+    return snapSales.data().count || 0;
+  };
   
   // States for quantities sold analysis
   const [activeDashboardTab, setActiveDashboardTab] = useState<'overview' | 'analysis' | 'performance'>('overview');
@@ -804,6 +833,44 @@ export const Dashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Dashboard Date Range Query Guardrail */}
+      <DateRangeQueryGuardrail
+        title="DASHBOARD DATE RANGE QUERY GUARDRAIL"
+        badgeLabel="Firestore Cost Protection"
+        description="Filter dashboard metrics and sales charts by date range. Estimate exact Firestore reads before pulling larger live dataset intervals."
+        startDate={guardrailStartDate}
+        endDate={guardrailEndDate}
+        onStartDateChange={setGuardrailStartDate}
+        onEndDateChange={setGuardrailEndDate}
+        calculateDocCount={calculateDashboardDocs}
+        targetEntityLabel="sales records"
+        isQueryApplied={isGuardrailApplied}
+        activeLoadedRange={isGuardrailApplied ? { start: customStartDate, end: customEndDate } : null}
+        onApplyQuery={(sDate, eDate) => {
+          setCustomStartDate(sDate);
+          setCustomEndDate(eDate);
+          setTimeRange('custom');
+          setIsGuardrailApplied(true);
+        }}
+        onReset={() => {
+          const now = new Date();
+          const startStr = format(subDays(now, 7), 'yyyy-MM-dd');
+          const endStr = format(now, 'yyyy-MM-dd');
+          setGuardrailStartDate(startStr);
+          setGuardrailEndDate(endStr);
+          setCustomStartDate(startStr);
+          setCustomEndDate(endStr);
+          setTimeRange('7days');
+          setIsGuardrailApplied(false);
+        }}
+        presets={[
+          { label: 'Today', key: 'today' },
+          { label: 'Last 7 Days', key: '7days' },
+          { label: 'This Month', key: 'this_month' },
+          { label: 'Last 30 Days', key: 'last_30_days' }
+        ]}
+      />
 
       {/* Shared Range Filters */}
       <div className="flex flex-wrap items-center gap-3 bg-white/75 backdrop-blur-sm p-3 rounded-xl border border-slate-200/50 shadow-sm">
