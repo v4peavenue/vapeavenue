@@ -32,6 +32,7 @@ import { MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from '@/components/ui/badge';
+import greenVaporWave from '@/assets/images/green_vapor_wave_1786985245951.jpg';
 
 const navItems = [
   { name: 'Home', path: '/home', icon: HomeIcon, roles: ['admin', 'manager', 'staff'] },
@@ -271,9 +272,20 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       isHomePage ? "h-screen max-h-screen overflow-hidden" : "min-h-screen overflow-x-hidden"
     )}>
 
+      {/* Ambient Green Smoke Atmospheric Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
+        <img 
+          src={greenVaporWave} 
+          alt="Vape Avenue Green Smoke Ambient" 
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover opacity-[0.16] mix-blend-multiply filter contrast-125 saturate-150 scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#E6ECF5]/60 via-[#E6ECF5]/40 to-[#E6ECF5]/80" />
+      </div>
+
       {/* Top Header Navigation Bar (Hidden on Home page) */}
       {!isHomePage && (
-        <header className="sticky top-0 z-40 w-full bg-[#E6ECF5] text-slate-800 border-b border-[#D1D9E6]/70 shadow-none">
+        <header className="sticky top-0 z-40 w-full bg-[#E6ECF5]/90 backdrop-blur-md text-slate-800 border-b border-[#D1D9E6]/80 shadow-xs">
           <div className="w-full px-3 sm:px-4 lg:px-6 py-2.5">
             <div className="flex items-center justify-between gap-3">
               

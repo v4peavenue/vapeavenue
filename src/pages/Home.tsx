@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import greenVaporWave from '@/assets/images/green_vapor_wave_1786985245951.jpg';
 
 export const Home: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
@@ -119,14 +120,35 @@ export const Home: React.FC = () => {
   });
 
   return (
-    <div className="h-screen max-h-screen w-full flex flex-col justify-between bg-[#E6ECF5] p-3.5 sm:p-5 lg:p-6 overflow-hidden font-sans box-border text-slate-700 select-none">
+    <div className="h-screen max-h-screen w-full flex flex-col justify-between bg-[#E6ECF5] p-3.5 sm:p-5 lg:p-6 overflow-hidden font-sans box-border text-slate-700 select-none relative">
       
+      {/* Background Ambient Green Smoke Layer */}
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden select-none">
+        <img 
+          src={greenVaporWave} 
+          alt="Vape Smoke Ambient" 
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover opacity-[0.14] mix-blend-multiply filter contrast-125 saturate-150 scale-105"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#E6ECF5]/80 via-transparent to-[#E6ECF5]/60" />
+      </div>
+
       {/* Centered Main Stage Container */}
-      <div className="w-full max-w-[1640px] mx-auto flex-1 min-h-0 flex flex-col justify-between gap-3.5 sm:gap-5">
+      <div className="w-full max-w-[1640px] mx-auto flex-1 min-h-0 flex flex-col justify-between gap-3.5 sm:gap-5 relative z-10">
         
         {/* Upper Floating Master Card */}
-        <div className="flex-1 min-h-0 flex flex-col justify-between neu-flat-lg rounded-2xl p-5 sm:p-6 lg:p-8 relative overflow-hidden bg-[#E6ECF5]">
+        <div className="flex-1 min-h-0 flex flex-col justify-between neu-flat-lg rounded-2xl p-5 sm:p-6 lg:p-8 relative overflow-hidden bg-[#E6ECF5]/95 backdrop-blur-sm border border-emerald-500/10">
           
+          {/* Internal Subtle Smoke Accent In Top-Right Corner */}
+          <div className="absolute -top-24 -right-24 w-96 h-96 pointer-events-none rounded-full overflow-hidden opacity-20 mix-blend-multiply blur-2xl">
+            <img 
+              src={greenVaporWave} 
+              alt="Smoke Corner Glow" 
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover"
+            />
+          </div>
+
           {/* Top Navbar */}
           <header className="relative z-10 flex items-center justify-between gap-4 pb-3 sm:pb-4 border-b border-[#D1D9E6]/70 shrink-0">
             
