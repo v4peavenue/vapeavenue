@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   Terminal,
   ShieldCheck,
+  Calculator,
   Search,
   Filter,
   Award,
@@ -302,9 +303,18 @@ export const Dashboard: React.FC = () => {
     };
   }, [isAdmin, selectedLocationId, locations]);
 
-  // 2. Date range dependent sales listener
+  // 2. Date range dependent sales listener (only runs when Guardrail query is confirmed by user)
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || !isGuardrailApplied) {
+      setFilteredSales([]);
+      setRecentSales([]);
+      setTopProducts([]);
+      setChartData([]);
+      setLocationChartData([]);
+      setStats(prev => ({ ...prev, totalSales: 0, totalOrders: 0 }));
+      setLoading(false);
+      return;
+    }
 
     const startDate = activeDateRange.start;
     const endDate = activeDateRange.end;
@@ -429,7 +439,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       unsubscribeSales();
     };
-  }, [isAdmin, selectedLocationId, groupBy, locations, activeDateRange.start.getTime(), activeDateRange.end.getTime()]);
+  }, [isAdmin, isGuardrailApplied, selectedLocationId, groupBy, locations, activeDateRange.start.getTime(), activeDateRange.end.getTime()]);
 
   // Dynamically extract unique categories and brands for the analysis filters
   const categories = useMemo(() => {
@@ -872,73 +882,106 @@ export const Dashboard: React.FC = () => {
         ]}
       />
 
-      {/* Shared Range Filters */}
-      <div className="flex flex-wrap items-center gap-3 bg-white/75 backdrop-blur-sm p-3 rounded-xl border border-slate-200/50 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Range:</Label>
-          <Select value={timeRange} onValueChange={setTimeRange}>
-            <SelectTrigger className="w-[140px] h-9 bg-white text-xs">
-              <SelectValue>
-                {timeRange === 'today' ? 'Today' : 
-                 timeRange === '7days' ? 'Last 7 Days' : 
-                 timeRange === '30days' ? 'Last 30 Days' : 
-                 timeRange === 'month' ? 'This Month' : 
-                 timeRange === 'lastMonth' ? 'Last Month' : 
-                 timeRange === 'year' ? 'This Year' : 
-                 timeRange === 'lastYear' ? 'Last Year' : 
-                 timeRange === 'custom' ? 'Custom Range' : timeRange}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="7days">Last 7 Days</SelectItem>
-              <SelectItem value="30days">Last 30 Days</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-              <SelectItem value="lastMonth">Last Month</SelectItem>
-              <SelectItem value="year">This Year</SelectItem>
-              <SelectItem value="lastYear">Last Year</SelectItem>
-              <SelectItem value="custom">Custom Range</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Conditional Rendering: Awaiting Guardrail Query vs Queried Dashboard */}
+      {!isGuardrailApplied ? (
+        <Card className="border border-emerald-200/80 bg-white/80 backdrop-blur-md rounded-2xl p-8 sm:p-12 text-center shadow-sm animate-in fade-in duration-300">
+          <div className="max-w-xl mx-auto space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600 shadow-xs">
+              <ShieldCheck className="w-8 h-8 text-emerald-600" />
+            </div>
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 text-emerald-800 border border-emerald-300 text-xs font-bold uppercase tracking-wider">
+                <Calculator className="w-3.5 h-3.5 text-emerald-700" />
+                <span>On-Demand Query Active</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 font-heading">
+                Dashboard Kept Blank Until Requested
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                To prevent unnecessary Firestore read costs, analytics and sales charts are loaded on-demand. Choose your date range in the guardrail above, then click <strong className="text-emerald-700 font-bold">"Estimate Read Cost & Query"</strong> to pull live metrics.
+              </p>
+            </div>
 
-        {timeRange === 'custom' && (
-          <div className="flex items-center gap-2 border-l border-slate-200 pl-4 animate-in fade-in slide-in-from-left-2 duration-300">
-            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">From:</Label>
-            <Input 
-              type="date" 
-              value={customStartDate} 
-              onChange={(e) => setCustomStartDate(e.target.value)}
-              className="h-9 text-xs w-[130px] bg-white border-slate-200 focus:ring-[#1A2B4B]"
-            />
-            <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">To:</Label>
-            <Input 
-              type="date" 
-              value={customEndDate} 
-              onChange={(e) => setCustomEndDate(e.target.value)}
-              className="h-9 text-xs w-[130px] bg-white border-slate-200 focus:ring-[#1A2B4B]"
-            />
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-xs font-semibold text-slate-400 w-full mb-1">Quick Presets in Guardrail:</span>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">Today</span>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">Last 7 Days</span>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">This Month</span>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">Last 30 Days</span>
+              </div>
+            </div>
           </div>
-        )}
+        </Card>
+      ) : (
+        <>
+          {/* Shared Range Filters */}
+          <div className="flex flex-wrap items-center gap-3 bg-white/75 backdrop-blur-sm p-3 rounded-xl border border-slate-200/50 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Range:</Label>
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger className="w-[140px] h-9 bg-white text-xs">
+                  <SelectValue>
+                    {timeRange === 'today' ? 'Today' : 
+                     timeRange === '7days' ? 'Last 7 Days' : 
+                     timeRange === '30days' ? 'Last 30 Days' : 
+                     timeRange === 'month' ? 'This Month' : 
+                     timeRange === 'lastMonth' ? 'Last Month' : 
+                     timeRange === 'year' ? 'This Year' : 
+                     timeRange === 'lastYear' ? 'Last Year' : 
+                     timeRange === 'custom' ? 'Custom Range' : timeRange}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="7days">Last 7 Days</SelectItem>
+                  <SelectItem value="30days">Last 30 Days</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="lastMonth">Last Month</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
+                  <SelectItem value="lastYear">Last Year</SelectItem>
+                  <SelectItem value="custom">Custom Range</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-          <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Group By:</Label>
-          <div className="flex p-1 bg-slate-100 rounded-lg">
-            {(['day', 'month', 'year'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setGroupBy(p)}
-                className={cn(
-                  "px-3 py-1 text-[10px] font-bold uppercase tracking-tight rounded-md transition-all",
-                  groupBy === p ? "bg-white text-[#1A2B4B] shadow-sm" : "text-slate-400 hover:text-slate-600"
-                )}
-              >
-                {p}
-              </button>
-            ))}
+            {timeRange === 'custom' && (
+              <div className="flex items-center gap-2 border-l border-slate-200 pl-4 animate-in fade-in slide-in-from-left-2 duration-300">
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">From:</Label>
+                <Input 
+                  type="date" 
+                  value={customStartDate} 
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="h-9 text-xs w-[130px] bg-white border-slate-200 focus:ring-[#1A2B4B]"
+                />
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">To:</Label>
+                <Input 
+                  type="date" 
+                  value={customEndDate} 
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="h-9 text-xs w-[130px] bg-white border-slate-200 focus:ring-[#1A2B4B]"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+              <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Group By:</Label>
+              <div className="flex p-1 bg-slate-100 rounded-lg">
+                {(['day', 'month', 'year'] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setGroupBy(p)}
+                    className={cn(
+                      "px-3 py-1 text-[10px] font-bold uppercase tracking-tight rounded-md transition-all",
+                      groupBy === p ? "bg-white text-[#1A2B4B] shadow-sm" : "text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
       {activeDashboardTab === 'overview' ? (
         <div className="space-y-5 animate-in fade-in duration-300">
@@ -1285,11 +1328,25 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 1.9 */}
+              {/* Patch 2.0 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.9: POS Customer Autocomplete, Staff Directory Access & Management Authorization</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v2.0: On-Demand Query Guardrail, Payment Label Resolution & Memory Engine</h4>
                   <span className="text-[8px] font-mono text-[#D4AF37] bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold animate-pulse">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>On-Demand Guardrail Querying:</strong> Configured Dashboard and Reports to start completely blank on page load, executing queries and pulling documents only when explicitly requested via the Date Range Guardrail. This eliminates unintended Firestore read costs.</li>
+                  <li><strong>Payment Option Name Resolution:</strong> Fixed payment filter and column dropdown displays in Sales & Void History to show human-readable payment method and account names instead of raw IDs.</li>
+                  <li><strong>Firestore Memory Caching & Error Auto-Recovery:</strong> Upgraded the Firestore client engine to memory caching with automatic corruption listeners to prevent multi-tab IndexedDB locking and browser cache clearance errors.</li>
+                  <li><strong>Vape Avenue Emerald Aesthetic:</strong> Deployed high-definition emerald vapor atmosphere styling and cohesive branding across Login, primary navigation layout, and Home dashboard views.</li>
+                </ul>
+              </div>
+
+              {/* Patch 1.9 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v1.9: POS Customer Autocomplete, Staff Directory Access & Management Authorization</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>POS Customer Autocomplete Search:</strong> Replaced the customer dropdown with an interactive search input featuring real-time suggestions, name/phone/email filtering, and hardware/barcode loyalty card scanning (defaults to Walk-In Customer).</li>
@@ -2208,6 +2265,8 @@ export const Dashboard: React.FC = () => {
       </Card>
     </div>
   )}
+  </>
+)}
 </motion.div>
   );
 };

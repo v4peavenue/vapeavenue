@@ -216,10 +216,41 @@ To maintain a clean tracking records index without altering the core operational
 #### Patch v1.3: Employee Performance & Shift Analytics
 *   **Interactive Analytics Dashboard:** Implemented a new, premium "Employee Performance" dashboard view inside the central reporting module (`/src/pages/Dashboard.tsx`) giving authorized managers comprehensive visual insights into employee sales activity and shift attendance.
 *   **Active Subscriptions Pipeline:** Established real-time onSnapshot data streaming with Firebase Firestore for both the `users` and `attendance` collections, ensuring calculations on regular hours, overtime, and register orders stay actively synchronized.
-*   **Multi-Tier KPI Leaderboards:** Created visual winner cards summarizing four essential retail KPI winners: Top Sales Volume (units), Top Revenue Generator (monetary sales), Most Hours Worked (attendance shifts), and Sales Efficiency (average units sold per logged hour).
-*   **Toggleable Recharts bar charts:** Engineered an interactive Recharts bar comparison chart with customizable data toggle selection allowing operators to visually map and analyze team productivity (Net Units Sold, Hours Worked, Revenue, and Units/Hour) at a glance.
-*   **Staff Ledger Grid with Multi-Device Compatibility:** Built a detailed Staff Performance Ledger table enabling real-time name searches, user-role filter selects, desktop-aligned table rows, and responsive, fluid mobile card stacks.
-*   **Register Shrinkage and Return Audits:** Coded real-time tracking of individual cashier return frequencies and calculated a **Returns Accuracy Rate** to help administrators track customer satisfaction, measure accuracy, and prevent internal shrinkage.
+*   **Multi-Tier KPI Leaderboards:** Created visual winner cards summarizing four essential retail KPI winners: Top Sales Volume, Top Revenue Generator, Most Hours Worked, and Sales Efficiency (units/hour).
+*   **Staff Ledger Grid with Multi-Device Compatibility:** Built a detailed Staff Performance Ledger table enabling real-time name searches, user-role filter selects, and responsive card views.
+
+#### Patch v1.4: Delivery Fees & Tappable Presets
+*   **Cumulative Presets:** Enabled POS quick bill buttons (+50, +100, +500, +1000) to accumulate on consecutive taps instead of replacing the input.
+*   **Standardized Delivery Fee Defaults:** Added default delivery fee of ₱50 for Online orders, while keeping In-Store order delivery fees defaulted to zero.
+
+#### Patch v1.5: Unified Financial Ledger & Net Flows
+*   **Unified Ledger Tab:** Introduced a new 'Unified Ledger' tab in Sales & Returns History displaying all inflows and outflows (Sales, Returns, Voids, Expenses, Transfers) line-by-line.
+*   **Balance Sheet KPI:** Added aggregate summaries showing Total Cash In, Total Cash Out, and the Net Cash Balance Impact dynamically reflecting chosen filters.
+*   **Account Auditing:** Included direct account balances, transaction descriptors, and transfer flow pathways (source ➔ destination) for comprehensive auditing.
+
+#### Patch v1.6: Account Control & Logistical Categories
+*   **Account Status Control:** Admins can now toggle the active status of any financial account directly in Finance. Inactive accounts are automatically hidden from selection in POS checkouts, returns, expense tabs, and transfers.
+*   **Delivery & Shipping Category:** Added "Delivery/Shipping Fee" as a standard category inside the Expense logs and claims selectors.
+
+#### Patch v1.7: Editable Checkout, Range Schedules, & Admin Controls
+*   **Editable Checkout Totals & Approvals:** Staff and managers can now override the computed total during checkout with pending supervisor approvals.
+*   **Date Ranges & Auto-Plot on Schedule Changes:** Staff schedule change requests now support start/end date ranges with automated calendar plotting.
+*   **Admin-Restricted Expense Deletion:** Expense history items can now only be deleted by Administrators, with automated balance reversals.
+
+#### Patch v1.8: Customer Search & Saturday–Friday Weekly Cycle
+*   **Customer Name Search:** Allowed searching customer names directly in Sales History.
+*   **Saturday–Friday Weekly Cycle:** Updated weekly date ranges to run from Saturday to Friday, rolling over cleanly for payroll alignment.
+
+#### Patch v1.9: POS Customer Autocomplete & Staff Directory Access
+*   **POS Customer Autocomplete:** Replaced standard customer dropdown with real-time suggestions, phone/email search, and hardware loyalty barcode card scanning.
+*   **Staff Directory Access:** Allowed staff members to register customers and issue loyalty cards directly.
+*   **Manager Void Permissions:** Empowered store managers to void sales, returns, and purchase orders.
+
+#### Patch v2.0: On-Demand Query Guardrail, Payment Label Resolution & Memory Engine
+*   **Zero-Cost On-Demand Analytics:** Reports and Dashboards start completely blank on initial mount with zero unrequested Firestore reads. Data is only fetched when the user triggers the Date Range Guardrail and confirms the estimated read count.
+*   **Payment Option ID Resolution:** Resolved payment filter and column dropdowns in Sales & Void History to display human-readable method and account names instead of raw document IDs.
+*   **In-Memory Firestore Cache & Multi-Tab Stability:** Upgraded Firestore caching to `memoryLocalCache` with an automated corruption cleanup listener to prevent multi-tab browser storage corruption.
+*   **Atmospheric Brand Theme:** Implemented emerald vapor wave background styling and refined typography across Login, Layout, and Home views matching the official Vape Avenue flyer.
 
 ---
 

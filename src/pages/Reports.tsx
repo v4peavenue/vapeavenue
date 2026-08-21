@@ -18,7 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  ShieldCheck,
+  Calculator
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, Timestamp, orderBy, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -253,9 +255,16 @@ export const Reports: React.FC = () => {
     };
   }, []);
 
-  // 2. Date & location range dependent listeners
+  // 2. Date & location range dependent listeners (strictly on-demand when guardrail query is applied)
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin || !isGuardrailApplied) {
+      setSales([]);
+      setAdjustments([]);
+      setPurchaseOrders([]);
+      setReturnTransactions([]);
+      setLoading(false);
+      return;
+    }
 
     const q = query(
       collection(db, 'sales'),
@@ -276,8 +285,10 @@ export const Reports: React.FC = () => {
       }
       
       setSales(salesList);
+      setLoading(false);
     }, (error) => {
       console.warn("Reports: Error listening to sales:", error);
+      setLoading(false);
     });
 
     const adjQ = query(
@@ -323,9 +334,13 @@ export const Reports: React.FC = () => {
       unsubscribePOs();
       unsubscribeReturns();
     };
-  }, [start.getTime(), end.getTime(), selectedLocationId, profile?.id, isAdmin]);
+  }, [isGuardrailApplied, start.getTime(), end.getTime(), selectedLocationId, profile?.id, isAdmin]);
 
   const handleGeneratePDF = () => {
+    if (!isGuardrailApplied) {
+      toast.error('Please run a query via the Date Range Guardrail first to generate a report PDF.');
+      return;
+    }
     window.print();
   };
 
@@ -966,7 +981,43 @@ export const Reports: React.FC = () => {
         ]}
       />
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      {/* Conditional Rendering: Awaiting Guardrail Query vs Queried Reports */}
+      {!isGuardrailApplied ? (
+        <Card className="border border-emerald-200/80 bg-white/80 backdrop-blur-md rounded-2xl p-8 sm:p-12 text-center shadow-sm animate-in fade-in duration-300">
+          <div className="max-w-xl mx-auto space-y-4">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600 shadow-xs">
+              <ShieldCheck className="w-8 h-8 text-emerald-600" />
+            </div>
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 text-emerald-800 border border-emerald-300 text-xs font-bold uppercase tracking-wider">
+                <Calculator className="w-3.5 h-3.5 text-emerald-700" />
+                <span>On-Demand Query Active</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 font-heading">
+                Reports Kept Blank Until Requested
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                To prevent unnecessary Firestore read charges, detailed reports (Sales, Inventory, Profit, Stock Adjustments, Seller performance, and Product movement) are loaded strictly on-demand.
+              </p>
+              <p className="text-xs text-slate-500 font-medium pt-1">
+                Select your preferred date range in the guardrail above, then click <strong className="text-emerald-700 font-bold">"Estimate Read Cost & Query"</strong> to pull records.
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-xs font-semibold text-slate-400 w-full mb-1">Quick Presets in Guardrail:</span>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">Today</span>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">Last 7 Days</span>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">This Month</span>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-slate-100 text-slate-700">Last 30 Days</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="shadow-sm border-slate-200/60 overflow-hidden">
           <div className="h-1 bg-indigo-500" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -1841,6 +1892,8 @@ export const Reports: React.FC = () => {
           )}
         </CardContent>
       </Card>
+      </>
+    )}
     </div>
   );
 };

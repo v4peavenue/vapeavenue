@@ -69,4 +69,10 @@ Please complete the transaction for the remaining balance via one of the followi
 
 ---
 
+## **DEVELOPER SUPPORT & MAINTENANCE TERMS**
+* **Lifetime Technical Support:** Includes continuous system optimization, hotfix patches, Firestore performance guardrails, and software maintenance for single-entity operational usage by Vape Avenue.
+* **Non-Distribution Condition:** Free lifetime support remains fully valid provided the software is not redistributed, resold, or duplicated for third parties without prior written consent.
+
+---
+
 *Thank you for your business. We look forward to partnering with Vape Avenue on future digital transformation projects.*
