@@ -64,12 +64,13 @@ Below is a detailed representation of the structured database schemas declared a
 | :--- | :--- | :--- |
 | **locations** | Manages branches or retail outlets. | `id` (string), `name` (string), `code` (string), `address` (string), `phone` (string) |
 | **categories** | For grouping products in POS/Inventory. | `id` (string), `name` (string), `description` (string) |
-| **brands** | Represents product manufacturing brands. | `id` (string), `name` (string) |
+| **brands** | Represents product flavors / flavor profiles (e.g., Mint, Lush Ice, Tobacco). | `id` (string), `name` (string) |
 | **suppliers** | External vendors for inventory restocking. | `id` (string), `name` (string), `contactPerson` (string), `email` (string), `phone` (string) |
 | **products** | Product inventory records. | `id` (string), `sku` (string), `barcode` (string), `name` (string), `categoryId` (string), `brandId` (string), `cost` (number), `price` (number), `qty` (number), `minStock` (number), `locationId` (string), `tierPrices` (object: `Record<tierId, price>`) |
 | **priceTiers** | Specialized custom customer pricing. | `id` (string), `name` (string), `discountPercentage` (number) |
 | **customers** | Handles credit and tier records. | `id` (string), `name` (string), `phone` (string), `email` (string), `priceTierId` (string) |
 | **sales** | Holds invoices and completed checkouts. | `id` (string), `invoiceNo` (string), `timestamp` (Timestamp), `cashierId` (string), `customerId` (string), `subtotal` (number), `discount` (number), `tax` (number), `total` (number), `paymentMethod` (string), `locationId` (string), `items` (array: `SaleItem[]`) |
+| **stockTransfers** | Inter-branch multi-item transfer manifests. | `id` (string), `transferNumber` (string), `sourceLocationId` (string), `destinationLocationId` (string), `status` (string), `items` (array: `StockTransferItem[]`), `createdAt` (Timestamp), `transferredBy` (string) |
 | **purchaseOrders** | Purchasing logs for external validation. | `id` (string), `poNumber` (string), `supplierId` (string), `status` (string: `'pending' \| 'received'`), `totalAmount` (number), `items` (array: `POItem[]`) |
 | **accounts** | Double-entry ledger accounts. | `id` (string), `name` (string), `type` (string: `'cash' \| 'bank' \| 'credit'`), `balance` (number) |
 | **attendance** | Employee clock-in and work log tracking. | `id` (string), `userId` (string), `userName` (string), `date` (string), `clockIn` (Timestamp), `clockOut` (Timestamp), `status` (string), `hoursWorked` (number) |
@@ -251,6 +252,11 @@ To maintain a clean tracking records index without altering the core operational
 *   **Payment Option ID Resolution:** Resolved payment filter and column dropdowns in Sales & Void History to display human-readable method and account names instead of raw document IDs.
 *   **In-Memory Firestore Cache & Multi-Tab Stability:** Upgraded Firestore caching to `memoryLocalCache` with an automated corruption cleanup listener to prevent multi-tab browser storage corruption.
 *   **Atmospheric Brand Theme:** Implemented emerald vapor wave background styling and refined typography across Login, Layout, and Home views matching the official Vape Avenue flyer.
+
+#### Patch v2.1: Multi-Item Branch Transfers, Standardized Wide Modal Forms & Flavor Profile Migration
+*   **Multi-Item Branch Stock Transfers:** Revamped Branch Stock Transfers (`/src/components/StockTransferForm.tsx`) to support transferring multiple catalog items within a single manifest, matching the purchase order architecture with dynamic item lines, origin stock validation, and atomic multi-location Firestore inventory synchronization.
+*   **Standardized Wide-Screen Forms:** Standardized all application modal dialogs (Create Purchase Order, Stock Transfers, Product Management, and Stock Adjustments) with ultra-wide, non-cramped layouts (`sm:max-w-4xl lg:max-w-5xl`) to eliminate horizontal and vertical panel scroll fatigue.
+*   **Directory Brand to Flavor Migration:** Renamed "Brand" to "Flavor" in Directory management (`/src/pages/Directory.tsx`), product definitions, catalog filters, and reporting views to natively match vape industry terminology (e.g., Mint, Lush Ice, Tobacco).
 
 ---
 

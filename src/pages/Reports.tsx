@@ -1219,15 +1219,15 @@ export const Reports: React.FC = () => {
                 </Select>
               </div>
 
-              {/* Brand Filter */}
+              {/* Brand / Flavor Filter */}
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Brand</Label>
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Flavor / Brand</Label>
                 <Select value={selectedBrand} onValueChange={setSelectedBrand}>
                   <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                    <SelectValue placeholder="All Brands" />
+                    <SelectValue placeholder="All Flavors" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Brands</SelectItem>
+                    <SelectItem value="all">All Flavors</SelectItem>
                     {uniqueBrands.map(brand => (
                       <SelectItem key={brand} value={brand}>{brand}</SelectItem>
                     ))}

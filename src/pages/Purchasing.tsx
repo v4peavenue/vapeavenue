@@ -650,9 +650,9 @@ export const Purchasing: React.FC = () => {
 
       {/* PO Details View */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+        <DialogContent className="sm:max-w-3xl md:max-w-4xl w-full rounded-3xl p-6 sm:p-8 bg-white/95 backdrop-blur-md border-[#D4AF37]/20 shadow-2xl overflow-hidden">
+          <DialogHeader className="pb-2 border-b border-slate-100">
+            <DialogTitle className="flex items-center gap-2 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
               <Truck className="w-5 h-5 text-indigo-600" />
               Purchase Order: {selectedPO?.poNumber}
             </DialogTitle>

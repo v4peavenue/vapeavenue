@@ -284,12 +284,12 @@ export const Inventory: React.FC = () => {
           </Select>
           <Select value={brandFilter} onValueChange={setBrandFilter}>
             <SelectTrigger className="w-full sm:w-[150px] bg-white/50 border-slate-200">
-              <SelectValue placeholder="Brand">
-                {brandFilter === 'all' ? 'All Brands' : brandFilter}
+              <SelectValue placeholder="Flavor / Brand">
+                {brandFilter === 'all' ? 'All Flavors' : brandFilter}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Brands</SelectItem>
+              <SelectItem value="all">All Flavors</SelectItem>
               {brands.map(brand => (
                 <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>
               ))}
@@ -322,7 +322,7 @@ export const Inventory: React.FC = () => {
               <TableHead className="w-[300px] text-[#1A2B4B] font-semibold">Product</TableHead>
               <TableHead className="text-[#1A2B4B] font-semibold">SKU</TableHead>
               <TableHead className="text-[#1A2B4B] font-semibold">Category</TableHead>
-              <TableHead className="text-[#1A2B4B] font-semibold">Brand</TableHead>
+              <TableHead className="text-[#1A2B4B] font-semibold">Flavor</TableHead>
               <TableHead className="text-[#1A2B4B] font-semibold">Price</TableHead>
               <TableHead className="text-[#1A2B4B] font-semibold">Stock</TableHead>
               <TableHead className="text-[#1A2B4B] font-semibold">Status</TableHead>

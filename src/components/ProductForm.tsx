@@ -198,28 +198,28 @@ export const ProductForm: React.FC<ProductFormProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] md:min-h-[600px] max-h-[95vh] overflow-y-auto flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{product ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+      <DialogContent className="sm:max-w-3xl md:max-w-4xl w-full max-h-[90vh] flex flex-col rounded-3xl p-6 sm:p-8 bg-white/95 backdrop-blur-md border-[#D4AF37]/20 shadow-2xl overflow-hidden">
+        <DialogHeader className="pb-2 border-b border-slate-100">
+          <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{product ? 'Edit Product' : 'Add New Product'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col">
-          <Tabs defaultValue="general" className="w-full flex-1 flex flex-col">
-            <TabsList className="grid w-full grid-cols-3 mb-2">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing</TabsTrigger>
-              <TabsTrigger value="inventory">Inventory</TabsTrigger>
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden pt-3">
+          <Tabs defaultValue="general" className="w-full flex-1 flex flex-col overflow-hidden">
+            <TabsList className="grid w-full grid-cols-3 mb-3 bg-slate-100 p-1 rounded-xl">
+              <TabsTrigger value="general" className="rounded-lg">General</TabsTrigger>
+              <TabsTrigger value="pricing" className="rounded-lg">Pricing</TabsTrigger>
+              <TabsTrigger value="inventory" className="rounded-lg">Inventory</TabsTrigger>
             </TabsList>
 
             <div className="flex-1 overflow-y-auto px-1 py-2 min-h-[350px]">
               <TabsContent value="general" className="space-y-4 mt-0">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="name">Product Name</Label>
-                    <Input id="name" {...register('name', { required: true })} placeholder="e.g. Wireless Mouse" />
+                    <Input id="name" {...register('name', { required: true })} placeholder="e.g. Relx Pod Pro 2" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="sku">SKU</Label>
-                    <Input id="sku" {...register('sku', { required: true })} placeholder="e.g. WM-001" />
+                    <Input id="sku" {...register('sku', { required: true })} placeholder="e.g. RLX-MNT-01" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="barcode">Barcode (Optional)</Label>
@@ -256,14 +256,14 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="brand">Brand</Label>
+                    <Label htmlFor="brand">Flavor / Brand</Label>
                     <Select 
                       onValueChange={(value) => setValue('brand', value)} 
                       value={watchBrand}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select brand">
-                          {watchBrand || 'Select brand'}
+                        <SelectValue placeholder="Select flavor / brand">
+                          {watchBrand || 'Select flavor / brand'}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
@@ -273,7 +273,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="supplierId">Supplier</Label>
                     <Select 
                       onValueChange={(value) => setValue('supplierId', value)} 
@@ -291,11 +291,11 @@ export const ProductForm: React.FC<ProductFormProps> = ({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="imageUrl">Product Image URL</Label>
                     <Input id="imageUrl" {...register('imageUrl')} placeholder="e.g. https://example.com/image.jpg" />
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="description">Description</Label>
                     <textarea 
                       id="description" 

@@ -161,15 +161,15 @@ export const StockAdjustmentForm: React.FC<StockAdjustmentFormProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Stock Adjustment</DialogTitle>
-          <DialogDescription>
-            Manually update stock levels for a specific product and location.
+      <DialogContent className="sm:max-w-xl md:max-w-2xl w-full rounded-3xl p-6 sm:p-8 bg-white/95 backdrop-blur-md border-[#D4AF37]/20 shadow-2xl overflow-hidden">
+        <DialogHeader className="pb-2 border-b border-slate-100">
+          <DialogTitle className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Stock Adjustment</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm text-slate-500">
+            Manually calibrate inventory stock levels for physical counts, damaged goods, or corrections.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
           <div className="space-y-2">
             <Label>Product</Label>
             <div className="flex gap-1.5">

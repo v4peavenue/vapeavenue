@@ -339,15 +339,15 @@ export const Directory: React.FC = () => {
     if (!newBrand.trim()) return;
     
     if (brands.some(b => b.name.toLowerCase() === newBrand.trim().toLowerCase())) {
-      toast.error('Brand with this name already exists');
+      toast.error('Flavor with this name already exists');
       return;
     }
 
     try {
       const docRef = await addDoc(collection(db, 'brands'), { name: newBrand });
-      await logAction(profile, 'CREATE_BRAND', `Created brand: ${newBrand}`, docRef.id, 'brand');
+      await logAction(profile, 'CREATE_BRAND', `Created flavor: ${newBrand}`, docRef.id, 'brand');
       setNewBrand('');
-      toast.success('Brand added');
+      toast.success('Flavor added');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'brands');
     }
@@ -550,9 +550,9 @@ export const Directory: React.FC = () => {
     if (!editingBrand || !editingBrand.name.trim()) return;
     try {
       await updateDoc(doc(db, 'brands', editingBrand.id), { name: editingBrand.name });
-      await logAction(profile, 'UPDATE_BRAND', `Updated brand: ${editingBrand.name}`, editingBrand.id, 'brand');
+      await logAction(profile, 'UPDATE_BRAND', `Updated flavor: ${editingBrand.name}`, editingBrand.id, 'brand');
       setEditingBrand(null);
-      toast.success('Brand updated');
+      toast.success('Flavor updated');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'brands');
     }
@@ -618,7 +618,7 @@ export const Directory: React.FC = () => {
       details = `Deleted category: ${item?.name}`;
     } else if (collectionName === 'brands') {
       const item = brands.find(b => b.id === id);
-      details = `Deleted brand: ${item?.name}`;
+      details = `Deleted flavor: ${item?.name}`;
     } else if (collectionName === 'suppliers') {
       const item = suppliers.find(s => s.id === id);
       details = `Deleted supplier: ${item?.name}`;
@@ -738,8 +738,8 @@ export const Directory: React.FC = () => {
                 Categories
               </TabsTrigger>
               <TabsTrigger value="brands" className="gap-2 rounded-lg px-6">
-                <BookOpen className="w-4 h-4" />
-                Brands
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                Flavors
               </TabsTrigger>
               <TabsTrigger value="suppliers" className="gap-2 rounded-lg px-6">
                 <Building2 className="w-4 h-4" />
@@ -858,22 +858,22 @@ export const Directory: React.FC = () => {
           <div className="grid md:grid-cols-3 gap-6">
             <Card className="md:col-span-1 border-none shadow-sm bg-white/50 backdrop-blur-sm">
               <CardHeader>
-                <CardTitle className="font-heading text-2xl">Add Brand</CardTitle>
-                <CardDescription>Group products by manufacturer or brand name.</CardDescription>
+                <CardTitle className="font-heading text-2xl">Add Flavor</CardTitle>
+                <CardDescription>Group vape products by flavor profile (e.g., Mint, Strawberry, Watermelon Ice, Tobacco).</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleAddBrand} className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Brand Name</Label>
+                    <Label>Flavor Name</Label>
                     <Input 
-                      placeholder="e.g. Nike, Apple" 
+                      placeholder="e.g. Cool Mint, Lush Ice, Tobacco" 
                       value={newBrand}
                       onChange={(e) => setNewBrand(e.target.value)}
                     />
                   </div>
                   <Button type="submit" className="w-full">
                     <Plus className="w-4 h-4 mr-2" />
-                    Create Brand
+                    Create Flavor
                   </Button>
                 </form>
               </CardContent>
@@ -881,14 +881,14 @@ export const Directory: React.FC = () => {
 
             <Card className="md:col-span-2 border-none shadow-sm">
               <CardHeader>
-                <CardTitle className="font-heading text-2xl">Brand List</CardTitle>
+                <CardTitle className="font-heading text-2xl">Flavor List</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto border border-border rounded-xl">
                   <Table>
                     <TableHeader className="bg-secondary/30">
                       <TableRow>
-                        <TableHead className="font-heading">Brand Name</TableHead>
+                        <TableHead className="font-heading">Flavor Name</TableHead>
                         <TableHead className="text-right font-heading w-[100px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -896,7 +896,7 @@ export const Directory: React.FC = () => {
                       {brands.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
-                            No brands found
+                            No flavors found
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1894,13 +1894,13 @@ export const Directory: React.FC = () => {
       </Dialog>
 
       <Dialog open={!!editingBrand} onOpenChange={(open) => !open && setEditingBrand(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Brand</DialogTitle>
+            <DialogTitle>Edit Flavor</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleUpdateBrand} className="space-y-4">
             <div className="space-y-2">
-              <Label>Brand Name</Label>
+              <Label>Flavor Name</Label>
               <Input 
                 value={editingBrand?.name || ''} 
                 onChange={(e) => setEditingBrand(prev => prev ? { ...prev, name: e.target.value } : null)}

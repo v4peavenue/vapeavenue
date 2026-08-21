@@ -25,7 +25,7 @@
 | :--- | :---: | :---: | :---: |
 | **Phase 1: Architecture & Auth Setup**<br>• Firebase database schema design<br>• Core user role authentication (Admin/Staff) | Milestone 1 | Fixed Price | ₱4,000.00 |
 | **Phase 2: Advanced Location-bound Inventory**<br>• Location-level inventory distribution<br>• Restricted staff-level view rules (Admin-only distribution visibility) | Milestone 2 | Fixed Price | ₱5,000.00 |
-| **Phase 3: Point of Sale (POS) Registry & Layouts**<br>• Standard Grid view implementation<br>• Default Category & Brand hierarchically grouped list-view<br>• Multi-tier customer pricing engines & 12% VAT calculations | Milestone 3 | Fixed Price | ₱8,000.00 |
+| **Phase 3: Point of Sale (POS) Registry & Layouts**<br>• Standard Grid view implementation<br>• Default Category & Flavor hierarchically grouped list-view<br>• Multi-tier customer pricing engines & 12% VAT calculations | Milestone 3 | Fixed Price | ₱8,000.00 |
 | **Phase 4: Finance Hub & Immutable Audit Logs**<br>• Expense registers, ledger trackers, and performance charts<br>• Immutable actions-logger audit pipeline for security | Milestone 4 | Fixed Price | ₱5,000.00 |
 | **Phase 5: Cloud Deployment & Knowledge Handover**<br>• Vite build pipeline optimizations, custom metadata<br>• System documentation updates ready for client signature | Milestone 5 | Fixed Price | ₱3,000.00 |
 

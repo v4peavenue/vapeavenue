@@ -135,6 +135,11 @@ To preserve the pristine definitions of the core milestones while accounting for
 *   **In-Memory Firestore Cache & Multi-Tab Stability:** Switched to `memoryLocalCache` with auto-recovery listeners, resolving multi-tab IndexedDB storage corruption.
 *   **Vape Avenue Atmospheric Brand Theme:** Added rich emerald green vapor aesthetic and polished styling across Login, Layout, and Home overview screens.
 
+### Patch v2.1: Multi-Item Branch Transfers, Standardized Wide Modal Forms & Flavor Profile Migration
+*   **Multi-Item Branch Stock Transfers:** Revamped Branch Stock Transfers to support transferring multiple catalog items in a single manifest, matching the purchase order architecture with dynamic item lines, real-time origin stock balance validation, and automated inventory sync.
+*   **Standardized Wide-Screen Forms:** Standardized all application modal dialogs (Create Purchase Order, Stock Transfers, Product Management, and Stock Adjustments) with ultra-wide, non-cramped layouts (`sm:max-w-4xl lg:max-w-5xl`) to eliminate horizontal and vertical panel scroll fatigue.
+*   **Directory Brand to Flavor Migration:** Renamed "Brand" to "Flavor" in Directory management, product definitions, catalog filters, and reporting views to natively match vape industry terminology (e.g., Mint, Lush Ice, Tobacco).
+
 ---
 
 ## 7. REVISION AND SIGN-OFF

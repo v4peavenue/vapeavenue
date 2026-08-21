@@ -252,6 +252,30 @@ export interface StockAdjustment {
   timestamp: Timestamp;
 }
 
+export interface StockTransferItem {
+  productId: string;
+  productName: string;
+  productSku: string;
+  quantity: number;
+  sourceStock?: number;
+  destStock?: number;
+}
+
+export interface StockTransfer {
+  id: string;
+  transferNumber?: string;
+  fromLocationId: string;
+  fromLocationName: string;
+  toLocationId: string;
+  toLocationName: string;
+  items: StockTransferItem[];
+  totalUnits: number;
+  reason: string;
+  transferredBy: string;
+  transferredByName: string;
+  timestamp: Timestamp;
+}
+
 export interface ReturnItem extends SaleItem {
   returnType: 'return' | 'replacement';
   reason: string;

@@ -1328,11 +1328,24 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 2.0 */}
+              {/* Patch 2.1 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v2.0: On-Demand Query Guardrail, Payment Label Resolution & Memory Engine</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v2.1: Multi-Item Branch Transfers, Standardized Wide Modal Forms & Flavor Profile Migration</h4>
                   <span className="text-[8px] font-mono text-[#D4AF37] bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold animate-pulse">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Multi-Item Branch Stock Transfers:</strong> Revamped Branch Stock Transfers to support transferring multiple catalog items in a single manifest, matching the purchase order architecture with dynamic item lines, real-time origin stock balance validation, and automated inventory sync.</li>
+                  <li><strong>Standardized Wide-Screen Forms:</strong> Standardized all application modal dialogs (Create Purchase Order, Stock Transfers, Product Management, and Stock Adjustments) with ultra-wide, non-cramped layouts (`sm:max-w-4xl lg:max-w-5xl`) to eliminate horizontal and vertical panel scroll fatigue.</li>
+                  <li><strong>Directory Brand to Flavor Migration:</strong> Renamed "Brand" to "Flavor" in Directory management, product definitions, catalog filters, and reporting views to natively match vape industry terminology (e.g. Mint, Lush Ice, Tobacco).</li>
+                </ul>
+              </div>
+
+              {/* Patch 2.0 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v2.0: On-Demand Query Guardrail, Payment Label Resolution & Memory Engine</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>On-Demand Guardrail Querying:</strong> Configured Dashboard and Reports to start completely blank on page load, executing queries and pulling documents only when explicitly requested via the Date Range Guardrail. This eliminates unintended Firestore read costs.</li>
