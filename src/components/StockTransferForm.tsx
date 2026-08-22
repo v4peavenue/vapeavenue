@@ -40,6 +40,7 @@ import { toast } from 'sonner';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { SearchableProductSelect } from './SearchableProductSelect';
 
 interface StockTransferFormProps {
   isOpen: boolean;
@@ -435,48 +436,35 @@ export const StockTransferForm: React.FC<StockTransferFormProps> = ({
                         {index + 1}
                       </span>
 
-                      {/* Product Selector */}
+                      {/* Searchable Product Typeahead Selector */}
                       <div className="flex-1 space-y-1">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Product</Label>
-                        <div className="flex gap-1.5">
-                          <Select 
-                            value={currentProductId || ''} 
-                            onValueChange={(val: string) => {
-                              setValue(`items.${index}.productId` as any, val);
-                              const prod = products.find(p => p.id === val);
-                              const stock = Number(prod?.stocks?.[watchFromLocationId] || 0);
-                              if (stock > 0 && currentQty === 0) {
-                                setValue(`items.${index}.quantity` as any, 1);
+                        <div className="flex items-end gap-1.5">
+                          <SearchableProductSelect
+                            products={products}
+                            value={currentProductId || ''}
+                            onChange={(prod) => {
+                              if (prod && typeof prod !== 'string') {
+                                setValue(`items.${index}.productId` as any, prod.id);
+                                const stock = Number(prod.stocks?.[watchFromLocationId] || 0);
+                                if (stock > 0 && currentQty === 0) {
+                                  setValue(`items.${index}.quantity` as any, 1);
+                                }
+                              } else {
+                                setValue(`items.${index}.productId` as any, '');
                               }
                             }}
-                          >
-                            <SelectTrigger className="bg-slate-50/50 border-slate-200 h-9 rounded-xl text-xs sm:text-sm font-medium">
-                              <SelectValue placeholder="Select product to transfer">
-                                {selectedProd ? `${selectedProd.name} (${selectedProd.sku})` : 'Select product'}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="max-h-60">
-                              {products.map(p => {
-                                const pStock = Number(p.stocks?.[watchFromLocationId] || 0);
-                                return (
-                                  <SelectItem key={p.id} value={p.id}>
-                                    <div className="flex items-center justify-between gap-4 w-full">
-                                      <span>{p.name} <span className="text-slate-400 font-mono text-xs">({p.sku})</span></span>
-                                      <span className={pStock > 0 ? "text-emerald-600 font-bold text-xs" : "text-rose-500 font-bold text-xs"}>
-                                        {pStock} in source
-                                      </span>
-                                    </div>
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
+                            label="Product (Name / SKU)"
+                            placeholder="Type SKU (e.g. V4-...) or product name..."
+                            locationId={watchFromLocationId}
+                            showStock={false}
+                            required={true}
+                          />
 
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
-                            className="h-9 w-9 border-slate-200 hover:bg-slate-50 rounded-xl shrink-0"
+                            className="h-9 w-9 border-slate-200 hover:bg-slate-50 rounded-xl shrink-0 mb-[1px]"
                             onClick={() => {
                               setActiveScanningIndex(index);
                               setIsScannerOpen(true);

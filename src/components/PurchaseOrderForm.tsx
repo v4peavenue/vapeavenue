@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Product, Location, Supplier, PaymentOption } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -27,9 +27,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { logAction } from '@/lib/audit';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2, ShoppingBag, X, Building2, MapPin, CreditCard, Receipt, Layers } from 'lucide-react';
+import { 
+  Plus, 
+  Trash2, 
+  ShoppingBag, 
+  X, 
+  Building2, 
+  MapPin, 
+  CreditCard, 
+  Receipt, 
+  Layers, 
+  Search, 
+  Check, 
+  Package 
+} from 'lucide-react';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
+import { SearchableProductSelect } from './SearchableProductSelect';
 
 interface PurchaseOrderFormProps {
   isOpen: boolean;
@@ -511,33 +525,23 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
                         {index + 1}
                       </span>
 
-                      {/* Product Selector */}
-                      <div className="flex-1 space-y-1">
-                        <Label className="text-[10px] uppercase font-bold text-slate-400">Product</Label>
-                        <Select 
-                          value={currentProductId} 
-                          onValueChange={(val: string) => {
-                            setValue(`items.${index}.productId` as any, val);
-                            const prod = products.find(p => p.id === val);
-                            if (prod) {
-                              setValue(`items.${index}.cost` as any, prod.cost || 0);
-                            }
-                          }}
-                        >
-                          <SelectTrigger className="bg-slate-50/50 border-slate-200 h-9 rounded-xl text-xs sm:text-sm font-medium">
-                            <SelectValue placeholder="Select product">
-                              {selectedProd ? `${selectedProd.name} (${selectedProd.sku})` : 'Select product'}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="max-h-60">
-                            {products.map(p => (
-                              <SelectItem key={p.id} value={p.id}>
-                                <span>{p.name}</span> <span className="text-slate-400 font-mono text-xs">({p.sku})</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {/* Searchable Product Typeahead Selector */}
+                      <SearchableProductSelect
+                        products={products}
+                        value={currentProductId || ''}
+                        onChange={(prod) => {
+                          if (prod && prod !== 'all') {
+                            setValue(`items.${index}.productId` as any, prod.id);
+                            setValue(`items.${index}.cost` as any, prod.cost || 0);
+                          } else {
+                            setValue(`items.${index}.productId` as any, '');
+                          }
+                        }}
+                        label="Product (Name / SKU)"
+                        placeholder="Type SKU or product name..."
+                        showStock={true}
+                        required={true}
+                      />
 
                       {/* Quantity */}
                       <div className="w-full md:w-28 space-y-1 shrink-0">

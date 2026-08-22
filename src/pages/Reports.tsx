@@ -34,6 +34,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-utils';
 import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
+import { SearchableProductSelect } from '@/components/SearchableProductSelect';
 import { 
   Select, 
   SelectContent, 
@@ -1348,18 +1349,23 @@ export const Reports: React.FC = () => {
 
               {/* Product Filter */}
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product</Label>
-                <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                    <SelectValue placeholder="All Products" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Products</SelectItem>
-                    {selectableProducts.map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableProductSelect
+                  products={selectableProducts}
+                  value={selectedProduct}
+                  onChange={(prod) => {
+                    if (prod === 'all' || !prod) {
+                      setSelectedProduct('all');
+                    } else {
+                      setSelectedProduct(prod.id);
+                    }
+                  }}
+                  label="Product"
+                  placeholder="All products or type SKU / Name..."
+                  allowAll={true}
+                  allLabel="All Products"
+                  showStock={false}
+                  inputClassName="bg-white border-slate-200 h-9"
+                />
               </div>
 
               {/* Seller / Staff Filter */}
