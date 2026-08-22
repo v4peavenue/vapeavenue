@@ -1328,11 +1328,24 @@ export const Dashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Patch 2.1 */}
+              {/* Patch 2.2 */}
               <div className="space-y-1.5 border-l-2 border-[#D4AF37] pl-3 py-0.5">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v2.1: Multi-Item Branch Transfers, Standardized Wide Modal Forms & Flavor Profile Migration</h4>
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v2.2: Damaged / Defective Stock Adjuster & Reason Category Logger</h4>
                   <span className="text-[8px] font-mono text-[#D4AF37] bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-bold animate-pulse">Latest</span>
+                </div>
+                <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
+                  <li><strong>Dedicated Reason Categories:</strong> Added a specialized Adjustment Reason dropdown featuring <em>Damaged / Defective Product</em> (factory defects, leaking pods, dead batteries, burnt coils), <em>Physical Count Audit</em>, <em>Loss / Shrinkage</em>, <em>Expired / Deteriorated E-Liquid</em>, <em>Return to Vendor (RTV)</em>, <em>Store Tester</em>, and <em>Manual Restock</em>.</li>
+                  <li><strong>Auto-Action Configuration & Quick Defect Chips:</strong> Selecting "Damaged / Defective" or "Loss" automatically switches the adjustment mode to subtraction, and provides single-click quick defect chips (e.g. <code>+ Leaking Pod</code>, <code>+ Dead Battery</code>, <code>+ Burnt Coil</code>).</li>
+                  <li><strong>Interactive Live Stock Preview Card:</strong> Added a real-time calibration simulation card showing Current Stock, +/- Adjustment, and Projected New Stock with negative inventory warnings.</li>
+                </ul>
+              </div>
+
+              {/* Patch 2.1 */}
+              <div className="space-y-1.5 border-l-2 border-slate-300 pl-3 py-0.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-[#1A2B4B]">Patch v2.1: Multi-Item Branch Transfers, Standardized Wide Modal Forms & Flavor Profile Migration</h4>
+                  <span className="text-[8px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-bold">Stable</span>
                 </div>
                 <ul className="text-[10px] text-slate-600 list-disc list-inside space-y-1 leading-relaxed">
                   <li><strong>Multi-Item Branch Stock Transfers:</strong> Revamped Branch Stock Transfers to support transferring multiple catalog items in a single manifest, matching the purchase order architecture with dynamic item lines, real-time origin stock balance validation, and automated inventory sync.</li>

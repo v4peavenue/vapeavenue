@@ -258,6 +258,11 @@ To maintain a clean tracking records index without altering the core operational
 *   **Standardized Wide-Screen Forms:** Standardized all application modal dialogs (Create Purchase Order, Stock Transfers, Product Management, and Stock Adjustments) with ultra-wide, non-cramped layouts (`sm:max-w-4xl lg:max-w-5xl`) to eliminate horizontal and vertical panel scroll fatigue.
 *   **Directory Brand to Flavor Migration:** Renamed "Brand" to "Flavor" in Directory management (`/src/pages/Directory.tsx`), product definitions, catalog filters, and reporting views to natively match vape industry terminology (e.g., Mint, Lush Ice, Tobacco).
 
+#### Patch v2.2: Damaged / Defective Stock Adjuster & Reason Category Logger
+*   **Dedicated Reason Categories:** Added a specialized Adjustment Reason dropdown (`/src/components/StockAdjustmentForm.tsx`) featuring *Damaged / Defective Product* (factory defects, leaking pods, dead batteries, burnt coils), *Physical Count Audit*, *Loss / Shrinkage*, *Expired / Deteriorated E-Liquid*, *Return to Vendor (RTV)*, *Store Tester*, and *Manual Restock*.
+*   **Auto-Action Configuration & Quick Defect Chips:** Selecting "Damaged / Defective" or "Loss" automatically switches the adjustment mode to subtraction, and provides single-click quick defect chips (e.g. `+ Leaking Pod`, `+ Dead Battery`, `+ Burnt Coil`).
+*   **Interactive Live Stock Preview Card:** Added a real-time calibration simulation card showing Current Stock, +/- Adjustment, and Projected New Stock with negative inventory warnings and atomic audit logging.
+
 ---
 
 ## 6. SYSTEM SIGN-OFF & APPROVAL

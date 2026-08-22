@@ -246,6 +246,7 @@ export interface StockAdjustment {
   adjustmentQuantity: number;
   newStock: number;
   type: 'add' | 'subtract' | 'set';
+  reasonCategory?: 'defective' | 'audit' | 'loss' | 'expiry' | 'rtv' | 'tester' | 'restock' | 'other' | string;
   reason: string;
   adjustedBy: string;
   adjustedByName: string;

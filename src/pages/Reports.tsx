@@ -57,6 +57,86 @@ import { exportToCSV } from '@/lib/export';
 
 type ReportType = 'sales' | 'inventory' | 'profit' | 'stock-adjustments' | 'sales-by-seller' | 'product-movement';
 
+export const ADJUSTMENT_CATEGORIES = [
+  { value: 'all', label: 'All Adjustment Categories' },
+  { value: 'defective', label: 'Damaged / Defective Product' },
+  { value: 'audit', label: 'Physical Count / Inventory Audit' },
+  { value: 'loss', label: 'Loss / Shrinkage / Missing Stock' },
+  { value: 'expiry', label: 'Expired / Deteriorated Product' },
+  { value: 'rtv', label: 'Return to Vendor / Supplier (RTV)' },
+  { value: 'tester', label: 'Store Tester / Customer Demo' },
+  { value: 'restock', label: 'Manual Restock / Inbound Unrecorded' },
+  { value: 'other', label: 'Other / Custom Adjustment' }
+] as const;
+
+export const matchesAdjustmentCategory = (adj: StockAdjustment, targetCategory: string): boolean => {
+  if (!targetCategory || targetCategory === 'all') return true;
+  if (adj.reasonCategory) {
+    return adj.reasonCategory === targetCategory;
+  }
+  // Fallback checking adj.reason text for older logs
+  const lowerReason = (adj.reason || '').toLowerCase();
+  if (targetCategory === 'defective') {
+    return lowerReason.includes('defect') || lowerReason.includes('damage') || lowerReason.includes('leak') || lowerReason.includes('broken') || lowerReason.includes('burnt') || lowerReason.includes('dead battery');
+  }
+  if (targetCategory === 'audit') {
+    return lowerReason.includes('audit') || lowerReason.includes('count') || lowerReason.includes('cycle');
+  }
+  if (targetCategory === 'loss') {
+    return lowerReason.includes('loss') || lowerReason.includes('shrinkage') || lowerReason.includes('missing');
+  }
+  if (targetCategory === 'expiry') {
+    return lowerReason.includes('expir') || lowerReason.includes('deteriorat') || lowerReason.includes('past best');
+  }
+  if (targetCategory === 'rtv') {
+    return lowerReason.includes('rtv') || lowerReason.includes('vendor') || lowerReason.includes('supplier') || lowerReason.includes('rma');
+  }
+  if (targetCategory === 'tester') {
+    return lowerReason.includes('tester') || lowerReason.includes('demo') || lowerReason.includes('sample');
+  }
+  if (targetCategory === 'restock') {
+    return lowerReason.includes('restock') || lowerReason.includes('inbound') || lowerReason.includes('surplus');
+  }
+  if (targetCategory === 'other') {
+    return lowerReason.includes('other') || lowerReason.includes('override') || lowerReason.includes('custom');
+  }
+  return false;
+};
+
+export const getAdjustmentCategoryBadge = (adj: StockAdjustment) => {
+  let cat = adj.reasonCategory;
+  if (!cat) {
+    const lower = (adj.reason || '').toLowerCase();
+    if (lower.includes('defect') || lower.includes('damage') || lower.includes('leak') || lower.includes('broken')) cat = 'defective';
+    else if (lower.includes('audit') || lower.includes('count') || lower.includes('cycle')) cat = 'audit';
+    else if (lower.includes('loss') || lower.includes('shrinkage') || lower.includes('missing')) cat = 'loss';
+    else if (lower.includes('expir')) cat = 'expiry';
+    else if (lower.includes('rtv') || lower.includes('vendor')) cat = 'rtv';
+    else if (lower.includes('tester') || lower.includes('demo')) cat = 'tester';
+    else if (lower.includes('restock')) cat = 'restock';
+    else cat = 'other';
+  }
+
+  switch (cat) {
+    case 'defective':
+      return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-semibold">Defective / Damaged</Badge>;
+    case 'audit':
+      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-semibold">Physical Audit</Badge>;
+    case 'loss':
+      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-semibold">Loss / Shrinkage</Badge>;
+    case 'expiry':
+      return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-[10px] font-semibold">Expired</Badge>;
+    case 'rtv':
+      return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] font-semibold">Return to Vendor</Badge>;
+    case 'tester':
+      return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-semibold">Store Tester</Badge>;
+    case 'restock':
+      return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[10px] font-semibold">Manual Restock</Badge>;
+    default:
+      return <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 text-[10px] font-semibold">Adjustment</Badge>;
+  }
+};
+
 export interface ProductMovementEvent {
   id: string;
   timestamp: Date;
@@ -156,6 +236,7 @@ export const Reports: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
   const [selectedProduct, setSelectedProduct] = useState<string>('all');
+  const [selectedAdjustmentCategory, setSelectedAdjustmentCategory] = useState<string>('defective');
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -164,7 +245,7 @@ export const Reports: React.FC = () => {
   // Reset to page 1 whenever tab or filter criteria change
   useEffect(() => {
     setCurrentPage(1);
-  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCategory, selectedBrand, selectedProduct, selectedLocationId]);
+  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCategory, selectedBrand, selectedProduct, selectedAdjustmentCategory, selectedLocationId]);
 
   const getPaymentMethodName = (methodId: string) => {
     if (!methodId) return 'N/A';
@@ -526,6 +607,10 @@ export const Reports: React.FC = () => {
 
   const filteredAdjustments = useMemo(() => {
     return adjustments.filter(adj => {
+      if (selectedAdjustmentCategory !== 'all') {
+        if (!matchesAdjustmentCategory(adj, selectedAdjustmentCategory)) return false;
+      }
+
       if (selectedProduct !== 'all' && adj.productId !== selectedProduct) return false;
 
       if (selectedCategory !== 'all' || selectedBrand !== 'all') {
@@ -547,7 +632,7 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [adjustments, products, selectedProduct, selectedCategory, selectedBrand, selectedSeller, searchTerm]);
+  }, [adjustments, products, selectedAdjustmentCategory, selectedProduct, selectedCategory, selectedBrand, selectedSeller, searchTerm]);
 
   const productMovementEvents = useMemo(() => {
     const events: ProductMovementEvent[] = [];
@@ -881,6 +966,7 @@ export const Reports: React.FC = () => {
         Date: format(a.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
         Product: a.productName,
         Location: a.locationName,
+        Category: a.reasonCategory || 'defective',
         Type: a.type,
         Quantity: a.adjustmentQuantity,
         Reason: a.reason,
@@ -1184,7 +1270,7 @@ export const Reports: React.FC = () => {
                 <Filter className="w-3.5 h-3.5 text-indigo-500" />
                 Filter Report Data
               </span>
-              {(selectedSeller !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || searchTerm !== '') && (
+              {(selectedSeller !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') || searchTerm !== '') && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -1193,6 +1279,7 @@ export const Reports: React.FC = () => {
                     setSelectedCategory('all');
                     setSelectedBrand('all');
                     setSelectedProduct('all');
+                    setSelectedAdjustmentCategory('all');
                     setSearchTerm('');
                   }}
                   className="text-xs h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
@@ -1202,10 +1289,34 @@ export const Reports: React.FC = () => {
               )}
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className={cn(
+              "grid grid-cols-1 sm:grid-cols-2 gap-3",
+              reportType === 'stock-adjustments' ? "lg:grid-cols-5" : "lg:grid-cols-4"
+            )}>
+              {/* Adjustment Category Filter (Specific to Stock Adjustments tab) */}
+              {reportType === 'stock-adjustments' && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-rose-600 uppercase tracking-wider flex items-center gap-1">
+                    <span>Adjustment Category</span>
+                  </Label>
+                  <Select value={selectedAdjustmentCategory} onValueChange={setSelectedAdjustmentCategory}>
+                    <SelectTrigger className="w-full h-9 text-xs bg-rose-50/40 border-rose-200 font-medium text-slate-900 focus:ring-rose-400">
+                      <SelectValue placeholder="Damaged / Defective Product" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ADJUSTMENT_CATEGORIES.map(cat => (
+                        <SelectItem key={cat.value} value={cat.value} className="text-xs">
+                          {cat.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {/* Category Filter */}
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category</Label>
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product Category</Label>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                   <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
                     <SelectValue placeholder="All Categories" />
@@ -1251,15 +1362,17 @@ export const Reports: React.FC = () => {
                 </Select>
               </div>
 
-              {/* Seller Filter */}
+              {/* Seller / Staff Filter */}
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Seller Name</Label>
+                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {reportType === 'stock-adjustments' ? 'Adjusted By' : 'Seller Name'}
+                </Label>
                 <Select value={selectedSeller} onValueChange={setSelectedSeller}>
                   <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                    <SelectValue placeholder="All Sellers" />
+                    <SelectValue placeholder={reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Sellers</SelectItem>
+                    <SelectItem value="all">{reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'}</SelectItem>
                     {usersList.map(u => (
                       <SelectItem key={u.id} value={u.id}>{u.name || u.email || 'Unknown'}</SelectItem>
                     ))}
@@ -1539,30 +1652,34 @@ export const Reports: React.FC = () => {
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Product</TableHead>
                   {selectedLocationId === 'all' && <TableHead>Location</TableHead>}
+                  <TableHead>Category</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Adjustment</TableHead>
                   <TableHead>New Stock</TableHead>
-                  <TableHead>Reason</TableHead>
+                  <TableHead>Reason / Notes</TableHead>
                   <TableHead>Adjusted By</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAdjustments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={selectedLocationId === 'all' ? 8 : 7} className="text-center py-12 text-slate-400 italic">
-                      No stock adjustments match the selected filters
+                    <TableCell colSpan={selectedLocationId === 'all' ? 9 : 8} className="text-center py-12 text-slate-400 italic">
+                      No stock adjustments match the selected category and filters
                     </TableCell>
                   </TableRow>
                 ) : (
                   paginatedAdjustments.map((adj) => (
                     <TableRow key={adj.id} className="hover:bg-slate-50/50 transition-colors">
-                      <TableCell className="text-xs">
+                      <TableCell className="text-xs whitespace-nowrap">
                         {format(adj.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}
                       </TableCell>
                       <TableCell className="font-medium text-xs">{adj.productName}</TableCell>
                       {selectedLocationId === 'all' && (
                         <TableCell className="text-xs">{adj.locationName}</TableCell>
                       )}
+                      <TableCell>
+                        {getAdjustmentCategoryBadge(adj)}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={cn(
                           "capitalize text-[10px]",
