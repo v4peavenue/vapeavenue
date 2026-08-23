@@ -41,6 +41,8 @@ import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { SearchableProductSelect } from './SearchableProductSelect';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { DraftStatusBanner } from '@/components/DraftStatusBanner';
 
 interface StockTransferFormProps {
   isOpen: boolean;
@@ -99,17 +101,52 @@ export const StockTransferForm: React.FC<StockTransferFormProps> = ({
   const watchToLocationId = watch('toLocationId');
   const watchItems = watch('items') || [];
   const watchReason = watch('reason');
+  const formValues = watch();
 
-  // Reset form with new transfer number when opening
+  const handleRestoreDraft = React.useCallback((savedData: TransferFormData) => {
+    reset(savedData);
+    toast.info('Restored your draft stock transfer', { duration: 3000 });
+  }, [reset]);
+
+  const { hasDraft, lastSaved, clearDraft } = useFormDraft<TransferFormData>({
+    key: 'v4_draft_stock_transfer',
+    data: formValues,
+    isOpen,
+    onRestore: handleRestoreDraft,
+    hasMeaningfulData: (data) => {
+      return Boolean(data.items?.some(i => Boolean(i?.productId)) || data.reason || (data.items && data.items.length > 1));
+    }
+  });
+
+  const handleResetFormClean = () => {
+    clearDraft();
+    reset({
+      transferNumber: `TR-${Date.now().toString().slice(-6)}`,
+      fromLocationId: locations[0]?.id || '',
+      toLocationId: locations[1]?.id || '',
+      reason: '',
+      items: [{ productId: '', quantity: 1 }]
+    });
+    toast.success('Draft cleared and form reset');
+  };
+
+  // Reset form with new transfer number when opening (only if no draft)
   useEffect(() => {
     if (isOpen) {
-      reset({
-        transferNumber: `TR-${Date.now().toString().slice(-6)}`,
-        fromLocationId: locations[0]?.id || '',
-        toLocationId: locations[1]?.id || '',
-        reason: '',
-        items: [{ productId: '', quantity: 1 }]
-      });
+      try {
+        const stored = localStorage.getItem('v4_draft_stock_transfer');
+        if (!stored) {
+          reset({
+            transferNumber: `TR-${Date.now().toString().slice(-6)}`,
+            fromLocationId: locations[0]?.id || '',
+            toLocationId: locations[1]?.id || '',
+            reason: '',
+            items: [{ productId: '', quantity: 1 }]
+          });
+        }
+      } catch (e) {
+        // fallback
+      }
     }
   }, [isOpen, locations, reset]);
 
@@ -267,6 +304,7 @@ export const StockTransferForm: React.FC<StockTransferFormProps> = ({
 
       toast.dismiss(toastId);
       toast.success(`Successfully transferred ${totalUnits} unit(s) across ${transferItems.length} product(s)!`);
+      clearDraft();
       reset();
       onClose();
     } catch (error) {
@@ -304,6 +342,19 @@ export const StockTransferForm: React.FC<StockTransferFormProps> = ({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden pt-4">
+          {/* Draft Status Banner */}
+          {hasDraft && (
+            <div className="mb-3">
+              <DraftStatusBanner
+                hasDraft={hasDraft}
+                lastSaved={lastSaved}
+                onClearDraft={handleResetFormClean}
+                itemCount={validItemsCount}
+                itemLabel="transfer item"
+              />
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto space-y-6 pr-1 pb-4">
             
             {/* Top Branch Routing Controls */}

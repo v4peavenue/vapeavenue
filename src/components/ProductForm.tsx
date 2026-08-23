@@ -30,6 +30,8 @@ import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
 import { MapPin, Scan } from 'lucide-react';
 import { BarcodeScanner } from './BarcodeScanner';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { DraftStatusBanner } from '@/components/DraftStatusBanner';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -78,6 +80,49 @@ export const ProductForm: React.FC<ProductFormProps> = ({
   const watchCategory = watch('category');
   const watchBrand = watch('brand');
   const watchSupplierId = watch('supplierId');
+  const formValues = watch();
+
+  const handleRestoreDraft = React.useCallback((savedData: any) => {
+    if (savedData.form) reset(savedData.form);
+    if (savedData.tierPrices) setTierPrices(savedData.tierPrices);
+    if (savedData.locationThresholds) setLocationThresholds(savedData.locationThresholds);
+    toast.info('Restored your product draft', { duration: 3000 });
+  }, [reset]);
+
+  const { hasDraft, lastSaved, clearDraft } = useFormDraft({
+    key: 'v4_draft_new_product',
+    data: {
+      form: formValues,
+      tierPrices,
+      locationThresholds
+    },
+    isOpen: isOpen && !product,
+    isEnabled: !product,
+    onRestore: handleRestoreDraft,
+    hasMeaningfulData: (data) => {
+      return Boolean(data.form?.name?.trim() || data.form?.sku?.trim() || data.form?.barcode?.trim());
+    }
+  });
+
+  const handleResetFormClean = () => {
+    clearDraft();
+    reset({
+      name: '',
+      sku: '',
+      barcode: '',
+      category: '',
+      brand: '',
+      price: 0,
+      cost: 0,
+      imageUrl: '',
+      description: '',
+      supplierId: '',
+      lowStockThreshold: 5,
+    });
+    setTierPrices({});
+    setLocationThresholds({});
+    toast.success('Draft cleared and form reset');
+  };
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'locations'), (snapshot) => {
@@ -112,21 +157,24 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       setTierPrices(product.tierPrices || {});
       setLocationThresholds(product.locationThresholds || {});
     } else {
-      reset({
-        name: '',
-        sku: '',
-        barcode: '',
-        category: '',
-        brand: '',
-        price: 0,
-        cost: 0,
-        imageUrl: '',
-        description: '',
-        supplierId: '',
-        lowStockThreshold: 5,
-      });
-      setTierPrices({});
-      setLocationThresholds({});
+      const stored = localStorage.getItem('v4_draft_new_product');
+      if (!stored) {
+        reset({
+          name: '',
+          sku: '',
+          barcode: '',
+          category: '',
+          brand: '',
+          price: 0,
+          cost: 0,
+          imageUrl: '',
+          description: '',
+          supplierId: '',
+          lowStockThreshold: 5,
+        });
+        setTierPrices({});
+        setLocationThresholds({});
+      }
     }
   }, [product, reset, isOpen]);
 
@@ -187,6 +235,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         });
         await logAction(profile, 'CREATE_PRODUCT', `Created product: ${productData.name} (SKU: ${productData.sku})`, docRef.id, 'product');
         toast.success('Product added successfully');
+        clearDraft();
       }
       onClose();
     } catch (error) {
@@ -203,6 +252,17 @@ export const ProductForm: React.FC<ProductFormProps> = ({
           <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{product ? 'Edit Product' : 'Add New Product'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden pt-3">
+          {!product && hasDraft && (
+            <div className="mb-3">
+              <DraftStatusBanner
+                hasDraft={hasDraft}
+                lastSaved={lastSaved}
+                onClearDraft={handleResetFormClean}
+                itemLabel="new product draft"
+              />
+            </div>
+          )}
+
           <Tabs defaultValue="general" className="w-full flex-1 flex flex-col overflow-hidden">
             <TabsList className="grid w-full grid-cols-3 mb-3 bg-slate-100 p-1 rounded-xl">
               <TabsTrigger value="general" className="rounded-lg">General</TabsTrigger>

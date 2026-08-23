@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { Product, Location, Supplier, PaymentOption } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -39,11 +39,14 @@ import {
   Layers, 
   Search, 
   Check, 
-  Package 
+  Package,
+  Save
 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
 import { SearchableProductSelect } from './SearchableProductSelect';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { DraftStatusBanner } from '@/components/DraftStatusBanner';
 
 interface PurchaseOrderFormProps {
   isOpen: boolean;
@@ -121,27 +124,68 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
   const watchItems = watch('items') || [];
   const watchSplits = watch('paymentSplits') || [];
   const isSplitPayment = watch('isSplitPayment');
+  const formValues = watch();
 
   const totalAmount = watchItems.reduce((sum, item) => sum + (Number(item?.quantity || 0) * Number(item?.cost || 0)), 0);
   const totalUnits = watchItems.reduce((sum, item) => sum + Number(item?.quantity || 0), 0);
   const totalSplitAmount = watchSplits.reduce((sum, split) => sum + Number(split?.amount || 0), 0);
   const validItemsCount = watchItems.filter(item => Boolean(item?.productId)).length;
 
+  const handleRestoreDraft = useCallback((savedData: POFormData) => {
+    reset(savedData);
+    toast.info('Restored your draft purchase order', { duration: 3000 });
+  }, [reset]);
+
+  const { hasDraft, lastSaved, clearDraft } = useFormDraft<POFormData>({
+    key: 'v4_draft_purchase_order',
+    data: formValues,
+    isOpen,
+    onRestore: handleRestoreDraft,
+    hasMeaningfulData: (data) => {
+      return Boolean(data.items?.some(i => Boolean(i?.productId)) || data.notes || (data.items && data.items.length > 1));
+    }
+  });
+
+  const handleResetFormClean = () => {
+    clearDraft();
+    reset({
+      poNumber: `PO-${Date.now().toString().slice(-6)}`,
+      supplierId: suppliers[0]?.id || '',
+      locationId: locations[0]?.id || '',
+      paymentAccountId: paymentOptions[0]?.id || '',
+      paymentMethod: paymentOptions[0]?.type || 'cash',
+      paymentCategory: paymentOptions[0]?.type === 'card' ? 'Card' : paymentOptions[0]?.type === 'cash' ? 'Cash' : 'Digital',
+      paymentReference: '',
+      isSplitPayment: false,
+      paymentSplits: [],
+      notes: '',
+      items: [{ productId: '', quantity: 1, cost: 0 }]
+    });
+    toast.success('Draft cleared and form reset');
+  };
+
   useEffect(() => {
     if (isOpen) {
-      reset({
-        poNumber: `PO-${Date.now().toString().slice(-6)}`,
-        supplierId: suppliers[0]?.id || '',
-        locationId: locations[0]?.id || '',
-        paymentAccountId: paymentOptions[0]?.id || '',
-        paymentMethod: paymentOptions[0]?.type || 'cash',
-        paymentCategory: paymentOptions[0]?.type === 'card' ? 'Card' : paymentOptions[0]?.type === 'cash' ? 'Cash' : 'Digital',
-        paymentReference: '',
-        isSplitPayment: false,
-        paymentSplits: [],
-        notes: '',
-        items: [{ productId: '', quantity: 1, cost: 0 }]
-      });
+      try {
+        const stored = localStorage.getItem('v4_draft_purchase_order');
+        if (!stored) {
+          reset({
+            poNumber: `PO-${Date.now().toString().slice(-6)}`,
+            supplierId: suppliers[0]?.id || '',
+            locationId: locations[0]?.id || '',
+            paymentAccountId: paymentOptions[0]?.id || '',
+            paymentMethod: paymentOptions[0]?.type || 'cash',
+            paymentCategory: paymentOptions[0]?.type === 'card' ? 'Card' : paymentOptions[0]?.type === 'cash' ? 'Cash' : 'Digital',
+            paymentReference: '',
+            isSplitPayment: false,
+            paymentSplits: [],
+            notes: '',
+            items: [{ productId: '', quantity: 1, cost: 0 }]
+          });
+        }
+      } catch (e) {
+        // fallback
+      }
     }
   }, [isOpen, suppliers, locations, paymentOptions, reset]);
 
@@ -209,6 +253,7 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
       await logAction(profile, 'CREATE_PO', `Created Purchase Order: ${poData.poNumber} (${poData.items.length} items, Total: ${settings.currency}${totalAmount.toFixed(2)})`, docRef.id, 'purchaseOrder');
       
       toast.success('Purchase order created and items successfully ordered');
+      clearDraft();
       reset();
       onClose();
     } catch (error) {
@@ -247,6 +292,19 @@ export const PurchaseOrderForm: React.FC<PurchaseOrderFormProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden pt-4">
+          {/* Draft Status Banner */}
+          {hasDraft && (
+            <div className="mb-3">
+              <DraftStatusBanner
+                hasDraft={hasDraft}
+                lastSaved={lastSaved}
+                onClearDraft={handleResetFormClean}
+                itemCount={validItemsCount}
+                itemLabel="ordered item"
+              />
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto space-y-6 pr-1 pb-4">
             
             {/* Top Order Information Grid */}

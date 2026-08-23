@@ -43,6 +43,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { logAction } from '@/lib/audit';
 import { toast } from 'sonner';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import { DraftStatusBanner } from '@/components/DraftStatusBanner';
 
 interface StockAdjustmentFormProps {
   isOpen: boolean;
@@ -202,6 +204,36 @@ export const StockAdjustmentForm: React.FC<StockAdjustmentFormProps> = ({
   const watchType = watch('type');
   const watchQuantity = watch('quantity');
   const watchReason = watch('reason');
+  const formValues = watch();
+
+  const handleRestoreDraft = React.useCallback((savedData: FormData) => {
+    reset(savedData);
+    toast.info('Restored your draft stock adjustment', { duration: 3000 });
+  }, [reset]);
+
+  const { hasDraft, lastSaved, clearDraft } = useFormDraft<FormData>({
+    key: 'v4_draft_stock_adjustment',
+    data: formValues,
+    isOpen,
+    onRestore: handleRestoreDraft,
+    hasMeaningfulData: (data) => {
+      return Boolean(data.productId || data.reason || (data.locationId && data.reasonCategory !== 'defective'));
+    }
+  });
+
+  const handleResetFormClean = () => {
+    clearDraft();
+    reset({
+      productId: initialProductId || '',
+      locationId: '',
+      reasonCategory: 'defective',
+      type: 'subtract',
+      quantity: 1,
+      reason: ''
+    });
+    setProductSearchQuery('');
+    toast.success('Draft cleared and form reset');
+  };
 
   const selectedProduct = products.find(p => p.id === watchProductId);
   const currentStockAtLocation = selectedProduct?.stocks?.[watchLocationId] || 0;
@@ -402,6 +434,7 @@ export const StockAdjustmentForm: React.FC<StockAdjustmentFormProps> = ({
           ? `Defective stock adjusted (-${qty} units logged)` 
           : 'Stock adjusted successfully'
       );
+      clearDraft();
       reset({
         productId: '',
         locationId: '',
@@ -443,6 +476,17 @@ export const StockAdjustmentForm: React.FC<StockAdjustmentFormProps> = ({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 pt-4">
+          {/* Draft Status Banner */}
+          {hasDraft && (
+            <DraftStatusBanner
+              hasDraft={hasDraft}
+              lastSaved={lastSaved}
+              onClearDraft={handleResetFormClean}
+              itemCount={selectedProduct ? 1 : 0}
+              itemLabel="product adjustment"
+            />
+          )}
+
           {/* Two-Column Wide Layout to fit everything comfortably without scrolling */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
