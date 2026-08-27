@@ -42,7 +42,15 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
 }) => {
   const { settings } = useSettings();
   const { user, profile, isAdmin, isManager } = useAuth();
-  const { locations } = useLocations();
+  const { selectedLocationId, locations } = useLocations();
+
+  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
+    ? profile.locationId
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+
+  const activeLocationName = effectiveLocationId
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    : undefined;
 
   // Date Range Read Estimator state
   const [filterStartDate, setFilterStartDate] = useState<string>(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
@@ -52,14 +60,21 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    const countQuery = query(
-      collection(db, 'financialTransactions'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
+    const countQuery = effectiveLocationId
+      ? query(
+          collection(db, 'financialTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        )
+      : query(
+          collection(db, 'financialTransactions'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
 
     const snapshot = await getCountFromServer(countQuery);
-    return snapshot.data().count;
+    return snapshot.data().count || 0;
   };
 
   const handleDeleteExpense = async (id: string, amount: number, accountId: string, description: string) => {
@@ -242,6 +257,7 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         onEndDateChange={setFilterEndDate}
         calculateDocCount={calculateExpenseDocs}
         targetEntityLabel="expense transactions"
+        locationName={activeLocationName}
         isQueryApplied={!!dateRange}
         activeLoadedRange={dateRange ? { start: dateRange.startDate, end: dateRange.endDate } : null}
         onApplyQuery={(s, e) => {

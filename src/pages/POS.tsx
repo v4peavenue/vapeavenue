@@ -147,6 +147,54 @@ export const POS: React.FC = () => {
     }
   }, [selectedCustomerId, customers]);
 
+  // Restore cart draft from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('v4_pos_active_cart');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && Array.isArray(parsed.cart) && parsed.cart.length > 0) {
+          setCart(parsed.cart);
+          if (parsed.selectedCustomerId) setSelectedCustomerId(parsed.selectedCustomerId);
+          if (parsed.customerDetails) setCustomerDetails(parsed.customerDetails);
+          if (parsed.saleType) setSaleType(parsed.saleType);
+          if (parsed.deliveryFee) setDeliveryFee(parsed.deliveryFee);
+          toast.info(`Restored saved draft order (${parsed.cart.length} items)`, { duration: 3500 });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to restore POS cart draft:', e);
+    }
+  }, []);
+
+  // Auto-save cart draft to localStorage
+  useEffect(() => {
+    try {
+      if (cart.length > 0) {
+        localStorage.setItem('v4_pos_active_cart', JSON.stringify({
+          cart,
+          selectedCustomerId,
+          customerDetails,
+          saleType,
+          deliveryFee,
+          timestamp: new Date().toISOString()
+        }));
+      } else {
+        localStorage.removeItem('v4_pos_active_cart');
+      }
+    } catch (e) {
+      console.warn('Failed to save POS cart draft:', e);
+    }
+  }, [cart, selectedCustomerId, customerDetails, saleType, deliveryFee]);
+
+  const handleClearCart = () => {
+    setCart([]);
+    setAppliedPromo(null);
+    setPromoCodeInput('');
+    localStorage.removeItem('v4_pos_active_cart');
+    toast.info('Cart cleared');
+  };
+
   const [activeTab, setActiveTab] = useState<'products' | 'cart'>('products');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedBrand, setSelectedBrand] = useState<string>('all');
@@ -1542,9 +1590,23 @@ export const POS: React.FC = () => {
                 <CardDescription className="text-[10px] uppercase font-bold tracking-widest text-[#D4AF37]">Checkout Session</CardDescription>
               </div>
             </div>
-            <Badge variant="secondary" className="bg-white/10 text-white border border-white/20 px-2.5 py-0.5 text-xs font-semibold backdrop-blur-sm">
-              {cart.reduce((sum, i) => sum + i.quantity, 0)} items
-            </Badge>
+            <div className="flex items-center gap-2">
+              {cart.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearCart}
+                  className="h-7 px-2 text-[11px] text-white/80 hover:text-white hover:bg-white/10 rounded-lg border border-white/20"
+                  title="Clear all items in cart"
+                >
+                  Clear Cart
+                </Button>
+              )}
+              <Badge variant="secondary" className="bg-white/10 text-white border border-white/20 px-2.5 py-0.5 text-xs font-semibold backdrop-blur-sm">
+                {cart.reduce((sum, i) => sum + i.quantity, 0)} items
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         

@@ -204,12 +204,27 @@ export const Attendance: React.FC = () => {
   const [guardrailReportEnd, setGuardrailReportEnd] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
   const [isReportGuardrailApplied, setIsReportGuardrailApplied] = useState(false);
 
+  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
+    ? profile.locationId
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+
+  const activeLocationName = effectiveLocationId
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    : undefined;
+
   const calculateAttendanceDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const q = query(
-      collection(db, 'attendance'),
-      where('date', '>=', startStr),
-      where('date', '<=', endStr)
-    );
+    const q = effectiveLocationId
+      ? query(
+          collection(db, 'attendance'),
+          where('locationId', '==', effectiveLocationId),
+          where('date', '>=', startStr),
+          where('date', '<=', endStr)
+        )
+      : query(
+          collection(db, 'attendance'),
+          where('date', '>=', startStr),
+          where('date', '<=', endStr)
+        );
     const snap = await getCountFromServer(q);
     return snap.data().count || 0;
   };
@@ -492,8 +507,12 @@ export const Attendance: React.FC = () => {
     let unsubscribeAllLogs = () => {};
     let unsubscribeRates = () => {};
     if (isAdmin || isManager) {
+      const qLogs = effectiveLocationId
+        ? query(collection(db, 'attendance'), where('locationId', '==', effectiveLocationId))
+        : collection(db, 'attendance');
+
       unsubscribeAllLogs = onSnapshot(
-        collection(db, 'attendance'),
+        qLogs,
         (snapshot) => {
           const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceType));
           logs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -1959,6 +1978,7 @@ export const Attendance: React.FC = () => {
                   onEndDateChange={setGuardrailReportEnd}
                   calculateDocCount={calculateAttendanceDocs}
                   targetEntityLabel="attendance logs"
+                  locationName={activeLocationName}
                   isQueryApplied={isReportGuardrailApplied}
                   activeLoadedRange={isReportGuardrailApplied ? { start: reportStartDate, end: reportEndDate } : null}
                   onApplyQuery={(sDate, eDate) => {

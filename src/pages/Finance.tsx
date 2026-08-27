@@ -156,23 +156,43 @@ export const Finance: React.FC = () => {
         console.warn("Finance: Error listening to accounts:", error);
       });
 
+      const effectiveLocId = (!isAdmin && !isManager && profile?.locationId)
+        ? profile.locationId
+        : (selectedLocationId !== 'all' ? selectedLocationId : null);
+
       let qTrans;
       if (dateRange?.startDate && dateRange?.endDate) {
         const startTs = Timestamp.fromDate(new Date(`${dateRange.startDate}T00:00:00`));
         const endTs = Timestamp.fromDate(new Date(`${dateRange.endDate}T23:59:59`));
-        qTrans = query(
-          collection(db, 'financialTransactions'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc'),
-          limit(2000)
-        );
+        qTrans = effectiveLocId
+          ? query(
+              collection(db, 'financialTransactions'),
+              where('locationId', '==', effectiveLocId),
+              where('timestamp', '>=', startTs),
+              where('timestamp', '<=', endTs),
+              orderBy('timestamp', 'desc'),
+              limit(2000)
+            )
+          : query(
+              collection(db, 'financialTransactions'),
+              where('timestamp', '>=', startTs),
+              where('timestamp', '<=', endTs),
+              orderBy('timestamp', 'desc'),
+              limit(2000)
+            );
       } else {
-        qTrans = query(
-          collection(db, 'financialTransactions'),
-          orderBy('timestamp', 'desc'),
-          limit(transLimit)
-        );
+        qTrans = effectiveLocId
+          ? query(
+              collection(db, 'financialTransactions'),
+              where('locationId', '==', effectiveLocId),
+              orderBy('timestamp', 'desc'),
+              limit(transLimit)
+            )
+          : query(
+              collection(db, 'financialTransactions'),
+              orderBy('timestamp', 'desc'),
+              limit(transLimit)
+            );
       }
       unsubTrans = onSnapshot(qTrans, (snapshot) => {
         const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));

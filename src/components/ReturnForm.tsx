@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sale, ReturnItem, ReturnTransaction, Product, PaymentOption } from '@/types';
 import { format } from 'date-fns';
 import { 
@@ -6,7 +6,7 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogFooter,
+  DialogFooter, 
   DialogDescription
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -21,12 +21,13 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RefreshCcw, Undo2, AlertCircle } from 'lucide-react';
+import { RefreshCcw, Undo2, AlertCircle, Save } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, updateDoc, doc, increment, Timestamp, onSnapshot, setDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { logAction } from '@/lib/audit';
+import { useFormDraft } from '@/hooks/useFormDraft';
 
 interface ReturnFormProps {
   isOpen: boolean;
@@ -34,6 +35,14 @@ interface ReturnFormProps {
   sale: Sale | null;
   paymentOptions: PaymentOption[];
   onSuccess: () => void;
+}
+
+interface ReturnDraftData {
+  selectedItems: { [key: string]: { quantity: number, type: 'return' | 'replacement', reason: string, restock: boolean } };
+  overallReason: string;
+  refundMethod: string;
+  refundAccountId: string;
+  returnDate: string;
 }
 
 export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, paymentOptions, onSuccess }) => {
@@ -45,6 +54,35 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
   const [refundAccountId, setRefundAccountId] = useState<string>('');
   const [accounts, setAccounts] = useState<any[]>([]);
   const [returnDate, setReturnDate] = useState<string>(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+
+  const draftKey = sale ? `v4_draft_return_${sale.id}` : 'v4_draft_return';
+
+  const handleRestoreDraft = useCallback((savedData: ReturnDraftData) => {
+    if (savedData.selectedItems) setSelectedItems(savedData.selectedItems);
+    if (savedData.overallReason) setOverallReason(savedData.overallReason);
+    if (savedData.refundMethod) setRefundMethod(savedData.refundMethod);
+    if (savedData.refundAccountId) setRefundAccountId(savedData.refundAccountId);
+    if (savedData.returnDate) setReturnDate(savedData.returnDate);
+    toast.info('Restored your draft return selections', { duration: 3000 });
+  }, []);
+
+  const currentDraftData: ReturnDraftData = {
+    selectedItems,
+    overallReason,
+    refundMethod,
+    refundAccountId,
+    returnDate
+  };
+
+  const { hasDraft, lastSaved, clearDraft } = useFormDraft<ReturnDraftData>({
+    key: draftKey,
+    data: currentDraftData,
+    isOpen: Boolean(isOpen && sale),
+    onRestore: handleRestoreDraft,
+    hasMeaningfulData: (data) => {
+      return Object.keys(data.selectedItems || {}).length > 0 || Boolean(data.overallReason?.trim());
+    }
+  });
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'accounts'), (snapshot) => {
@@ -270,6 +308,7 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
         await logAction(profile, 'UPDATE_ACCOUNT', `Deducted ${(totalRefund ?? 0).toFixed(2)} from account for refund on Sale #${sale.id.slice(-6)}`, resolvedAccountId, 'account');
       }
 
+      clearDraft();
       toast.success('Return/Replacement processed successfully');
       onSuccess();
       onClose();
@@ -285,10 +324,17 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ isOpen, onClose, sale, p
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Undo2 className="w-5 h-5 text-[#D4AF37]" />
-            Return or Replacement
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="flex items-center gap-2">
+              <Undo2 className="w-5 h-5 text-[#D4AF37]" />
+              Return or Replacement
+            </DialogTitle>
+            {hasDraft && lastSaved && (
+              <span className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                <Save className="w-3 h-3 text-emerald-600" /> Draft Saved
+              </span>
+            )}
+          </div>
           <DialogDescription>
             Sale #{sale.id.slice(-6)} • {new Date(sale.timestamp.toDate()).toLocaleDateString()}
           </DialogDescription>

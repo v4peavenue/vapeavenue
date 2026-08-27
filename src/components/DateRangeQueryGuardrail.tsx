@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Calendar, Calculator, Loader2, RotateCcw, AlertTriangle, CheckCircle2, ShieldCheck, Info, RefreshCw } from 'lucide-react';
+import { Calendar, Calculator, Loader2, RotateCcw, AlertTriangle, CheckCircle2, ShieldCheck, Info, RefreshCw, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 
 export interface DateRangePreset {
@@ -29,6 +29,7 @@ export interface DateRangeQueryGuardrailProps {
   activeLoadedRange?: { start: string; end: string } | null;
   calculateDocCount: (startDate: string, endDate: string) => Promise<number>;
   targetEntityLabel?: string;
+  locationName?: string | null;
   presets?: DateRangePreset[];
   className?: string;
   disabled?: boolean;
@@ -48,6 +49,7 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
   activeLoadedRange,
   calculateDocCount,
   targetEntityLabel = 'documents',
+  locationName,
   presets,
   className = '',
   disabled = false
@@ -192,6 +194,12 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
                 <Badge variant="outline" className="text-[10px] font-bold bg-amber-100/80 text-amber-900 border-amber-200/80 px-2 py-0.5 rounded-full">
                   {badgeLabel}
                 </Badge>
+                {locationName && locationName !== 'all' && locationName !== 'All Locations' && (
+                  <Badge variant="outline" className="text-[10px] font-bold bg-blue-50 text-blue-800 border-blue-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <MapPin className="w-2.5 h-2.5 text-blue-600" />
+                    Location: {locationName}
+                  </Badge>
+                )}
                 {isAlreadyDisplayed && (
                   <Badge variant="outline" className="text-[10px] font-bold bg-emerald-100 text-emerald-800 border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
                     <CheckCircle2 className="w-2.5 h-2.5" />
@@ -327,6 +335,16 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
           )}
 
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 my-1 space-y-2.5">
+            {locationName && locationName !== 'all' && locationName !== 'All Locations' && (
+              <div className="flex items-center justify-between text-xs border-b border-slate-200/60 pb-2">
+                <span className="text-slate-500 font-medium">Target Location:</span>
+                <span className="font-bold text-blue-700 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-blue-600" />
+                  {locationName}
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between text-xs border-b border-slate-200/60 pb-2">
               <span className="text-slate-500 font-medium">Selected Date Range:</span>
               <span className="font-bold font-mono text-slate-800">
@@ -350,7 +368,7 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
           </div>
 
           <p className="text-[11px] text-slate-500 leading-normal">
-            Proceeding will perform exactly {exactReadCount !== null ? exactReadCount.toLocaleString() : '0'} document reads from your Firestore database.
+            Proceeding will perform exactly {exactReadCount !== null ? exactReadCount.toLocaleString() : '0'} document reads {locationName && locationName !== 'all' && locationName !== 'All Locations' ? `for ${locationName}` : ''} from your Firestore database.
           </p>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-slate-100">

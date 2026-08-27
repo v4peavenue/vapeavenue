@@ -48,6 +48,7 @@ import { PurchaseOrderForm } from '@/components/PurchaseOrderForm';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useLocations } from '@/contexts/LocationContext';
 import { logAction } from '@/lib/audit';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { 
@@ -61,6 +62,7 @@ import {
 export const Purchasing: React.FC = () => {
   const { user, profile, isAdmin, isManager } = useAuth();
   const { settings } = useSettings();
+  const { selectedLocationId, locations: globalLocations } = useLocations();
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -77,6 +79,14 @@ export const Purchasing: React.FC = () => {
   const [isReceiving, setIsReceiving] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
 
+  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
+    ? profile.locationId
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+
+  const activeLocationName = effectiveLocationId
+    ? ((globalLocations.length ? globalLocations : locations).find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    : undefined;
+
   // Date Range Guardrail states
   const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'));
   const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -86,11 +96,18 @@ export const Purchasing: React.FC = () => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    const q = query(
-      collection(db, 'purchaseOrders'),
-      where('createdAt', '>=', startTs),
-      where('createdAt', '<=', endTs)
-    );
+    const q = effectiveLocationId
+      ? query(
+          collection(db, 'purchaseOrders'),
+          where('locationId', '==', effectiveLocationId),
+          where('createdAt', '>=', startTs),
+          where('createdAt', '<=', endTs)
+        )
+      : query(
+          collection(db, 'purchaseOrders'),
+          where('createdAt', '>=', startTs),
+          where('createdAt', '<=', endTs)
+        );
 
     const snapshot = await getCountFromServer(q);
     return snapshot.data().count || 0;
@@ -112,14 +129,33 @@ export const Purchasing: React.FC = () => {
     if (appliedDateRange) {
       const startTs = Timestamp.fromDate(new Date(`${appliedDateRange.start}T00:00:00`));
       const endTs = Timestamp.fromDate(new Date(`${appliedDateRange.end}T23:59:59`));
-      q = query(
-        collection(db, 'purchaseOrders'),
-        where('createdAt', '>=', startTs),
-        where('createdAt', '<=', endTs),
-        orderBy('createdAt', 'desc')
-      );
+      q = effectiveLocationId
+        ? query(
+            collection(db, 'purchaseOrders'),
+            where('locationId', '==', effectiveLocationId),
+            where('createdAt', '>=', startTs),
+            where('createdAt', '<=', endTs),
+            orderBy('createdAt', 'desc')
+          )
+        : query(
+            collection(db, 'purchaseOrders'),
+            where('createdAt', '>=', startTs),
+            where('createdAt', '<=', endTs),
+            orderBy('createdAt', 'desc')
+          );
     } else {
-      q = query(collection(db, 'purchaseOrders'), orderBy('createdAt', 'desc'), limit(200));
+      q = effectiveLocationId
+        ? query(
+            collection(db, 'purchaseOrders'),
+            where('locationId', '==', effectiveLocationId),
+            orderBy('createdAt', 'desc'),
+            limit(200)
+          )
+        : query(
+            collection(db, 'purchaseOrders'),
+            orderBy('createdAt', 'desc'),
+            limit(200)
+          );
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -449,6 +485,7 @@ export const Purchasing: React.FC = () => {
         onEndDateChange={setGuardrailEndDate}
         calculateDocCount={calculatePurchasingDocs}
         targetEntityLabel="purchase orders"
+        locationName={activeLocationName}
         isQueryApplied={!!appliedDateRange}
         activeLoadedRange={appliedDateRange}
         onApplyQuery={(sDate, eDate) => {

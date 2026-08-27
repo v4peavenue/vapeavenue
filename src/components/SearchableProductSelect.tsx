@@ -42,6 +42,7 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
 }) => {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedProduct = useMemo(() => {
@@ -49,8 +50,9 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     return products.find(p => p.id === value);
   }, [products, value]);
 
-  // Sync display text when value changes externally
+  // Sync display text when value changes externally (only when not actively typing/focused)
   useEffect(() => {
+    if (isFocused) return;
     if (value === 'all') {
       setQuery(allLabel);
     } else if (selectedProduct) {
@@ -58,13 +60,14 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     } else if (!value) {
       setQuery('');
     }
-  }, [selectedProduct, value, allLabel]);
+  }, [selectedProduct, value, allLabel, isFocused]);
 
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        setIsFocused(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -96,12 +99,14 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
     onChange(product);
     setQuery(`${product.name} (${product.sku})`);
     setIsOpen(false);
+    setIsFocused(false);
   };
 
   const handleSelectAll = () => {
     onChange('all');
     setQuery(allLabel);
     setIsOpen(false);
+    setIsFocused(false);
   };
 
   const handleClear = () => {
@@ -113,6 +118,17 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
       setQuery('');
     }
     setIsOpen(true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredProducts.length > 0) {
+        handleSelect(filteredProducts[0]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
   };
 
   return (
@@ -137,9 +153,9 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
           disabled={disabled}
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value);
-            setIsOpen(true);
             const val = e.target.value;
+            setQuery(val);
+            setIsOpen(true);
             if (selectedProduct && val !== `${selectedProduct.name} (${selectedProduct.sku})`) {
               if (allowAll && val === '') {
                 onChange('all');
@@ -149,8 +165,28 @@ export const SearchableProductSelect: React.FC<SearchableProductSelectProps> = (
             }
           }}
           onFocus={() => {
-            if (!disabled) setIsOpen(true);
+            if (!disabled) {
+              setIsFocused(true);
+              setIsOpen(true);
+            }
           }}
+          onBlur={() => {
+            // Delay closing to allow onClick in dropdown to register
+            setTimeout(() => {
+              setIsFocused(false);
+              const trimmed = query.trim().toLowerCase();
+              if (trimmed && !selectedProduct) {
+                const exactMatch = products.find(p => 
+                  (p.sku && p.sku.toLowerCase() === trimmed) ||
+                  (p.barcode && p.barcode.toLowerCase() === trimmed)
+                );
+                if (exactMatch) {
+                  handleSelect(exactMatch);
+                }
+              }
+            }, 200);
+          }}
+          onKeyDown={handleKeyDown}
           placeholder={placeholder}
           className={cn(
             "pl-8 pr-7 h-9 bg-slate-50/70 border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:bg-white transition-all",

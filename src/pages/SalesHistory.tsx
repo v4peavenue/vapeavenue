@@ -150,23 +150,38 @@ export const SalesHistory: React.FC = () => {
   const [isReverseDialogOpen, setIsReverseDialogOpen] = useState(false);
   const [isReversing, setIsReversing] = useState(false);
 
+  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
+    ? profile.locationId
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+
+  const activeLocationName = effectiveLocationId
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    : undefined;
+
   const calculateSalesHistoryDocs = async (startStr: string, endStr: string): Promise<number> => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
     let qSales;
     let qTrans;
+    let qReturns;
 
-    if (selectedLocationId && selectedLocationId !== 'all') {
+    if (effectiveLocationId) {
       qSales = query(
         collection(db, 'sales'),
-        where('locationId', '==', selectedLocationId),
+        where('locationId', '==', effectiveLocationId),
         where('timestamp', '>=', startTs),
         where('timestamp', '<=', endTs)
       );
       qTrans = query(
         collection(db, 'financialTransactions'),
-        where('locationId', '==', selectedLocationId),
+        where('locationId', '==', effectiveLocationId),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      qReturns = query(
+        collection(db, 'returnTransactions'),
+        where('locationId', '==', effectiveLocationId),
         where('timestamp', '>=', startTs),
         where('timestamp', '<=', endTs)
       );
@@ -181,14 +196,20 @@ export const SalesHistory: React.FC = () => {
         where('timestamp', '>=', startTs),
         where('timestamp', '<=', endTs)
       );
+      qReturns = query(
+        collection(db, 'returnTransactions'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
     }
 
-    const [snapSales, snapTrans] = await Promise.all([
+    const [snapSales, snapTrans, snapReturns] = await Promise.all([
       getCountFromServer(qSales),
-      getCountFromServer(qTrans)
+      getCountFromServer(qTrans),
+      getCountFromServer(qReturns)
     ]);
 
-    return (snapSales.data().count || 0) + (snapTrans.data().count || 0);
+    return (snapSales.data().count || 0) + (snapTrans.data().count || 0) + (snapReturns.data().count || 0);
   };
 
   const handleApplyGuardedDateRange = (sDate: string, eDate: string) => {
@@ -245,23 +266,43 @@ export const SalesHistory: React.FC = () => {
     if (queryDateRange?.start && queryDateRange?.end) {
       const startTs = Timestamp.fromDate(new Date(`${queryDateRange.start}T00:00:00`));
       const endTs = Timestamp.fromDate(new Date(`${queryDateRange.end}T23:59:59`));
-      q = query(
-        collection(db, 'sales'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs),
-        orderBy('timestamp', 'desc'),
-        limit(2000)
-      );
+      if (effectiveLocationId) {
+        q = query(
+          collection(db, 'sales'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc'),
+          limit(2000)
+        );
+      } else {
+        q = query(
+          collection(db, 'sales'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc'),
+          limit(2000)
+        );
+      }
     } else {
-      q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(300));
+      if (effectiveLocationId) {
+        q = query(
+          collection(db, 'sales'),
+          where('locationId', '==', effectiveLocationId),
+          orderBy('timestamp', 'desc'),
+          limit(300)
+        );
+      } else {
+        q = query(collection(db, 'sales'), orderBy('timestamp', 'desc'), limit(300));
+      }
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let salesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
       
       // Filter by global location
-      if (selectedLocationId !== 'all') {
-        salesList = salesList.filter(s => s.locationId === selectedLocationId);
+      if (effectiveLocationId) {
+        salesList = salesList.filter(s => s.locationId === effectiveLocationId);
       }
       
       setSales(salesList);
@@ -271,20 +312,27 @@ export const SalesHistory: React.FC = () => {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile?.id, queryDateRange]);
+  }, [effectiveLocationId, profile?.id, queryDateRange]);
 
   useEffect(() => {
     if (!profile) return;
     
-    const q = query(
+    let q = query(
       collection(db, 'sales'), 
       where('status', '==', 'pending')
     );
+    if (effectiveLocationId) {
+      q = query(
+        collection(db, 'sales'),
+        where('locationId', '==', effectiveLocationId),
+        where('status', '==', 'pending')
+      );
+    }
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
-      if (selectedLocationId !== 'all') {
-        list = list.filter(s => s.locationId === selectedLocationId);
+      if (effectiveLocationId) {
+        list = list.filter(s => s.locationId === effectiveLocationId);
       }
       list.sort((a, b) => {
         const timeA = parseTimestampDate(a.timestamp).getTime();
@@ -297,7 +345,7 @@ export const SalesHistory: React.FC = () => {
     });
     
     return () => unsubscribe();
-  }, [selectedLocationId, profile?.id]);
+  }, [effectiveLocationId, profile?.id]);
 
   useEffect(() => {
     if (!profile) return;
@@ -305,22 +353,42 @@ export const SalesHistory: React.FC = () => {
     if (queryDateRange?.start && queryDateRange?.end) {
       const startTs = Timestamp.fromDate(new Date(`${queryDateRange.start}T00:00:00`));
       const endTs = Timestamp.fromDate(new Date(`${queryDateRange.end}T23:59:59`));
-      q = query(
-        collection(db, 'returnTransactions'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs),
-        orderBy('timestamp', 'desc'),
-        limit(500)
-      );
+      if (effectiveLocationId) {
+        q = query(
+          collection(db, 'returnTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc'),
+          limit(500)
+        );
+      } else {
+        q = query(
+          collection(db, 'returnTransactions'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc'),
+          limit(500)
+        );
+      }
     } else {
-      q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'), limit(200));
+      if (effectiveLocationId) {
+        q = query(
+          collection(db, 'returnTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          orderBy('timestamp', 'desc'),
+          limit(200)
+        );
+      } else {
+        q = query(collection(db, 'returnTransactions'), orderBy('timestamp', 'desc'), limit(200));
+      }
     }
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let returnsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       // Filter by global location
-      if (selectedLocationId !== 'all') {
-        returnsList = returnsList.filter((r: any) => r.locationId === selectedLocationId);
+      if (effectiveLocationId) {
+        returnsList = returnsList.filter((r: any) => r.locationId === effectiveLocationId);
       }
       
       setReturnTransactions(returnsList);
@@ -328,7 +396,7 @@ export const SalesHistory: React.FC = () => {
       console.warn("SalesHistory: Error listening to returnTransactions:", error);
     });
     return () => unsubscribe();
-  }, [selectedLocationId, profile?.id, queryDateRange]);
+  }, [effectiveLocationId, profile?.id, queryDateRange]);
 
   useEffect(() => {
     if (!profile) return;
@@ -1542,6 +1610,7 @@ export const SalesHistory: React.FC = () => {
         onEndDateChange={setGuardrailEndDate}
         calculateDocCount={calculateSalesHistoryDocs}
         targetEntityLabel="sales & ledger records"
+        locationName={activeLocationName}
         isQueryApplied={!!queryDateRange}
         activeLoadedRange={queryDateRange}
         onApplyQuery={handleApplyGuardedDateRange}

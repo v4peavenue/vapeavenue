@@ -177,6 +177,14 @@ export const Reports: React.FC = () => {
   const [isGuardrailApplied, setIsGuardrailApplied] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
+    ? profile.locationId
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+
+  const activeLocationName = effectiveLocationId
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    : undefined;
+
   const calculateReportDocs = async (startStr: string, endStr: string): Promise<number> => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
@@ -184,25 +192,32 @@ export const Reports: React.FC = () => {
     let qSales;
     let qAdj;
     let qReturns;
+    let qPOs;
 
-    if (selectedLocationId && selectedLocationId !== 'all') {
+    if (effectiveLocationId) {
       qSales = query(
         collection(db, 'sales'),
-        where('locationId', '==', selectedLocationId),
+        where('locationId', '==', effectiveLocationId),
         where('timestamp', '>=', startTs),
         where('timestamp', '<=', endTs)
       );
       qAdj = query(
         collection(db, 'stockAdjustments'),
-        where('locationId', '==', selectedLocationId),
+        where('locationId', '==', effectiveLocationId),
         where('timestamp', '>=', startTs),
         where('timestamp', '<=', endTs)
       );
       qReturns = query(
         collection(db, 'returnTransactions'),
-        where('locationId', '==', selectedLocationId),
+        where('locationId', '==', effectiveLocationId),
         where('timestamp', '>=', startTs),
         where('timestamp', '<=', endTs)
+      );
+      qPOs = query(
+        collection(db, 'purchaseOrders'),
+        where('locationId', '==', effectiveLocationId),
+        where('createdAt', '>=', startTs),
+        where('createdAt', '<=', endTs)
       );
     } else {
       qSales = query(
@@ -220,15 +235,21 @@ export const Reports: React.FC = () => {
         where('timestamp', '>=', startTs),
         where('timestamp', '<=', endTs)
       );
+      qPOs = query(
+        collection(db, 'purchaseOrders'),
+        where('createdAt', '>=', startTs),
+        where('createdAt', '<=', endTs)
+      );
     }
 
-    const [snapSales, snapAdj, snapReturns] = await Promise.all([
+    const [snapSales, snapAdj, snapReturns, snapPOs] = await Promise.all([
       getCountFromServer(qSales),
       getCountFromServer(qAdj),
-      getCountFromServer(qReturns)
+      getCountFromServer(qReturns),
+      getCountFromServer(qPOs)
     ]);
 
-    return (snapSales.data().count || 0) + (snapAdj.data().count || 0) + (snapReturns.data().count || 0);
+    return (snapSales.data().count || 0) + (snapAdj.data().count || 0) + (snapReturns.data().count || 0) + (snapPOs.data().count || 0);
   };
 
   // New states for the requested seller, category, brand, and product filters
@@ -348,12 +369,23 @@ export const Reports: React.FC = () => {
       return;
     }
 
-    const q = query(
-      collection(db, 'sales'),
-      where('timestamp', '>=', Timestamp.fromDate(start)),
-      where('timestamp', '<=', Timestamp.fromDate(end)),
-      orderBy('timestamp', 'desc')
-    );
+    const startTs = Timestamp.fromDate(start);
+    const endTs = Timestamp.fromDate(end);
+
+    const q = effectiveLocationId
+      ? query(
+          collection(db, 'sales'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc')
+        )
+      : query(
+          collection(db, 'sales'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc')
+        );
 
     const unsubscribeSales = onSnapshot(q, (snapshot) => {
       let salesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
@@ -361,9 +393,9 @@ export const Reports: React.FC = () => {
       // Filter out voided sales
       salesList = salesList.filter(s => s.status !== 'voided');
 
-      // Filter by global location
-      if (selectedLocationId !== 'all') {
-        salesList = salesList.filter(s => s.locationId === selectedLocationId);
+      // Filter by location
+      if (effectiveLocationId) {
+        salesList = salesList.filter(s => s.locationId === effectiveLocationId);
       }
       
       setSales(salesList);
@@ -373,37 +405,75 @@ export const Reports: React.FC = () => {
       setLoading(false);
     });
 
-    const adjQ = query(
-      collection(db, 'stockAdjustments'),
-      where('timestamp', '>=', Timestamp.fromDate(start)),
-      where('timestamp', '<=', Timestamp.fromDate(end)),
-      orderBy('timestamp', 'desc')
-    );
+    const adjQ = effectiveLocationId
+      ? query(
+          collection(db, 'stockAdjustments'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc')
+        )
+      : query(
+          collection(db, 'stockAdjustments'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc')
+        );
 
     const unsubscribeAdjustments = onSnapshot(adjQ, (snapshot) => {
       let adjList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockAdjustment));
-      if (selectedLocationId !== 'all') {
-        adjList = adjList.filter(a => a.locationId === selectedLocationId);
+      if (effectiveLocationId) {
+        adjList = adjList.filter(a => a.locationId === effectiveLocationId);
       }
       setAdjustments(adjList);
     }, (error) => {
       console.warn("Reports: Error listening to adjustments:", error);
     });
 
-    const unsubscribePOs = onSnapshot(collection(db, 'purchaseOrders'), (snapshot) => {
+    const poQ = effectiveLocationId
+      ? query(
+          collection(db, 'purchaseOrders'),
+          where('locationId', '==', effectiveLocationId),
+          where('createdAt', '>=', startTs),
+          where('createdAt', '<=', endTs),
+          orderBy('createdAt', 'desc')
+        )
+      : query(
+          collection(db, 'purchaseOrders'),
+          where('createdAt', '>=', startTs),
+          where('createdAt', '<=', endTs),
+          orderBy('createdAt', 'desc')
+        );
+
+    const unsubscribePOs = onSnapshot(poQ, (snapshot) => {
       let poList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseOrder));
-      if (selectedLocationId !== 'all') {
-        poList = poList.filter(po => po.locationId === selectedLocationId);
+      if (effectiveLocationId) {
+        poList = poList.filter(po => po.locationId === effectiveLocationId);
       }
       setPurchaseOrders(poList);
     }, (error) => {
       console.warn("Reports: Error listening to purchase orders:", error);
     });
 
-    const unsubscribeReturns = onSnapshot(collection(db, 'returnTransactions'), (snapshot) => {
+    const retQ = effectiveLocationId
+      ? query(
+          collection(db, 'returnTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc')
+        )
+      : query(
+          collection(db, 'returnTransactions'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc')
+        );
+
+    const unsubscribeReturns = onSnapshot(retQ, (snapshot) => {
       let retList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReturnTransaction));
-      if (selectedLocationId !== 'all') {
-        retList = retList.filter(r => r.locationId === selectedLocationId);
+      if (effectiveLocationId) {
+        retList = retList.filter(r => r.locationId === effectiveLocationId);
       }
       setReturnTransactions(retList);
     }, (error) => {
@@ -416,7 +486,7 @@ export const Reports: React.FC = () => {
       unsubscribePOs();
       unsubscribeReturns();
     };
-  }, [isGuardrailApplied, start.getTime(), end.getTime(), selectedLocationId, profile?.id, isAdmin]);
+  }, [isGuardrailApplied, start.getTime(), end.getTime(), effectiveLocationId, profile?.id, isAdmin]);
 
   const handleGeneratePDF = () => {
     if (!isGuardrailApplied) {
@@ -1034,13 +1104,14 @@ export const Reports: React.FC = () => {
       <DateRangeQueryGuardrail
         title="REPORTS DATE RANGE QUERY GUARDRAIL"
         badgeLabel="Firestore Cost Protection"
-        description="Filter reports by date range. Before running the query, the system calculates exact matching documents (sales, adjustments, returns) to prevent excessive Firestore read costs."
+        description="Filter reports by date range. Before running the query, the system calculates exact matching documents (sales, adjustments, returns, POs) to prevent excessive Firestore read costs."
         startDate={guardrailStartDate}
         endDate={guardrailEndDate}
         onStartDateChange={setGuardrailStartDate}
         onEndDateChange={setGuardrailEndDate}
         calculateDocCount={calculateReportDocs}
         targetEntityLabel="report records"
+        locationName={activeLocationName}
         isQueryApplied={isGuardrailApplied}
         activeLoadedRange={isGuardrailApplied ? { start: customStartDate, end: customEndDate } : null}
         onApplyQuery={(sDate, eDate) => {

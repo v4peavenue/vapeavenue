@@ -101,7 +101,7 @@ import {
 } from '@/components/ui/select';
 
 export const Dashboard: React.FC = () => {
-  const { isAdmin } = useAuth();
+  const { profile, isAdmin, isManager } = useAuth();
   const { selectedLocationId, locations } = useLocations();
   const { settings } = useSettings();
   const [stats, setStats] = useState({
@@ -121,6 +121,14 @@ export const Dashboard: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
+    ? profile.locationId
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+
+  const activeLocationName = effectiveLocationId
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    : undefined;
+
   // New states for filters
   const [timeRange, setTimeRange] = useState<string>('7days');
   const [customStartDate, setCustomStartDate] = useState<string>(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
@@ -134,21 +142,18 @@ export const Dashboard: React.FC = () => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    let qSales;
-    if (selectedLocationId && selectedLocationId !== 'all') {
-      qSales = query(
-        collection(db, 'sales'),
-        where('locationId', '==', selectedLocationId),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-    } else {
-      qSales = query(
-        collection(db, 'sales'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-    }
+    const qSales = effectiveLocationId
+      ? query(
+          collection(db, 'sales'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        )
+      : query(
+          collection(db, 'sales'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
 
     const snapSales = await getCountFromServer(qSales);
     return snapSales.data().count || 0;
@@ -319,20 +324,29 @@ export const Dashboard: React.FC = () => {
     const startDate = activeDateRange.start;
     const endDate = activeDateRange.end;
 
-    const salesQuery = query(
-      collection(db, 'sales'),
-      where('timestamp', '>=', Timestamp.fromDate(startDate)),
-      where('timestamp', '<=', Timestamp.fromDate(endDate)),
-      orderBy('timestamp', 'desc'),
-      limit(500)
-    );
+    const salesQuery = effectiveLocationId
+      ? query(
+          collection(db, 'sales'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', Timestamp.fromDate(startDate)),
+          where('timestamp', '<=', Timestamp.fromDate(endDate)),
+          orderBy('timestamp', 'desc'),
+          limit(1000)
+        )
+      : query(
+          collection(db, 'sales'),
+          where('timestamp', '>=', Timestamp.fromDate(startDate)),
+          where('timestamp', '<=', Timestamp.fromDate(endDate)),
+          orderBy('timestamp', 'desc'),
+          limit(1000)
+        );
 
     const unsubscribeSales = onSnapshot(salesQuery, (snapshot) => {
       let sales = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
       sales = sales.filter(s => s.status !== 'voided' && s.status !== 'pending' && s.status !== 'pending_total_approval' && s.status !== 'pending_promo_approval');
 
-      if (selectedLocationId !== 'all') {
-        sales = sales.filter(s => s.locationId === selectedLocationId);
+      if (effectiveLocationId) {
+        sales = sales.filter(s => s.locationId === effectiveLocationId);
       }
       
       setFilteredSales(sales);
@@ -855,6 +869,7 @@ export const Dashboard: React.FC = () => {
         onEndDateChange={setGuardrailEndDate}
         calculateDocCount={calculateDashboardDocs}
         targetEntityLabel="sales records"
+        locationName={activeLocationName}
         isQueryApplied={isGuardrailApplied}
         activeLoadedRange={isGuardrailApplied ? { start: customStartDate, end: customEndDate } : null}
         onApplyQuery={(sDate, eDate) => {
