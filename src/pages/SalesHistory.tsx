@@ -162,46 +162,54 @@ export const SalesHistory: React.FC = () => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    let qSales;
-    let qTrans;
-    let qReturns;
+    try {
+      if (effectiveLocationId) {
+        const qSales = query(
+          collection(db, 'sales'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
+        const qTrans = query(
+          collection(db, 'financialTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
+        const qReturns = query(
+          collection(db, 'returnTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
 
-    if (effectiveLocationId) {
-      qSales = query(
-        collection(db, 'sales'),
-        where('locationId', '==', effectiveLocationId),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qTrans = query(
-        collection(db, 'financialTransactions'),
-        where('locationId', '==', effectiveLocationId),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qReturns = query(
-        collection(db, 'returnTransactions'),
-        where('locationId', '==', effectiveLocationId),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-    } else {
-      qSales = query(
-        collection(db, 'sales'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qTrans = query(
-        collection(db, 'financialTransactions'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qReturns = query(
-        collection(db, 'returnTransactions'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
+        const [snapSales, snapTrans, snapReturns] = await Promise.all([
+          getCountFromServer(qSales),
+          getCountFromServer(qTrans),
+          getCountFromServer(qReturns)
+        ]);
+
+        return (snapSales.data().count || 0) + (snapTrans.data().count || 0) + (snapReturns.data().count || 0);
+      }
+    } catch (e: any) {
+      console.warn("Composite query failed in calculateSalesHistoryDocs (missing index), falling back to date-range count:", e?.message);
     }
+
+    const qSales = query(
+      collection(db, 'sales'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
+    const qTrans = query(
+      collection(db, 'financialTransactions'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
+    const qReturns = query(
+      collection(db, 'returnTransactions'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
 
     const [snapSales, snapTrans, snapReturns] = await Promise.all([
       getCountFromServer(qSales),
@@ -266,24 +274,13 @@ export const SalesHistory: React.FC = () => {
     if (queryDateRange?.start && queryDateRange?.end) {
       const startTs = Timestamp.fromDate(new Date(`${queryDateRange.start}T00:00:00`));
       const endTs = Timestamp.fromDate(new Date(`${queryDateRange.end}T23:59:59`));
-      if (effectiveLocationId) {
-        q = query(
-          collection(db, 'sales'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc'),
-          limit(2000)
-        );
-      } else {
-        q = query(
-          collection(db, 'sales'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc'),
-          limit(2000)
-        );
-      }
+      q = query(
+        collection(db, 'sales'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs),
+        orderBy('timestamp', 'desc'),
+        limit(2000)
+      );
     } else {
       if (effectiveLocationId) {
         q = query(
@@ -353,24 +350,13 @@ export const SalesHistory: React.FC = () => {
     if (queryDateRange?.start && queryDateRange?.end) {
       const startTs = Timestamp.fromDate(new Date(`${queryDateRange.start}T00:00:00`));
       const endTs = Timestamp.fromDate(new Date(`${queryDateRange.end}T23:59:59`));
-      if (effectiveLocationId) {
-        q = query(
-          collection(db, 'returnTransactions'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc'),
-          limit(500)
-        );
-      } else {
-        q = query(
-          collection(db, 'returnTransactions'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc'),
-          limit(500)
-        );
-      }
+      q = query(
+        collection(db, 'returnTransactions'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs),
+        orderBy('timestamp', 'desc'),
+        limit(500)
+      );
     } else {
       if (effectiveLocationId) {
         q = query(

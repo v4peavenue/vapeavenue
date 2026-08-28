@@ -213,18 +213,26 @@ export const Attendance: React.FC = () => {
     : undefined;
 
   const calculateAttendanceDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const q = effectiveLocationId
-      ? query(
+    try {
+      if (effectiveLocationId) {
+        const q = query(
           collection(db, 'attendance'),
           where('locationId', '==', effectiveLocationId),
           where('date', '>=', startStr),
           where('date', '<=', endStr)
-        )
-      : query(
-          collection(db, 'attendance'),
-          where('date', '>=', startStr),
-          where('date', '<=', endStr)
         );
+        const snap = await getCountFromServer(q);
+        return snap.data().count || 0;
+      }
+    } catch (e: any) {
+      console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+    }
+
+    const q = query(
+      collection(db, 'attendance'),
+      where('date', '>=', startStr),
+      where('date', '<=', endStr)
+    );
     const snap = await getCountFromServer(q);
     return snap.data().count || 0;
   };

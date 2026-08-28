@@ -42,7 +42,7 @@ const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
 try {
   firestoreDb = initializeFirestore(app, {
     localCache: memoryLocalCache(),
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
   }, databaseId);
 } catch {
   // If already initialized or fails, retrieve default instance

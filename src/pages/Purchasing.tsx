@@ -96,18 +96,26 @@ export const Purchasing: React.FC = () => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    const q = effectiveLocationId
-      ? query(
+    try {
+      if (effectiveLocationId) {
+        const q = query(
           collection(db, 'purchaseOrders'),
           where('locationId', '==', effectiveLocationId),
           where('createdAt', '>=', startTs),
           where('createdAt', '<=', endTs)
-        )
-      : query(
-          collection(db, 'purchaseOrders'),
-          where('createdAt', '>=', startTs),
-          where('createdAt', '<=', endTs)
         );
+        const snapshot = await getCountFromServer(q);
+        return snapshot.data().count || 0;
+      }
+    } catch (e: any) {
+      console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+    }
+
+    const q = query(
+      collection(db, 'purchaseOrders'),
+      where('createdAt', '>=', startTs),
+      where('createdAt', '<=', endTs)
+    );
 
     const snapshot = await getCountFromServer(q);
     return snapshot.data().count || 0;
@@ -129,20 +137,12 @@ export const Purchasing: React.FC = () => {
     if (appliedDateRange) {
       const startTs = Timestamp.fromDate(new Date(`${appliedDateRange.start}T00:00:00`));
       const endTs = Timestamp.fromDate(new Date(`${appliedDateRange.end}T23:59:59`));
-      q = effectiveLocationId
-        ? query(
-            collection(db, 'purchaseOrders'),
-            where('locationId', '==', effectiveLocationId),
-            where('createdAt', '>=', startTs),
-            where('createdAt', '<=', endTs),
-            orderBy('createdAt', 'desc')
-          )
-        : query(
-            collection(db, 'purchaseOrders'),
-            where('createdAt', '>=', startTs),
-            where('createdAt', '<=', endTs),
-            orderBy('createdAt', 'desc')
-          );
+      q = query(
+        collection(db, 'purchaseOrders'),
+        where('createdAt', '>=', startTs),
+        where('createdAt', '<=', endTs),
+        orderBy('createdAt', 'desc')
+      );
     } else {
       q = effectiveLocationId
         ? query(
@@ -159,7 +159,11 @@ export const Purchasing: React.FC = () => {
     }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setPos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseOrder)));
+      let orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseOrder));
+      if (effectiveLocationId) {
+        orders = orders.filter(po => po.locationId === effectiveLocationId);
+      }
+      setPos(orders);
       setLoading(false);
     }, (error) => {
       console.warn("Purchasing: Error listening to purchaseOrders:", error);

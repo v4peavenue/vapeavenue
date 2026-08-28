@@ -189,58 +189,71 @@ export const Reports: React.FC = () => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    let qSales;
-    let qAdj;
-    let qReturns;
-    let qPOs;
+    try {
+      if (effectiveLocationId) {
+        const qSales = query(
+          collection(db, 'sales'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
+        const qAdj = query(
+          collection(db, 'stockAdjustments'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
+        const qReturns = query(
+          collection(db, 'returnTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
+        const qPOs = query(
+          collection(db, 'purchaseOrders'),
+          where('locationId', '==', effectiveLocationId),
+          where('createdAt', '>=', startTs),
+          where('createdAt', '<=', endTs)
+        );
 
-    if (effectiveLocationId) {
-      qSales = query(
-        collection(db, 'sales'),
-        where('locationId', '==', effectiveLocationId),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qAdj = query(
-        collection(db, 'stockAdjustments'),
-        where('locationId', '==', effectiveLocationId),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qReturns = query(
-        collection(db, 'returnTransactions'),
-        where('locationId', '==', effectiveLocationId),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qPOs = query(
-        collection(db, 'purchaseOrders'),
-        where('locationId', '==', effectiveLocationId),
-        where('createdAt', '>=', startTs),
-        where('createdAt', '<=', endTs)
-      );
-    } else {
-      qSales = query(
-        collection(db, 'sales'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qAdj = query(
-        collection(db, 'stockAdjustments'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qReturns = query(
-        collection(db, 'returnTransactions'),
-        where('timestamp', '>=', startTs),
-        where('timestamp', '<=', endTs)
-      );
-      qPOs = query(
-        collection(db, 'purchaseOrders'),
-        where('createdAt', '>=', startTs),
-        where('createdAt', '<=', endTs)
-      );
+        const [snapSales, snapAdj, snapReturns, snapPOs] = await Promise.all([
+          getCountFromServer(qSales),
+          getCountFromServer(qAdj),
+          getCountFromServer(qReturns),
+          getCountFromServer(qPOs)
+        ]);
+
+        return (
+          (snapSales.data().count || 0) +
+          (snapAdj.data().count || 0) +
+          (snapReturns.data().count || 0) +
+          (snapPOs.data().count || 0)
+        );
+      }
+    } catch (e: any) {
+      console.warn("Composite query failed in calculateReportDocs (missing index), falling back to date-range count:", e?.message);
     }
+
+    const qSales = query(
+      collection(db, 'sales'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
+    const qAdj = query(
+      collection(db, 'stockAdjustments'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
+    const qReturns = query(
+      collection(db, 'returnTransactions'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
+    const qPOs = query(
+      collection(db, 'purchaseOrders'),
+      where('createdAt', '>=', startTs),
+      where('createdAt', '<=', endTs)
+    );
 
     const [snapSales, snapAdj, snapReturns, snapPOs] = await Promise.all([
       getCountFromServer(qSales),
@@ -372,20 +385,12 @@ export const Reports: React.FC = () => {
     const startTs = Timestamp.fromDate(start);
     const endTs = Timestamp.fromDate(end);
 
-    const q = effectiveLocationId
-      ? query(
-          collection(db, 'sales'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc')
-        )
-      : query(
-          collection(db, 'sales'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc')
-        );
+    const q = query(
+      collection(db, 'sales'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs),
+      orderBy('timestamp', 'desc')
+    );
 
     const unsubscribeSales = onSnapshot(q, (snapshot) => {
       let salesList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
@@ -405,20 +410,12 @@ export const Reports: React.FC = () => {
       setLoading(false);
     });
 
-    const adjQ = effectiveLocationId
-      ? query(
-          collection(db, 'stockAdjustments'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc')
-        )
-      : query(
-          collection(db, 'stockAdjustments'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc')
-        );
+    const adjQ = query(
+      collection(db, 'stockAdjustments'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs),
+      orderBy('timestamp', 'desc')
+    );
 
     const unsubscribeAdjustments = onSnapshot(adjQ, (snapshot) => {
       let adjList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StockAdjustment));
@@ -430,20 +427,12 @@ export const Reports: React.FC = () => {
       console.warn("Reports: Error listening to adjustments:", error);
     });
 
-    const poQ = effectiveLocationId
-      ? query(
-          collection(db, 'purchaseOrders'),
-          where('locationId', '==', effectiveLocationId),
-          where('createdAt', '>=', startTs),
-          where('createdAt', '<=', endTs),
-          orderBy('createdAt', 'desc')
-        )
-      : query(
-          collection(db, 'purchaseOrders'),
-          where('createdAt', '>=', startTs),
-          where('createdAt', '<=', endTs),
-          orderBy('createdAt', 'desc')
-        );
+    const poQ = query(
+      collection(db, 'purchaseOrders'),
+      where('createdAt', '>=', startTs),
+      where('createdAt', '<=', endTs),
+      orderBy('createdAt', 'desc')
+    );
 
     const unsubscribePOs = onSnapshot(poQ, (snapshot) => {
       let poList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PurchaseOrder));
@@ -455,20 +444,12 @@ export const Reports: React.FC = () => {
       console.warn("Reports: Error listening to purchase orders:", error);
     });
 
-    const retQ = effectiveLocationId
-      ? query(
-          collection(db, 'returnTransactions'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc')
-        )
-      : query(
-          collection(db, 'returnTransactions'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs),
-          orderBy('timestamp', 'desc')
-        );
+    const retQ = query(
+      collection(db, 'returnTransactions'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs),
+      orderBy('timestamp', 'desc')
+    );
 
     const unsubscribeReturns = onSnapshot(retQ, (snapshot) => {
       let retList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReturnTransaction));

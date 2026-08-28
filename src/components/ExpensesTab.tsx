@@ -60,20 +60,27 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
     const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    const countQuery = effectiveLocationId
-      ? query(
+    try {
+      if (effectiveLocationId) {
+        const countQuery = query(
           collection(db, 'financialTransactions'),
           where('locationId', '==', effectiveLocationId),
           where('timestamp', '>=', startTs),
           where('timestamp', '<=', endTs)
-        )
-      : query(
-          collection(db, 'financialTransactions'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
         );
+        const snapshot = await getCountFromServer(countQuery);
+        return snapshot.data().count || 0;
+      }
+    } catch (e: any) {
+      console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+    }
 
-    const snapshot = await getCountFromServer(countQuery);
+    const fallbackQuery = query(
+      collection(db, 'financialTransactions'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
+    const snapshot = await getCountFromServer(fallbackQuery);
     return snapshot.data().count || 0;
   };
 

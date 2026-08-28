@@ -164,22 +164,13 @@ export const Finance: React.FC = () => {
       if (dateRange?.startDate && dateRange?.endDate) {
         const startTs = Timestamp.fromDate(new Date(`${dateRange.startDate}T00:00:00`));
         const endTs = Timestamp.fromDate(new Date(`${dateRange.endDate}T23:59:59`));
-        qTrans = effectiveLocId
-          ? query(
-              collection(db, 'financialTransactions'),
-              where('locationId', '==', effectiveLocId),
-              where('timestamp', '>=', startTs),
-              where('timestamp', '<=', endTs),
-              orderBy('timestamp', 'desc'),
-              limit(2000)
-            )
-          : query(
-              collection(db, 'financialTransactions'),
-              where('timestamp', '>=', startTs),
-              where('timestamp', '<=', endTs),
-              orderBy('timestamp', 'desc'),
-              limit(2000)
-            );
+        qTrans = query(
+          collection(db, 'financialTransactions'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs),
+          orderBy('timestamp', 'desc'),
+          limit(2000)
+        );
       } else {
         qTrans = effectiveLocId
           ? query(
@@ -195,7 +186,10 @@ export const Finance: React.FC = () => {
             );
       }
       unsubTrans = onSnapshot(qTrans, (snapshot) => {
-        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+        let list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+        if (effectiveLocId) {
+          list = list.filter(t => t.locationId === effectiveLocId);
+        }
         
         const deduplicated: Transaction[] = [];
         const seenKeys = new Set<string>();
