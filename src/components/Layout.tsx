@@ -512,7 +512,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className={cn(
               "w-full",
-              isHomePage ? "flex-1 h-full max-h-screen flex flex-col overflow-hidden" : "p-3 sm:p-5 lg:p-6 max-w-7xl mx-auto"
+              isHomePage ? "flex-1 h-full max-h-screen flex flex-col overflow-hidden" : "p-3 sm:p-5 lg:p-6 2xl:px-8 max-w-[1720px] mx-auto"
             )}
           >
             {children}

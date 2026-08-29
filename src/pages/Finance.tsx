@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   collection, 
@@ -95,19 +95,43 @@ export const Finance: React.FC = () => {
     description: ''
   });
 
+  const FINANCE_CACHE_KEY = 'v4_finance_query_cache';
+
+  const getStoredFinanceCache = () => {
+    try {
+      const raw = sessionStorage.getItem(FINANCE_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to parse finance cache from sessionStorage', e);
+      return null;
+    }
+  };
+
+  const initialFinanceCache = useMemo(() => getStoredFinanceCache(), []);
+
   // Tab control state
   const isManagerOrAdmin = isAdmin || isManager || ['admin', 'manager'].includes(profile?.role || '');
-  const [activeTab, setActiveTab] = useState<'accounts' | 'expenses' | 'transfers' | 'history'>(
-    isAdmin ? 'accounts' : 'expenses'
-  );
-
-  useEffect(() => {
-    setActiveTab(isAdmin ? 'accounts' : 'expenses');
-  }, [isAdmin]);
+  const [activeTab, setActiveTab] = useState<'accounts' | 'expenses' | 'transfers' | 'history'>(() => {
+    if (initialFinanceCache?.activeTab) return initialFinanceCache.activeTab;
+    return isAdmin ? 'accounts' : 'expenses';
+  });
 
   // Expense tab form state
   const [transLimit, setTransLimit] = useState<number>(300);
-  const [dateRange, setDateRange] = useState<{ startDate: string; endDate: string } | null>(null);
+  const [dateRange, setDateRange] = useState<{ startDate: string; endDate: string } | null>(() => initialFinanceCache?.dateRange || null);
+
+  useEffect(() => {
+    try {
+      const stateToSave = {
+        activeTab,
+        dateRange
+      };
+      sessionStorage.setItem(FINANCE_CACHE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.warn('Failed to save finance cache to sessionStorage', e);
+    }
+  }, [activeTab, dateRange]);
   const [expenseAmount, setExpenseAmount] = useState<number>(0);
   const [expenseAccountId, setExpenseAccountId] = useState<string>('');
   const [expenseLocationId, setExpenseLocationId] = useState<string>('');

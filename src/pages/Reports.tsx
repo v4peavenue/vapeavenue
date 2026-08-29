@@ -155,10 +155,44 @@ export interface ProductMovementEvent {
   performedBy: string;
 }
 
+const REPORTS_CACHE_KEY = 'v4_reports_query_cache';
+
+interface ReportsCacheState {
+  reportType?: ReportType;
+  movementSubView?: 'detailed' | 'summary';
+  dateRange?: string;
+  customStartDate?: string;
+  customEndDate?: string;
+  guardrailStartDate?: string;
+  guardrailEndDate?: string;
+  isGuardrailApplied?: boolean;
+  searchTerm?: string;
+  selectedSeller?: string;
+  selectedCategory?: string;
+  selectedBrand?: string;
+  selectedProduct?: string;
+  selectedAdjustmentCategory?: string;
+  pageSize?: number;
+}
+
+const getStoredReportsCache = (): ReportsCacheState | null => {
+  try {
+    const raw = sessionStorage.getItem(REPORTS_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Failed to parse reports cache from sessionStorage', e);
+    return null;
+  }
+};
+
 export const Reports: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
   const { selectedLocationId, locations } = useLocations();
   const { settings } = useSettings();
+
+  const initialCache = useMemo(() => getStoredReportsCache(), []);
+
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
@@ -167,15 +201,69 @@ export const Reports: React.FC = () => {
   const [paymentOptions, setPaymentOptions] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reportType, setReportType] = useState<ReportType>('sales');
-  const [movementSubView, setMovementSubView] = useState<'detailed' | 'summary'>('detailed');
-  const [dateRange, setDateRange] = useState<string>('month');
-  const [customStartDate, setCustomStartDate] = useState<string>(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [customEndDate, setCustomEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [isGuardrailApplied, setIsGuardrailApplied] = useState<boolean>(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [reportType, setReportType] = useState<ReportType>(() => initialCache?.reportType || 'sales');
+  const [movementSubView, setMovementSubView] = useState<'detailed' | 'summary'>(() => initialCache?.movementSubView || 'detailed');
+  const [dateRange, setDateRange] = useState<string>(() => initialCache?.dateRange || 'month');
+  const [customStartDate, setCustomStartDate] = useState<string>(() => initialCache?.customStartDate || format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [customEndDate, setCustomEndDate] = useState<string>(() => initialCache?.customEndDate || format(new Date(), 'yyyy-MM-dd'));
+  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(() => initialCache?.guardrailStartDate || format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(() => initialCache?.guardrailEndDate || format(new Date(), 'yyyy-MM-dd'));
+  const [isGuardrailApplied, setIsGuardrailApplied] = useState<boolean>(() => !!initialCache?.isGuardrailApplied);
+  const [searchTerm, setSearchTerm] = useState(() => initialCache?.searchTerm || '');
+
+  // States for the seller, category, brand, and product filters
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [selectedSeller, setSelectedSeller] = useState<string>(() => initialCache?.selectedSeller || 'all');
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => initialCache?.selectedCategory || 'all');
+  const [selectedBrand, setSelectedBrand] = useState<string>(() => initialCache?.selectedBrand || 'all');
+  const [selectedProduct, setSelectedProduct] = useState<string>(() => initialCache?.selectedProduct || 'all');
+  const [selectedAdjustmentCategory, setSelectedAdjustmentCategory] = useState<string>(() => initialCache?.selectedAdjustmentCategory || 'defective');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(() => initialCache?.pageSize || 20);
+
+  // Sync state to sessionStorage whenever query, tab, or filter parameters update
+  useEffect(() => {
+    try {
+      const stateToSave: ReportsCacheState = {
+        reportType,
+        movementSubView,
+        dateRange,
+        customStartDate,
+        customEndDate,
+        guardrailStartDate,
+        guardrailEndDate,
+        isGuardrailApplied,
+        searchTerm,
+        selectedSeller,
+        selectedCategory,
+        selectedBrand,
+        selectedProduct,
+        selectedAdjustmentCategory,
+        pageSize
+      };
+      sessionStorage.setItem(REPORTS_CACHE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.warn('Failed to save reports cache to sessionStorage', e);
+    }
+  }, [
+    reportType,
+    movementSubView,
+    dateRange,
+    customStartDate,
+    customEndDate,
+    guardrailStartDate,
+    guardrailEndDate,
+    isGuardrailApplied,
+    searchTerm,
+    selectedSeller,
+    selectedCategory,
+    selectedBrand,
+    selectedProduct,
+    selectedAdjustmentCategory,
+    pageSize
+  ]);
 
   const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
     ? profile.locationId
@@ -264,18 +352,6 @@ export const Reports: React.FC = () => {
 
     return (snapSales.data().count || 0) + (snapAdj.data().count || 0) + (snapReturns.data().count || 0) + (snapPOs.data().count || 0);
   };
-
-  // New states for the requested seller, category, brand, and product filters
-  const [usersList, setUsersList] = useState<any[]>([]);
-  const [selectedSeller, setSelectedSeller] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedBrand, setSelectedBrand] = useState<string>('all');
-  const [selectedProduct, setSelectedProduct] = useState<string>('all');
-  const [selectedAdjustmentCategory, setSelectedAdjustmentCategory] = useState<string>('defective');
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(20);
 
   // Reset to page 1 whenever tab or filter criteria change
   useEffect(() => {
@@ -1094,10 +1170,12 @@ export const Reports: React.FC = () => {
         targetEntityLabel="report records"
         locationName={activeLocationName}
         isQueryApplied={isGuardrailApplied}
-        activeLoadedRange={isGuardrailApplied ? { start: customStartDate, end: customEndDate } : null}
+        activeLoadedRange={isGuardrailApplied ? { start: format(start, 'yyyy-MM-dd'), end: format(end, 'yyyy-MM-dd') } : null}
         onApplyQuery={(sDate, eDate) => {
           setCustomStartDate(sDate);
           setCustomEndDate(eDate);
+          setGuardrailStartDate(sDate);
+          setGuardrailEndDate(eDate);
           setDateRange('custom');
           setIsGuardrailApplied(true);
         }}
@@ -1111,6 +1189,9 @@ export const Reports: React.FC = () => {
           setCustomEndDate(endStr);
           setDateRange('month');
           setIsGuardrailApplied(false);
+          try {
+            sessionStorage.removeItem(REPORTS_CACHE_KEY);
+          } catch (e) {}
         }}
         presets={[
           { label: 'Today', key: 'today' },

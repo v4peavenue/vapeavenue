@@ -198,11 +198,41 @@ export const Attendance: React.FC = () => {
     left: number;
   } | null>(null);
   
-  const [reportStartDate, setReportStartDate] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [reportEndDate, setReportEndDate] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [guardrailReportStart, setGuardrailReportStart] = useState(format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [guardrailReportEnd, setGuardrailReportEnd] = useState(format(endOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [isReportGuardrailApplied, setIsReportGuardrailApplied] = useState(false);
+  const ATTENDANCE_CACHE_KEY = 'v4_attendance_query_cache';
+
+  const getStoredAttendanceCache = () => {
+    try {
+      const raw = sessionStorage.getItem(ATTENDANCE_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to parse attendance cache from sessionStorage', e);
+      return null;
+    }
+  };
+
+  const initialAttendanceCache = useMemo(() => getStoredAttendanceCache(), []);
+
+  const [reportStartDate, setReportStartDate] = useState(() => initialAttendanceCache?.reportStartDate || format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [reportEndDate, setReportEndDate] = useState(() => initialAttendanceCache?.reportEndDate || format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [guardrailReportStart, setGuardrailReportStart] = useState(() => initialAttendanceCache?.guardrailReportStart || format(startOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [guardrailReportEnd, setGuardrailReportEnd] = useState(() => initialAttendanceCache?.guardrailReportEnd || format(endOfMonth(new Date()), 'yyyy-MM-dd'));
+  const [isReportGuardrailApplied, setIsReportGuardrailApplied] = useState(() => !!initialAttendanceCache?.isReportGuardrailApplied);
+
+  useEffect(() => {
+    try {
+      const stateToSave = {
+        reportStartDate,
+        reportEndDate,
+        guardrailReportStart,
+        guardrailReportEnd,
+        isReportGuardrailApplied
+      };
+      sessionStorage.setItem(ATTENDANCE_CACHE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.warn('Failed to save attendance cache to sessionStorage', e);
+    }
+  }, [reportStartDate, reportEndDate, guardrailReportStart, guardrailReportEnd, isReportGuardrailApplied]);
 
   const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
     ? profile.locationId
@@ -1508,9 +1538,9 @@ export const Attendance: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8">
         {/* Main Action Section */}
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-4 xl:col-span-3 2xl:col-span-3 space-y-6">
           <Card className={cn(
             "relative overflow-hidden border-none shadow-2xl transition-all duration-500",
             currentUserAttendance && !currentUserAttendance.timeOut 
@@ -1729,7 +1759,7 @@ export const Attendance: React.FC = () => {
         </div>
 
         {/* View Selection Section */}
-        <div className="lg:col-span-8">
+        <div className="lg:col-span-8 xl:col-span-9 2xl:col-span-9">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="mb-6">
               {/* Mobile Tab Selector (Select Dropdown) */}
@@ -1790,13 +1820,13 @@ export const Attendance: React.FC = () => {
                         key={tab.id}
                         value={tab.id} 
                         className={cn(
-                          "rounded-xl px-5 h-10 font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all duration-200",
+                          "rounded-xl px-5 h-10 font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all duration-200",
                           isActive 
-                            ? "bg-[#1A2B4B] text-white shadow-md border-b-2 border-[#D4AF37]/40" 
+                            ? "bg-[#1A2B4B] text-white shadow-md border-b-2 border-[#D4AF37]/40 font-bold" 
                             : "text-[#1A2B4B]/70 hover:bg-[#1A2B4B]/5 hover:text-[#1A2B4B]"
                         )}
                       >
-                        <Icon className={cn("w-3.5 h-3.5", isActive ? "text-[#D4AF37]" : "text-[#1A2B4B]/50")} />
+                        <Icon className={cn("w-4 h-4", isActive ? "text-[#D4AF37]" : "text-[#1A2B4B]/50")} />
                         {tab.label}
                       </TabsTrigger>
                     );
@@ -1808,7 +1838,7 @@ export const Attendance: React.FC = () => {
             <TabsContent value="requests">
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-black text-primary uppercase">Absence & Schedule Requests</h3>
+                  <h3 className="text-sm font-bold text-primary">Absence & Schedule Requests</h3>
                   <Button 
                     onClick={() => {
                       setNewRequest({
@@ -2003,6 +2033,9 @@ export const Attendance: React.FC = () => {
                     setReportStartDate(s);
                     setReportEndDate(e);
                     setIsReportGuardrailApplied(false);
+                    try {
+                      sessionStorage.removeItem(ATTENDANCE_CACHE_KEY);
+                    } catch (err) {}
                   }}
                   presets={[
                     { label: 'Today', key: 'today' },
@@ -2568,19 +2601,19 @@ export const Attendance: React.FC = () => {
                   `}</style>
 
                 {/* Configuration controls card */}
-                <Card className="border-none shadow-xl overflow-hidden rounded-3xl no-print">
-                  <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                <Card className="border-none shadow-xl overflow-hidden rounded-3xl no-print bg-white">
+                  <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-5 sm:p-6">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       <div>
-                        <CardTitle className="text-lg font-bold">Staff Payslips Manager</CardTitle>
-                        <CardDescription>Generate, adjust, and download payslips based on schedule and attendance.</CardDescription>
+                        <CardTitle className="text-lg font-bold text-slate-900">Staff Payslips Manager</CardTitle>
+                        <CardDescription className="text-xs text-slate-500 mt-0.5">Generate, adjust, and download payslips based on schedule and attendance.</CardDescription>
                       </div>
                       
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-400 uppercase font-bold">Staff Member</Label>
+                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+                        <div className="space-y-1 min-w-[200px] flex-1 sm:flex-initial">
+                          <Label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Staff Member</Label>
                           <Select value={selectedPayslipUser} onValueChange={setSelectedPayslipUser}>
-                            <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                            <SelectTrigger className="w-full h-10 text-xs bg-white border-slate-200 rounded-xl font-semibold text-slate-700">
                               <SelectValue placeholder="Select Staff...">
                                 {selectedPayslipUser ? (staffAndManagers.find(u => u.id === selectedPayslipUser)?.name || staffAndManagers.find(u => u.id === selectedPayslipUser)?.email || selectedPayslipUser) : undefined}
                               </SelectValue>
@@ -2595,21 +2628,21 @@ export const Attendance: React.FC = () => {
                           </Select>
                         </div>
                         
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-400 uppercase font-bold">Start Date</Label>
+                        <div className="space-y-1 min-w-[145px]">
+                          <Label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Start Date</Label>
                           <Input 
                             type="date" 
-                            className="bg-white border-slate-200 h-9 text-xs"
+                            className="bg-white border-slate-200 h-10 text-xs rounded-xl font-semibold w-full text-slate-700"
                             value={payslipStartDate}
                             onChange={(e) => setPayslipStartDate(e.target.value)}
                           />
                         </div>
 
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-slate-400 uppercase font-bold">End Date</Label>
+                        <div className="space-y-1 min-w-[145px]">
+                          <Label className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">End Date</Label>
                           <Input 
                             type="date" 
-                            className="bg-white border-slate-200 h-9 text-xs"
+                            className="bg-white border-slate-200 h-10 text-xs rounded-xl font-semibold w-full text-slate-700"
                             value={payslipEndDate}
                             onChange={(e) => setPayslipEndDate(e.target.value)}
                           />
@@ -2619,28 +2652,28 @@ export const Attendance: React.FC = () => {
                   </CardHeader>
                 </Card>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
                   {/* Left Side: Manipulation controls (Rates, Incentives, Deductions) */}
-                  <div className="lg:col-span-4 space-y-6 no-print">
-                    <Card className="border-none shadow-xl rounded-3xl">
-                      <CardHeader className="border-b border-slate-100/80 bg-slate-50/50">
+                  <div className="xl:col-span-4 2xl:col-span-4 space-y-6 no-print">
+                    <Card className="border-none shadow-xl rounded-3xl bg-white">
+                      <CardHeader className="border-b border-slate-100/80 bg-slate-50/50 p-5">
                         <div className="flex items-center gap-2">
                           <Coins className="w-4 h-4 text-indigo-500" />
                           <CardTitle className="text-sm font-bold">Compensation & Adjustments</CardTitle>
                         </div>
-                        <CardDescription>Customize rates, overtime parameters, and extra pay.</CardDescription>
+                        <CardDescription className="text-xs">Customize rates, overtime parameters, and extra pay.</CardDescription>
                       </CardHeader>
-                      <CardContent className="p-6 space-y-4">
+                      <CardContent className="p-5 sm:p-6 space-y-4">
                         {/* Regular hourly rate */}
-                        <div className="space-y-1">
-                          <Label className="text-xs font-semibold text-slate-600">Regular Hourly Rate ({settings.currency})</Label>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold text-slate-700">Regular Hourly Rate ({settings.currency})</Label>
                           <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                            <span className="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
                             <Input 
                               type="number" 
                               min="0"
                               step="0.01"
-                              className="pl-7 h-9 text-xs"
+                              className="pl-8 h-10 text-xs rounded-xl font-semibold"
                               value={payslipHourlyRate}
                               onChange={(e) => setPayslipHourlyRate(e.target.value)}
                             />
@@ -2648,50 +2681,50 @@ export const Attendance: React.FC = () => {
                         </div>
 
                         {/* Overtime rate */}
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-xs font-semibold text-slate-600">Overtime Hourly Rate ({settings.currency})</Label>
-                            <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex items-center gap-1 border border-amber-200/50">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <Label className="text-xs font-semibold text-slate-700">Overtime Hourly Rate ({settings.currency})</Label>
+                            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-200/80 shrink-0 whitespace-nowrap">
                               <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
                               Locked to Regular Rate
                             </span>
                           </div>
                           <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                            <span className="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
                             <Input 
                               type="number" 
                               min="0"
                               step="0.01"
-                              className="pl-7 h-9 text-xs bg-slate-50 cursor-not-allowed font-medium text-slate-500 border-dashed"
+                              className="pl-8 h-10 text-xs bg-slate-50 cursor-not-allowed font-medium text-slate-500 border-dashed rounded-xl"
                               value={payslipOtRate}
                               readOnly
                               disabled
                             />
                           </div>
-                          <span className="text-[10px] text-slate-400 font-medium">Applied to clocked hours exceeding scheduled shift length (automatically matches regular rate).</span>
+                          <span className="text-[10px] text-slate-400 font-medium leading-normal block">Applied to clocked hours exceeding scheduled shift length.</span>
                         </div>
 
                         {/* Incentives */}
-                        <div className="border-t border-slate-100 pt-4 space-y-4">
-                          <div className="space-y-1">
-                            <Label className="text-xs font-semibold text-slate-600">Add Incentives ({settings.currency})</Label>
+                        <div className="border-t border-slate-100 pt-4 space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Add Incentives ({settings.currency})</Label>
                             <div className="relative">
-                              <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                              <span className="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
                               <Input 
                                 type="number" 
                                 min="0"
                                 step="0.01"
-                                className="pl-7 h-9 text-xs"
+                                className="pl-8 h-10 text-xs rounded-xl font-semibold"
                                 value={payslipIncentiveAmount}
                                 onChange={(e) => setPayslipIncentiveAmount(e.target.value)}
                               />
                             </div>
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs font-semibold text-slate-600">Incentive Reason</Label>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Incentive Reason</Label>
                             <Input 
                               placeholder="e.g. Bonus, Overtime Bonus, Travel Allowance"
-                              className="h-9 text-xs"
+                              className="h-10 text-xs rounded-xl"
                               value={payslipIncentiveReason}
                               onChange={(e) => setPayslipIncentiveReason(e.target.value)}
                             />
@@ -2699,26 +2732,26 @@ export const Attendance: React.FC = () => {
                         </div>
 
                         {/* Deductions */}
-                        <div className="border-t border-slate-100 pt-4 space-y-4">
-                          <div className="space-y-1">
-                            <Label className="text-xs font-semibold text-slate-600">Manual Deduction ({settings.currency})</Label>
+                        <div className="border-t border-slate-100 pt-4 space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Manual Deduction ({settings.currency})</Label>
                             <div className="relative">
-                              <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                              <span className="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
                               <Input 
                                 type="number" 
                                 min="0"
                                 step="0.01"
-                                className="pl-7 h-9 text-xs"
+                                className="pl-8 h-10 text-xs rounded-xl font-semibold"
                                 value={payslipDeductionAmount}
                                 onChange={(e) => setPayslipDeductionAmount(e.target.value)}
                               />
                             </div>
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs font-semibold text-slate-600">Deduction Reason</Label>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-slate-700">Deduction Reason</Label>
                             <Input 
                               placeholder="e.g. Uniform fee, equipment damage"
-                              className="h-9 text-xs"
+                              className="h-10 text-xs rounded-xl"
                               value={payslipDeductionReason}
                               onChange={(e) => setPayslipDeductionReason(e.target.value)}
                             />
@@ -2727,7 +2760,7 @@ export const Attendance: React.FC = () => {
 
                         {/* Save adjustments */}
                         <Button 
-                          className="w-full mt-2 h-10 bg-[#1A2B4B] hover:bg-[#2C3E50] text-white font-bold text-xs uppercase tracking-wide gap-2 rounded-xl"
+                          className="w-full mt-2 h-11 bg-[#1A2B4B] hover:bg-[#2C3E50] text-white font-bold text-xs uppercase tracking-wide gap-2 rounded-xl"
                           disabled={isSavingRates || !selectedPayslipUser}
                           onClick={handleSaveRates}
                         >
@@ -2752,7 +2785,7 @@ export const Attendance: React.FC = () => {
                   </div>
 
                   {/* Right Side: Payslip Printable Statement */}
-                  <div className="lg:col-span-8 space-y-6">
+                  <div className="xl:col-span-8 2xl:col-span-8 space-y-6">
                      {/* Payslip view */}
                     <Card id="printable-payslip-area" className="border border-slate-200/80 shadow-xl overflow-hidden rounded-3xl bg-white">
                       <CardContent className="p-8 space-y-8">
@@ -2798,16 +2831,16 @@ export const Attendance: React.FC = () => {
                         {/* 1. Daily Work & Earnings Breakdown inside the printable payslip (MOVED TO TOP) */}
                         <div className="space-y-3">
                           <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest pb-1">1. Daily Work & Earnings Breakdown</h4>
-                          <div className="overflow-hidden border border-slate-100 rounded-2xl">
+                          <div className="overflow-x-auto border border-slate-100 rounded-2xl">
                             <table className="w-full text-left border-collapse">
                               <thead>
                                 <tr className="bg-slate-50/70 border-b border-slate-100">
-                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Date</th>
-                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center">Status</th>
-                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">Regular Hrs</th>
-                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">OT Hrs</th>
-                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">Late Penalty</th>
-                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right">Daily Earnings</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Date</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">Status</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">Regular Hrs</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">OT Hrs</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">Late Penalty</th>
+                                  <th className="py-2.5 px-4 text-[9px] font-bold text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">Daily Earnings</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
@@ -2817,32 +2850,32 @@ export const Attendance: React.FC = () => {
                                   const dailyEarned = regularPay + otPay;
                                   return (
                                     <tr key={day.dateStr} className="text-xs hover:bg-slate-50/50">
-                                      <td className="py-2 px-4 font-semibold text-slate-700">{day.dateFormatted}</td>
-                                      <td className="py-2 px-4 text-center">
+                                      <td className="py-2.5 px-4 font-semibold text-slate-700 whitespace-nowrap">{day.dateFormatted}</td>
+                                      <td className="py-2.5 px-4 text-center whitespace-nowrap">
                                         {day.status === 'worked' ? (
-                                          <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">WORKED</span>
+                                          <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">WORKED</span>
                                         ) : day.status === 'leave' ? (
-                                          <span className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">LEAVE</span>
+                                          <span className="text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">LEAVE</span>
                                         ) : day.status === 'off' ? (
-                                          <span className="text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">OFF</span>
+                                          <span className="text-slate-500 font-medium bg-slate-100 px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">OFF</span>
                                         ) : day.status === 'absent' ? (
-                                          <span className="text-rose-700 font-bold bg-rose-50 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">ABSENT</span>
+                                          <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded text-[9px] uppercase tracking-wide">ABSENT</span>
                                         ) : (
                                           <span className="text-slate-300">—</span>
                                         )}
                                       </td>
-                                      <td className="py-2 px-4 text-right font-medium text-slate-600">
+                                      <td className="py-2.5 px-4 text-right font-medium text-slate-600 whitespace-nowrap tabular-nums">
                                         {day.regHrs > 0 ? `${day.regHrs.toFixed(1)} hrs` : '—'}
                                       </td>
-                                      <td className="py-2 px-4 text-right font-medium text-indigo-600">
+                                      <td className="py-2.5 px-4 text-right font-medium text-indigo-600 whitespace-nowrap tabular-nums">
                                         {day.otHrs > 0 ? `${day.otHrs.toFixed(1)} hrs` : '—'}
                                       </td>
-                                      <td className="py-2 px-4 text-right">
+                                      <td className="py-2.5 px-4 text-right whitespace-nowrap tabular-nums">
                                         {day.lateDeductionHrs > 0 ? (
                                           <span className="text-rose-600 font-black text-[10px]">-{(day.lateDeductionHrs % 1 === 0 ? day.lateDeductionHrs : day.lateDeductionHrs.toFixed(2))} hr</span>
                                         ) : '—'}
                                       </td>
-                                      <td className="py-2 px-4 text-right font-bold text-slate-800">
+                                      <td className="py-2.5 px-4 text-right font-bold text-slate-800 whitespace-nowrap tabular-nums">
                                         {dailyEarned > 0 ? (
                                           `${settings.currency}${dailyEarned.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                                         ) : (
@@ -2862,37 +2895,37 @@ export const Attendance: React.FC = () => {
                           {/* Earnings side */}
                           <div className="space-y-4">
                             <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2.1 Earnings & Income</h4>
-                            <div className="space-y-2.5">
+                            <div className="space-y-3">
                               {/* Regular hours */}
                               <div className="flex justify-between items-center text-xs text-slate-600">
                                 <div className="space-y-0.5">
-                                  <p className="font-semibold">Regular Hours Worked</p>
+                                  <p className="font-semibold text-slate-700">Regular Hours Worked</p>
                                   <p className="text-[10px] text-slate-400">({payslipData.totalRegularHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipHourlyRate).toFixed(2)}/hr)</p>
                                 </div>
-                                <span className="font-bold text-slate-800">
+                                <span className="font-bold text-slate-800 tabular-nums whitespace-nowrap">
                                   {settings.currency}{(payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                               </div>
 
                               {/* Overtime hours */}
-                              <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                              <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-3">
                                 <div className="space-y-0.5">
-                                  <p className="font-semibold">Overtime Hours</p>
+                                  <p className="font-semibold text-slate-700">Overtime Hours</p>
                                   <p className="text-[10px] text-slate-400">({payslipData.totalOtHours.toFixed(1)} hrs @ {settings.currency}{parseFloat(payslipOtRate).toFixed(2)}/hr)</p>
                                 </div>
-                                <span className="font-bold text-slate-800">
+                                <span className="font-bold text-slate-800 tabular-nums whitespace-nowrap">
                                   {settings.currency}{(payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                               </div>
 
                               {/* Incentives */}
                               {(parseFloat(payslipIncentiveAmount) || 0) > 0 && (
-                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-3">
                                   <div className="space-y-0.5">
-                                    <p className="font-semibold">Incentives / Allowance</p>
+                                    <p className="font-semibold text-slate-700">Incentives / Allowance</p>
                                     {payslipIncentiveReason && <p className="text-[10px] text-slate-400">({payslipIncentiveReason})</p>}
                                   </div>
-                                  <span className="font-bold text-emerald-600">
+                                  <span className="font-bold text-emerald-600 tabular-nums whitespace-nowrap">
                                     +{settings.currency}{parseFloat(payslipIncentiveAmount).toFixed(2)}
                                   </span>
                                 </div>
@@ -2903,26 +2936,26 @@ export const Attendance: React.FC = () => {
                           {/* Deductions side */}
                           <div className="space-y-4">
                             <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2.2 Deductions</h4>
-                            <div className="space-y-2.5">
+                            <div className="space-y-3">
                               {/* Late deductions */}
                               <div className="flex justify-between items-center text-xs text-slate-600">
                                 <div className="space-y-0.5">
-                                  <p className="font-semibold">Late Penalties (Tardiness &gt; 5m)</p>
-                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} = {payslipData.totalLateDeductedHours % 1 === 0 ? payslipData.totalLateDeductedHours : payslipData.totalLateDeductedHours.toFixed(2)} hr{payslipData.totalLateDeductedHours !== 1 ? 's' : ''} deducted)</p>
+                                  <p className="font-semibold text-slate-700">Late Penalties (Tardiness &gt; 5m)</p>
+                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} • {payslipData.totalLateDeductedHours % 1 === 0 ? payslipData.totalLateDeductedHours : payslipData.totalLateDeductedHours.toFixed(2)} hr{payslipData.totalLateDeductedHours !== 1 ? 's' : ''} deducted)</p>
                                 </div>
-                                <span className="font-bold text-rose-600">
+                                <span className="font-bold text-rose-600 tabular-nums whitespace-nowrap">
                                   -{settings.currency}{(payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                               </div>
 
                               {/* Manual deduction */}
                               {(parseFloat(payslipDeductionAmount) || 0) > 0 && (
-                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-2.5">
+                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-3">
                                   <div className="space-y-0.5">
-                                    <p className="font-semibold">Other Adjustments</p>
+                                    <p className="font-semibold text-slate-700">Other Adjustments</p>
                                     {payslipDeductionReason && <p className="text-[10px] text-slate-400">({payslipDeductionReason})</p>}
                                   </div>
-                                  <span className="font-bold text-rose-600">
+                                  <span className="font-bold text-rose-600 tabular-nums whitespace-nowrap">
                                     -{settings.currency}{parseFloat(payslipDeductionAmount).toFixed(2)}
                                   </span>
                                 </div>
@@ -2943,7 +2976,7 @@ export const Attendance: React.FC = () => {
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border border-slate-100 p-5 rounded-2xl bg-slate-50/30">
                             <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
                               <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Gross Earnings</span>
-                              <p className="text-lg font-extrabold text-slate-800 mt-0.5">
+                              <p className="text-lg font-extrabold text-slate-800 mt-0.5 tabular-nums whitespace-nowrap">
                                 {settings.currency}{(
                                   ((payslipData.totalRegularHours + payslipData.totalLateDeductedHours) * (parseFloat(payslipHourlyRate) || 0)) + 
                                   (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
@@ -2954,7 +2987,7 @@ export const Attendance: React.FC = () => {
 
                             <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
                               <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider">Total Deductions</span>
-                              <p className="text-lg font-extrabold text-rose-600 mt-0.5">
+                              <p className="text-lg font-extrabold text-rose-600 mt-0.5 tabular-nums whitespace-nowrap">
                                 {settings.currency}{(
                                   (payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)) +
                                   (parseFloat(payslipDeductionAmount) || 0)
@@ -2964,7 +2997,7 @@ export const Attendance: React.FC = () => {
 
                             <div className="text-center bg-[#1A2B4B]/5 border border-[#1A2B4B]/10 p-4 rounded-xl">
                               <span className="text-[10px] text-[#1A2B4B] font-black uppercase tracking-wider">Net Payable Pay</span>
-                              <p className="text-lg font-black text-[#1A2B4B] mt-0.5">
+                              <p className="text-lg font-black text-[#1A2B4B] mt-0.5 tabular-nums whitespace-nowrap">
                                 {settings.currency}{(
                                   (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
                                   (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 

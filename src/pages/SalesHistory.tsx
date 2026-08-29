@@ -127,20 +127,52 @@ export const SalesHistory: React.FC = () => {
     return { start: todayStr, end: todayStr };
   };
 
-  const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => getTodayDateRange());
-  const [queryDateRange, setQueryDateRange] = useState<{ start: string; end: string } | null>(null);
-  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [paymentFilter, setPaymentFilter] = useState('cash');
+  const SALES_HISTORY_CACHE_KEY = 'v4_sales_history_query_cache';
+
+  const getStoredSalesHistoryCache = () => {
+    try {
+      const raw = sessionStorage.getItem(SALES_HISTORY_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to parse sales history cache from sessionStorage', e);
+      return null;
+    }
+  };
+
+  const initialSalesCache = useMemo(() => getStoredSalesHistoryCache(), []);
+
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>(() => initialSalesCache?.dateRange || getTodayDateRange());
+  const [queryDateRange, setQueryDateRange] = useState<{ start: string; end: string } | null>(() => initialSalesCache?.queryDateRange || null);
+  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(() => initialSalesCache?.guardrailStartDate || format(new Date(), 'yyyy-MM-dd'));
+  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(() => initialSalesCache?.guardrailEndDate || format(new Date(), 'yyyy-MM-dd'));
+  const [paymentFilter, setPaymentFilter] = useState(() => initialSalesCache?.paymentFilter || 'cash');
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [voidAccountId, setVoidAccountId] = useState('');
   const [saleToVoid, setSaleToVoid] = useState<Sale | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'sales' | 'voids' | 'pending' | 'ledger'>('ledger');
+  const [activeTab, setActiveTab] = useState<'sales' | 'voids' | 'pending' | 'ledger'>(() => initialSalesCache?.activeTab || 'ledger');
   const [ledgerLimit, setLedgerLimit] = useState<number>(300);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(() => initialSalesCache?.pageSize || 20);
+
+  useEffect(() => {
+    try {
+      const stateToSave = {
+        queryDateRange,
+        dateRange,
+        guardrailStartDate,
+        guardrailEndDate,
+        paymentFilter,
+        activeTab,
+        pageSize
+      };
+      sessionStorage.setItem(SALES_HISTORY_CACHE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.warn('Failed to save sales history cache to sessionStorage', e);
+    }
+  }, [queryDateRange, dateRange, guardrailStartDate, guardrailEndDate, paymentFilter, activeTab, pageSize]);
   const [rawFinancialTransactions, setRawFinancialTransactions] = useState<any[]>([]);
   const [pendingSales, setPendingSales] = useState<Sale[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<any[]>([]);
@@ -231,6 +263,9 @@ export const SalesHistory: React.FC = () => {
     setDateRange(today);
     setGuardrailStartDate(today.start);
     setGuardrailEndDate(today.end);
+    try {
+      sessionStorage.removeItem(SALES_HISTORY_CACHE_KEY);
+    } catch (e) {}
   };
 
   useEffect(() => {

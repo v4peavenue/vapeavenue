@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { DataTablePagination } from '@/components/DataTablePagination';
 import { 
@@ -87,10 +87,38 @@ export const Purchasing: React.FC = () => {
     ? ((globalLocations.length ? globalLocations : locations).find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
     : undefined;
 
+  const PURCHASING_CACHE_KEY = 'v4_purchasing_query_cache';
+
+  const getStoredPurchasingCache = () => {
+    try {
+      const raw = sessionStorage.getItem(PURCHASING_CACHE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn('Failed to parse purchasing cache from sessionStorage', e);
+      return null;
+    }
+  };
+
+  const initialPurchasingCache = useMemo(() => getStoredPurchasingCache(), []);
+
   // Date Range Guardrail states
-  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'));
-  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [appliedDateRange, setAppliedDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [guardrailStartDate, setGuardrailStartDate] = useState<string>(() => initialPurchasingCache?.guardrailStartDate || format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'));
+  const [guardrailEndDate, setGuardrailEndDate] = useState<string>(() => initialPurchasingCache?.guardrailEndDate || format(new Date(), 'yyyy-MM-dd'));
+  const [appliedDateRange, setAppliedDateRange] = useState<{ start: string; end: string } | null>(() => initialPurchasingCache?.appliedDateRange || null);
+
+  useEffect(() => {
+    try {
+      const stateToSave = {
+        guardrailStartDate,
+        guardrailEndDate,
+        appliedDateRange
+      };
+      sessionStorage.setItem(PURCHASING_CACHE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.warn('Failed to save purchasing cache to sessionStorage', e);
+    }
+  }, [guardrailStartDate, guardrailEndDate, appliedDateRange]);
 
   const calculatePurchasingDocs = async (startStr: string, endStr: string): Promise<number> => {
     const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
@@ -502,6 +530,9 @@ export const Purchasing: React.FC = () => {
           setGuardrailStartDate(startStr);
           setGuardrailEndDate(endStr);
           setAppliedDateRange(null);
+          try {
+            sessionStorage.removeItem(PURCHASING_CACHE_KEY);
+          } catch (e) {}
         }}
         presets={[
           { label: 'Today', key: 'today' },
