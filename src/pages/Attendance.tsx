@@ -719,9 +719,14 @@ export const Attendance: React.FC = () => {
 
         // Calculate late minutes and tardiness penalty hours
         // Policy:
-        // - 0-5 mins late: 0-5 mins late (0 hr penalty)
-        // - > 5 mins to 60 mins: Automatic 1 hour penalty
-        // - > 60 mins: Penalty equals exact hours late (e.g. 75m = 1.25 hrs)
+        // - 8:00 AM – 8:05 AM (0 to 5 mins late): 0 hours penalty (Within initial grace period)
+        // - 8:06 AM – 9:05 AM (6 to 65 mins late): 1 hour penalty (1.0 hr deduction)
+        // - 9:06 AM – 10:05 AM (66 to 125 mins late): 2 hours penalty (2.0 hrs deduction)
+        // - 10:06 AM – 11:05 AM (126 to 185 mins late): 3 hours penalty (3.0 hrs deduction)
+        // - 11:06 AM – 12:05 PM (186 to 245 mins late): 4 hours penalty, and so on.
+        // - Formula for late deduction hours:
+        //   - If lateMins <= 5: 0 penalty
+        //   - If lateMins > 5: Math.floor((lateMins - 6) / 60) + 1
         const effectiveStartTime = schChange?.newStartTime || schedule?.startTime;
         const effectiveEndTime = schChange?.newEndTime || schedule?.endTime;
 
@@ -732,13 +737,8 @@ export const Attendance: React.FC = () => {
           if (actualInMin > sMin) {
             lateMins = actualInMin - sMin;
             totalLateMinutes += lateMins;
-            if (lateMins > 5 && lateMins <= 60) {
-              lateDeductionHrs = 1.0;
-              isLateDeducted = true;
-              lateDeductionsCount++;
-              totalLateDeductedHours += 1.0;
-            } else if (lateMins > 60) {
-              lateDeductionHrs = lateMins / 60;
+            if (lateMins > 5) {
+              lateDeductionHrs = Math.floor((lateMins - 6) / 60) + 1;
               isLateDeducted = true;
               lateDeductionsCount++;
               totalLateDeductedHours += lateDeductionHrs;
@@ -2940,7 +2940,7 @@ export const Attendance: React.FC = () => {
                               {/* Late deductions */}
                               <div className="flex justify-between items-center text-xs text-slate-600">
                                 <div className="space-y-0.5">
-                                  <p className="font-semibold text-slate-700">Late Penalties (Tardiness &gt; 5m)</p>
+                                  <p className="font-semibold text-slate-700">Late Penalties</p>
                                   <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} • {payslipData.totalLateDeductedHours % 1 === 0 ? payslipData.totalLateDeductedHours : payslipData.totalLateDeductedHours.toFixed(2)} hr{payslipData.totalLateDeductedHours !== 1 ? 's' : ''} deducted)</p>
                                 </div>
                                 <span className="font-bold text-rose-600 tabular-nums whitespace-nowrap">

@@ -27,7 +27,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocations } from '@/contexts/LocationContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Sale, Product, StockAdjustment, PurchaseOrder, ReturnTransaction } from '@/types';
+import { Sale, Product, StockAdjustment, PurchaseOrder, ReturnTransaction, Customer, PromoCode, LoyaltyCard } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -168,6 +168,8 @@ interface ReportsCacheState {
   isGuardrailApplied?: boolean;
   searchTerm?: string;
   selectedSeller?: string;
+  selectedCustomer?: string;
+  selectedPromo?: string;
   selectedCategory?: string;
   selectedBrand?: string;
   selectedProduct?: string;
@@ -195,6 +197,9 @@ export const Reports: React.FC = () => {
 
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [promos, setPromos] = useState<PromoCode[]>([]);
+  const [loyaltyCards, setLoyaltyCards] = useState<LoyaltyCard[]>([]);
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [returnTransactions, setReturnTransactions] = useState<ReturnTransaction[]>([]);
@@ -211,9 +216,11 @@ export const Reports: React.FC = () => {
   const [isGuardrailApplied, setIsGuardrailApplied] = useState<boolean>(() => !!initialCache?.isGuardrailApplied);
   const [searchTerm, setSearchTerm] = useState(() => initialCache?.searchTerm || '');
 
-  // States for the seller, category, brand, and product filters
+  // States for the seller, customer, promo, category, brand, and product filters
   const [usersList, setUsersList] = useState<any[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<string>(() => initialCache?.selectedSeller || 'all');
+  const [selectedCustomer, setSelectedCustomer] = useState<string>(() => initialCache?.selectedCustomer || 'all');
+  const [selectedPromo, setSelectedPromo] = useState<string>(() => initialCache?.selectedPromo || 'all');
   const [selectedCategory, setSelectedCategory] = useState<string>(() => initialCache?.selectedCategory || 'all');
   const [selectedBrand, setSelectedBrand] = useState<string>(() => initialCache?.selectedBrand || 'all');
   const [selectedProduct, setSelectedProduct] = useState<string>(() => initialCache?.selectedProduct || 'all');
@@ -237,6 +244,8 @@ export const Reports: React.FC = () => {
         isGuardrailApplied,
         searchTerm,
         selectedSeller,
+        selectedCustomer,
+        selectedPromo,
         selectedCategory,
         selectedBrand,
         selectedProduct,
@@ -258,6 +267,8 @@ export const Reports: React.FC = () => {
     isGuardrailApplied,
     searchTerm,
     selectedSeller,
+    selectedCustomer,
+    selectedPromo,
     selectedCategory,
     selectedBrand,
     selectedProduct,
@@ -356,7 +367,7 @@ export const Reports: React.FC = () => {
   // Reset to page 1 whenever tab or filter criteria change
   useEffect(() => {
     setCurrentPage(1);
-  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCategory, selectedBrand, selectedProduct, selectedAdjustmentCategory, selectedLocationId]);
+  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCustomer, selectedPromo, selectedCategory, selectedBrand, selectedProduct, selectedAdjustmentCategory, selectedLocationId]);
 
   const getPaymentMethodName = (methodId: string) => {
     if (!methodId) return 'N/A';
@@ -427,6 +438,24 @@ export const Reports: React.FC = () => {
       console.warn("Reports: Error listening to users:", error);
     });
 
+    const unsubscribeCustomers = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
+    }, (error) => {
+      console.warn("Reports: Error listening to customers:", error);
+    });
+
+    const unsubscribePromos = onSnapshot(collection(db, 'promos'), (snapshot) => {
+      setPromos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PromoCode)));
+    }, (error) => {
+      console.warn("Reports: Error listening to promos:", error);
+    });
+
+    const unsubscribeLoyaltyCards = onSnapshot(collection(db, 'loyaltyCards'), (snapshot) => {
+      setLoyaltyCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoyaltyCard)));
+    }, (error) => {
+      console.warn("Reports: Error listening to loyalty cards:", error);
+    });
+
     const unsubscribePayments = onSnapshot(collection(db, 'paymentOptions'), (snapshot) => {
       setPaymentOptions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
@@ -442,6 +471,9 @@ export const Reports: React.FC = () => {
     return () => {
       unsubscribeProducts();
       unsubscribeUsers();
+      unsubscribeCustomers();
+      unsubscribePromos();
+      unsubscribeLoyaltyCards();
       unsubscribePayments();
       unsubscribeAccounts();
     };
@@ -572,6 +604,75 @@ export const Reports: React.FC = () => {
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [products, selectedCategory, selectedBrand]);
 
+  const getSaleCustomerName = (sale: Sale) => {
+    if (sale.customerDetails?.name && sale.customerDetails.name.trim()) {
+      return sale.customerDetails.name.trim();
+    }
+    if (sale.customerId && sale.customerId !== 'walk-in') {
+      const match = customers.find(c => c.id === sale.customerId);
+      if (match?.name) return match.name;
+      return `Customer (${sale.customerId.slice(0, 6)})`;
+    }
+    return 'Walk-in Customer';
+  };
+
+  const getSaleLoyaltyCardNumber = (sale: Sale) => {
+    if (sale.customerDetails?.loyaltyCardNumber && sale.customerDetails.loyaltyCardNumber.trim()) {
+      return sale.customerDetails.loyaltyCardNumber.trim();
+    }
+    if (sale.customerId && sale.customerId !== 'walk-in') {
+      const cust = customers.find(c => c.id === sale.customerId);
+      if (cust?.loyaltyCardNumber && cust.loyaltyCardNumber.trim()) {
+        return cust.loyaltyCardNumber.trim();
+      }
+      const card = loyaltyCards.find(l => l.customerId === sale.customerId);
+      if (card?.cardNumber && card.cardNumber.trim()) {
+        return card.cardNumber.trim();
+      }
+    }
+    return '—';
+  };
+
+  const getSalePromoCode = (sale: Sale) => {
+    if (sale.promoCode && sale.promoCode.trim()) {
+      return sale.promoCode.trim();
+    }
+    return '—';
+  };
+
+  const customerFilterOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    customers.forEach(c => {
+      if (c.name && c.name.trim()) {
+        map.set(c.id, c.name.trim());
+      }
+    });
+    sales.forEach(s => {
+      const name = getSaleCustomerName(s);
+      if (name && name !== 'Walk-in Customer') {
+        const key = s.customerId && s.customerId !== 'walk-in' ? s.customerId : name;
+        if (!map.has(key)) {
+          map.set(key, name);
+        }
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [customers, sales, loyaltyCards]);
+
+  const promoFilterOptions = useMemo(() => {
+    const set = new Set<string>();
+    promos.forEach(p => {
+      if (p.code && p.code.trim()) set.add(p.code.trim().toUpperCase());
+    });
+    sales.forEach(s => {
+      const code = getSalePromoCode(s);
+      if (code && code !== '—') set.add(code.toUpperCase());
+    });
+    return Array.from(set).sort();
+  }, [promos, sales]);
+
   const processedSales = useMemo(() => {
     return sales.map(s => {
       // Filter items based on category, brand, product
@@ -623,19 +724,46 @@ export const Reports: React.FC = () => {
       // Seller filter
       if (selectedSeller !== 'all' && s.staffId !== selectedSeller) return false;
 
+      // Customer Name filter
+      if (selectedCustomer !== 'all') {
+        const custName = getSaleCustomerName(s).toLowerCase();
+        const matchedCust = customers.find(c => c.id === selectedCustomer);
+        const targetName = (matchedCust?.name || selectedCustomer).toLowerCase();
+
+        const matchesId = s.customerId === selectedCustomer;
+        const matchesName = custName === targetName;
+        if (!matchesId && !matchesName) return false;
+      }
+
+      // Promo Code filter
+      if (selectedPromo !== 'all') {
+        const code = getSalePromoCode(s);
+        if (selectedPromo === 'none') {
+          if (code !== '—') return false;
+        } else {
+          if (code.toUpperCase() !== selectedPromo.toUpperCase()) return false;
+        }
+      }
+
       // Search term
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         const sellerName = (usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff').toLowerCase();
+        const customerName = getSaleCustomerName(s).toLowerCase();
+        const loyaltyNum = getSaleLoyaltyCardNumber(s).toLowerCase();
+        const promoCode = getSalePromoCode(s).toLowerCase();
         const matchesSearch = s.id.toLowerCase().includes(searchLower) ||
           sellerName.includes(searchLower) ||
+          customerName.includes(searchLower) ||
+          (loyaltyNum !== '—' && loyaltyNum.includes(searchLower)) ||
+          (promoCode !== '—' && promoCode.includes(searchLower)) ||
           s.matchingItems.some(i => i.name.toLowerCase().includes(searchLower));
         if (!matchesSearch) return false;
       }
 
       return true;
     });
-  }, [processedSales, selectedSeller, searchTerm, selectedCategory, selectedBrand, selectedProduct, usersList]);
+  }, [processedSales, selectedSeller, selectedCustomer, selectedPromo, searchTerm, selectedCategory, selectedBrand, selectedProduct, usersList, customers, loyaltyCards, promos]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -1061,6 +1189,9 @@ export const Reports: React.FC = () => {
           ID: s.id,
           Date: format(s.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
           Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
+          'Customer Name': getSaleCustomerName(s),
+          'Loyalty Card Number': getSaleLoyaltyCardNumber(s),
+          'Promo Code': getSalePromoCode(s),
           Items: itemsToExport.map(i => {
             const netQty = i.quantity - (i.returnedQuantity || 0);
             return `${i.name} x${netQty}${i.returnedQuantity ? ` (${i.returnedQuantity} returned)` : ''}`;
@@ -1404,12 +1535,14 @@ export const Reports: React.FC = () => {
                 <Filter className="w-3.5 h-3.5 text-indigo-500" />
                 Filter Report Data
               </span>
-              {(selectedSeller !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') || searchTerm !== '') && (
+              {(selectedSeller !== 'all' || selectedCustomer !== 'all' || selectedPromo !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') || searchTerm !== '') && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => {
                     setSelectedSeller('all');
+                    setSelectedCustomer('all');
+                    setSelectedPromo('all');
                     setSelectedCategory('all');
                     setSelectedBrand('all');
                     setSelectedProduct('all');
@@ -1425,6 +1558,7 @@ export const Reports: React.FC = () => {
             
             <div className={cn(
               "grid grid-cols-1 sm:grid-cols-2 gap-3",
+              reportType === 'sales' ? "lg:grid-cols-3 xl:grid-cols-6" :
               reportType === 'stock-adjustments' ? "lg:grid-cols-5" : "lg:grid-cols-4"
             )}>
               {/* Adjustment Category Filter (Specific to Stock Adjustments tab) */}
@@ -1518,6 +1652,43 @@ export const Reports: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Customer Name Filter (Sales tab only) */}
+              {reportType === 'sales' && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer Name</Label>
+                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
+                    <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                      <SelectValue placeholder="All Customers" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      <SelectItem value="all">All Customers</SelectItem>
+                      {customerFilterOptions.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Promo Code Filter (Sales tab only) */}
+              {reportType === 'sales' && (
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Promo Code Filter</Label>
+                  <Select value={selectedPromo} onValueChange={setSelectedPromo}>
+                    <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
+                      <SelectValue placeholder="All Promo Codes" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      <SelectItem value="all">All Promo Codes</SelectItem>
+                      <SelectItem value="none">No Promo Applied</SelectItem>
+                      {promoFilterOptions.map(code => (
+                        <SelectItem key={code} value={code}>{code}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -1529,6 +1700,9 @@ export const Reports: React.FC = () => {
                   <TableHead className="w-[100px]">Order ID</TableHead>
                   <TableHead>Date & Time</TableHead>
                   {selectedLocationId === 'all' && <TableHead>Location</TableHead>}
+                  <TableHead>Customer Name</TableHead>
+                  <TableHead>Loyalty Card #</TableHead>
+                  <TableHead>Promo Code #</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -1537,7 +1711,7 @@ export const Reports: React.FC = () => {
               <TableBody>
                 {filteredSales.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={selectedLocationId === 'all' ? 6 : 5} className="text-center py-12 text-slate-400 italic">
+                    <TableCell colSpan={selectedLocationId === 'all' ? 9 : 8} className="text-center py-12 text-slate-400 italic">
                       No sales records found for this period
                     </TableCell>
                   </TableRow>
@@ -1553,6 +1727,34 @@ export const Reports: React.FC = () => {
                           {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
                         </TableCell>
                       )}
+                      <TableCell className="text-xs font-medium text-slate-900">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate max-w-[140px]" title={getSaleCustomerName(sale)}>{getSaleCustomerName(sale)}</span>
+                          {sale.customerId && sale.customerId !== 'walk-in' && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-indigo-50/60 text-indigo-700 border-indigo-200 shrink-0">
+                              Member
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {getSaleLoyaltyCardNumber(sale) !== '—' ? (
+                          <Badge variant="outline" className="font-mono text-[10px] bg-amber-50 text-amber-800 border-amber-200 font-semibold whitespace-nowrap">
+                            {getSaleLoyaltyCardNumber(sale)}
+                          </Badge>
+                        ) : (
+                          <span className="text-slate-400 font-mono text-[11px]">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {getSalePromoCode(sale) !== '—' ? (
+                          <Badge variant="outline" className="font-mono text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold whitespace-nowrap">
+                            {getSalePromoCode(sale)}
+                          </Badge>
+                        ) : (
+                          <span className="text-slate-400 font-mono text-[11px]">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' ? sale.matchingItems : sale.items).map((item, idx) => {
