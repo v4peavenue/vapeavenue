@@ -147,10 +147,12 @@ export const Attendance: React.FC = () => {
   const [ratesList, setRatesList] = useState<any[]>([]);
   const [payslipHourlyRate, setPayslipHourlyRate] = useState<string>('15');
   const [payslipOtRate, setPayslipOtRate] = useState<string>('15');
-  const [payslipIncentiveAmount, setPayslipIncentiveAmount] = useState<string>('0');
-  const [payslipIncentiveReason, setPayslipIncentiveReason] = useState<string>('');
-  const [payslipDeductionAmount, setPayslipDeductionAmount] = useState<string>('0');
-  const [payslipDeductionReason, setPayslipDeductionReason] = useState<string>('');
+  const [payslipIncentives, setPayslipIncentives] = useState<{ id: string; reason: string; amount: number }[]>([]);
+  const [newIncentiveAmount, setNewIncentiveAmount] = useState<string>('');
+  const [newIncentiveReason, setNewIncentiveReason] = useState<string>('');
+  const [payslipDeductions, setPayslipDeductions] = useState<{ id: string; reason: string; amount: number }[]>([]);
+  const [newDeductionAmount, setNewDeductionAmount] = useState<string>('');
+  const [newDeductionReason, setNewDeductionReason] = useState<string>('');
   const [isSavingRates, setIsSavingRates] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('history');
 
@@ -602,30 +604,117 @@ export const Attendance: React.FC = () => {
   // Load current staff rates
   const currentStaffRates = useMemo(() => {
     const rateDoc = ratesList.find(r => r.id === selectedPayslipUser);
+    
+    // Parse multi-line incentives or fallback to legacy single field
+    let incentives: { id: string; reason: string; amount: number }[] = [];
+    if (Array.isArray(rateDoc?.incentives) && rateDoc.incentives.length > 0) {
+      incentives = rateDoc.incentives.map((item: any, idx: number) => ({
+        id: item.id || `inc-${idx}-${Date.now()}`,
+        reason: item.reason || 'Incentive',
+        amount: Number(item.amount) || 0
+      }));
+    } else if (rateDoc?.incentiveAmount && Number(rateDoc.incentiveAmount) > 0) {
+      incentives = [{
+        id: 'legacy-inc',
+        reason: rateDoc.incentiveReason || 'Incentives / Allowance',
+        amount: Number(rateDoc.incentiveAmount) || 0
+      }];
+    }
+
+    // Parse multi-line deductions or fallback to legacy single field
+    let deductions: { id: string; reason: string; amount: number }[] = [];
+    if (Array.isArray(rateDoc?.deductions) && rateDoc.deductions.length > 0) {
+      deductions = rateDoc.deductions.map((item: any, idx: number) => ({
+        id: item.id || `ded-${idx}-${Date.now()}`,
+        reason: item.reason || 'Manual Deduction',
+        amount: Number(item.amount) || 0
+      }));
+    } else if (rateDoc?.manualDeduction && Number(rateDoc.manualDeduction) > 0) {
+      deductions = [{
+        id: 'legacy-ded',
+        reason: rateDoc.deductionReason || 'Other Adjustments',
+        amount: Number(rateDoc.manualDeduction) || 0
+      }];
+    }
+
     return {
       hourlyRate: rateDoc?.hourlyRate ?? 15,
       otRate: rateDoc?.otRate ?? (rateDoc?.hourlyRate ?? 15),
-      incentiveAmount: rateDoc?.incentiveAmount ?? 0,
-      incentiveReason: rateDoc?.incentiveReason ?? '',
-      manualDeduction: rateDoc?.manualDeduction ?? 0,
-      deductionReason: rateDoc?.deductionReason ?? ''
+      incentives,
+      deductions
     };
   }, [ratesList, selectedPayslipUser]);
 
-  // Sync inputs with saved rates
+  // Sync inputs with saved rates when staff changes
   useEffect(() => {
     setPayslipHourlyRate(currentStaffRates.hourlyRate.toString());
     setPayslipOtRate(currentStaffRates.otRate.toString());
-    setPayslipIncentiveAmount(currentStaffRates.incentiveAmount.toString());
-    setPayslipIncentiveReason(currentStaffRates.incentiveReason);
-    setPayslipDeductionAmount(currentStaffRates.manualDeduction.toString());
-    setPayslipDeductionReason(currentStaffRates.deductionReason);
+    setPayslipIncentives(currentStaffRates.incentives);
+    setPayslipDeductions(currentStaffRates.deductions);
+    setNewIncentiveAmount('');
+    setNewIncentiveReason('');
+    setNewDeductionAmount('');
+    setNewDeductionReason('');
   }, [currentStaffRates]);
 
   // Keep OT Rate perfectly synced with the Regular Hourly Rate
   useEffect(() => {
     setPayslipOtRate(payslipHourlyRate);
   }, [payslipHourlyRate]);
+
+  // Totals for all added incentive and deduction lines
+  const totalIncentivesAmount = useMemo(() => {
+    return payslipIncentives.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [payslipIncentives]);
+
+  const totalManualDeductionsAmount = useMemo(() => {
+    return payslipDeductions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [payslipDeductions]);
+
+  // Handlers to add/remove lines
+  const handleAddIncentive = () => {
+    const amt = parseFloat(newIncentiveAmount);
+    if (isNaN(amt) || amt <= 0) {
+      toast.error('Please enter an incentive amount greater than 0');
+      return;
+    }
+    const reason = newIncentiveReason.trim() || 'Incentive / Bonus';
+    const newItem = {
+      id: `inc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      reason,
+      amount: amt
+    };
+    setPayslipIncentives(prev => [...prev, newItem]);
+    setNewIncentiveAmount('');
+    setNewIncentiveReason('');
+    toast.success(`Incentive added: ${reason} (+${settings.currency}${amt.toFixed(2)})`);
+  };
+
+  const handleRemoveIncentive = (id: string) => {
+    setPayslipIncentives(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleAddDeduction = () => {
+    const amt = parseFloat(newDeductionAmount);
+    if (isNaN(amt) || amt <= 0) {
+      toast.error('Please enter a deduction amount greater than 0');
+      return;
+    }
+    const reason = newDeductionReason.trim() || 'Manual Deduction';
+    const newItem = {
+      id: `ded-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      reason,
+      amount: amt
+    };
+    setPayslipDeductions(prev => [...prev, newItem]);
+    setNewDeductionAmount('');
+    setNewDeductionReason('');
+    toast.success(`Deduction added: ${reason} (-${settings.currency}${amt.toFixed(2)})`);
+  };
+
+  const handleRemoveDeduction = (id: string) => {
+    setPayslipDeductions(prev => prev.filter(item => item.id !== id));
+  };
 
   // Save rates to Firestore
   const handleSaveRates = async () => {
@@ -635,13 +724,15 @@ export const Attendance: React.FC = () => {
       await setDoc(doc(db, 'staffRates', selectedPayslipUser), {
         hourlyRate: parseFloat(payslipHourlyRate) || 0,
         otRate: parseFloat(payslipHourlyRate) || 0, // Matches regular rate
-        incentiveAmount: parseFloat(payslipIncentiveAmount) || 0,
-        incentiveReason: payslipIncentiveReason,
-        manualDeduction: parseFloat(payslipDeductionAmount) || 0,
-        deductionReason: payslipDeductionReason,
+        incentives: payslipIncentives,
+        deductions: payslipDeductions,
+        incentiveAmount: totalIncentivesAmount,
+        incentiveReason: payslipIncentives.map(i => i.reason).join(', '),
+        manualDeduction: totalManualDeductionsAmount,
+        deductionReason: payslipDeductions.map(d => d.reason).join(', '),
         updatedAt: serverTimestamp()
       }, { merge: true });
-      toast.success('Rates and adjustments updated successfully');
+      toast.success('Rates, incentives, and deductions saved successfully');
     } catch (err) {
       console.error('Error saving rates:', err);
       toast.error('Failed to save rates');
@@ -2706,55 +2797,195 @@ export const Attendance: React.FC = () => {
 
                         {/* Incentives */}
                         <div className="border-t border-slate-100 pt-4 space-y-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Add Incentives ({settings.currency})</Label>
-                            <div className="relative">
-                              <span className="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-xs font-bold text-slate-700">Incentives & Extra Pay</Label>
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                                +{settings.currency}{totalIncentivesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-medium">{payslipIncentives.length} line{payslipIncentives.length !== 1 ? 's' : ''}</span>
+                          </div>
+
+                          {/* Existing Incentive Lines List */}
+                          {payslipIncentives.length > 0 ? (
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+                              {payslipIncentives.map((item) => (
+                                <div 
+                                  key={item.id} 
+                                  className="flex items-center justify-between p-2.5 bg-emerald-50/40 border border-emerald-100/80 rounded-xl gap-2 hover:bg-emerald-50/70 transition-colors"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-semibold text-slate-800 truncate" title={item.reason}>{item.reason}</p>
+                                    <p className="text-[11px] font-bold text-emerald-600 tabular-nums">
+                                      +{settings.currency}{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </p>
+                                  </div>
+                                  <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                                    onClick={() => handleRemoveIncentive(item.id)}
+                                    title="Remove line"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                              <p className="text-[11px] text-slate-400 font-medium">No incentive lines added yet. Add a line below.</p>
+                            </div>
+                          )}
+
+                          {/* Add Incentive Form */}
+                          <div className="space-y-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
+                            <div className="space-y-1">
+                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Add New Incentive Line</Label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                                <Input 
+                                  type="number" 
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  className="pl-8 h-9 text-xs rounded-xl font-semibold bg-white"
+                                  value={newIncentiveAmount}
+                                  onChange={(e) => setNewIncentiveAmount(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleAddIncentive();
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
                               <Input 
-                                type="number" 
-                                min="0"
-                                step="0.01"
-                                className="pl-8 h-10 text-xs rounded-xl font-semibold"
-                                value={payslipIncentiveAmount}
-                                onChange={(e) => setPayslipIncentiveAmount(e.target.value)}
+                                placeholder="Description (e.g. Sales Bonus, Travel Allowance)"
+                                className="h-9 text-xs rounded-xl bg-white"
+                                value={newIncentiveReason}
+                                onChange={(e) => setNewIncentiveReason(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddIncentive();
+                                  }
+                                }}
                               />
                             </div>
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Incentive Reason</Label>
-                            <Input 
-                              placeholder="e.g. Bonus, Overtime Bonus, Travel Allowance"
-                              className="h-10 text-xs rounded-xl"
-                              value={payslipIncentiveReason}
-                              onChange={(e) => setPayslipIncentiveReason(e.target.value)}
-                            />
+
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm"
+                              className="w-full h-9 border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                              onClick={handleAddIncentive}
+                            >
+                              <Plus className="w-3.5 h-3.5 text-emerald-600" />
+                              Add Incentive Line
+                            </Button>
                           </div>
                         </div>
 
                         {/* Deductions */}
                         <div className="border-t border-slate-100 pt-4 space-y-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Manual Deduction ({settings.currency})</Label>
-                            <div className="relative">
-                              <span className="absolute left-3.5 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-xs font-bold text-slate-700">Manual Deductions</Label>
+                              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200/60">
+                                -{settings.currency}{totalManualDeductionsAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-medium">{payslipDeductions.length} line{payslipDeductions.length !== 1 ? 's' : ''}</span>
+                          </div>
+
+                          {/* Existing Deduction Lines List */}
+                          {payslipDeductions.length > 0 ? (
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+                              {payslipDeductions.map((item) => (
+                                <div 
+                                  key={item.id} 
+                                  className="flex items-center justify-between p-2.5 bg-rose-50/40 border border-rose-100/80 rounded-xl gap-2 hover:bg-rose-50/70 transition-colors"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-semibold text-slate-800 truncate" title={item.reason}>{item.reason}</p>
+                                    <p className="text-[11px] font-bold text-rose-600 tabular-nums">
+                                      -{settings.currency}{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </p>
+                                  </div>
+                                  <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg shrink-0"
+                                    onClick={() => handleRemoveDeduction(item.id)}
+                                    title="Remove line"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center">
+                              <p className="text-[11px] text-slate-400 font-medium">No manual deduction lines added yet. Add a line below.</p>
+                            </div>
+                          )}
+
+                          {/* Add Deduction Form */}
+                          <div className="space-y-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100">
+                            <div className="space-y-1">
+                              <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Add New Deduction Line</Label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">{settings.currency}</span>
+                                <Input 
+                                  type="number" 
+                                  min="0"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  className="pl-8 h-9 text-xs rounded-xl font-semibold bg-white"
+                                  value={newDeductionAmount}
+                                  onChange={(e) => setNewDeductionAmount(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleAddDeduction();
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
                               <Input 
-                                type="number" 
-                                min="0"
-                                step="0.01"
-                                className="pl-8 h-10 text-xs rounded-xl font-semibold"
-                                value={payslipDeductionAmount}
-                                onChange={(e) => setPayslipDeductionAmount(e.target.value)}
+                                placeholder="Description (e.g. Uniform fee, Cash advance)"
+                                className="h-9 text-xs rounded-xl bg-white"
+                                value={newDeductionReason}
+                                onChange={(e) => setNewDeductionReason(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddDeduction();
+                                  }
+                                }}
                               />
                             </div>
-                          </div>
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold text-slate-700">Deduction Reason</Label>
-                            <Input 
-                              placeholder="e.g. Uniform fee, equipment damage"
-                              className="h-10 text-xs rounded-xl"
-                              value={payslipDeductionReason}
-                              onChange={(e) => setPayslipDeductionReason(e.target.value)}
-                            />
+
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm"
+                              className="w-full h-9 border-dashed border-rose-300 bg-rose-50/50 hover:bg-rose-100/70 text-rose-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                              onClick={handleAddDeduction}
+                            >
+                              <Plus className="w-3.5 h-3.5 text-rose-600" />
+                              Add Deduction Line
+                            </Button>
                           </div>
                         </div>
 
@@ -2894,7 +3125,16 @@ export const Attendance: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
                           {/* Earnings side */}
                           <div className="space-y-4">
-                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2.1 Earnings & Income</h4>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">2.1 Earnings & Income</h4>
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                {settings.currency}{(
+                                  (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
+                                  (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
+                                  totalIncentivesAmount
+                                ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
                             <div className="space-y-3">
                               {/* Regular hours */}
                               <div className="flex justify-between items-center text-xs text-slate-600">
@@ -2918,16 +3158,25 @@ export const Attendance: React.FC = () => {
                                 </span>
                               </div>
 
-                              {/* Incentives */}
-                              {(parseFloat(payslipIncentiveAmount) || 0) > 0 && (
-                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-3">
-                                  <div className="space-y-0.5">
-                                    <p className="font-semibold text-slate-700">Incentives / Allowance</p>
-                                    {payslipIncentiveReason && <p className="text-[10px] text-slate-400">({payslipIncentiveReason})</p>}
+                              {/* Incentives Line Items */}
+                              {payslipIncentives.length > 0 && (
+                                <div className="border-t border-slate-50 pt-3 space-y-2.5">
+                                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                    <span>Incentives & Extra Pay ({payslipIncentives.length})</span>
+                                    {payslipIncentives.length > 1 && (
+                                      <span className="text-emerald-600 font-bold">
+                                        +{settings.currency}{totalIncentivesAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    )}
                                   </div>
-                                  <span className="font-bold text-emerald-600 tabular-nums whitespace-nowrap">
-                                    +{settings.currency}{parseFloat(payslipIncentiveAmount).toFixed(2)}
-                                  </span>
+                                  {payslipIncentives.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center text-xs text-slate-600 pl-2 border-l-2 border-emerald-200">
+                                      <span className="font-medium text-slate-700">{item.reason}</span>
+                                      <span className="font-bold text-emerald-600 tabular-nums whitespace-nowrap">
+                                        +{settings.currency}{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                             </div>
@@ -2935,33 +3184,52 @@ export const Attendance: React.FC = () => {
 
                           {/* Deductions side */}
                           <div className="space-y-4">
-                            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-2">2.2 Deductions</h4>
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">2.2 Deductions</h4>
+                              <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
+                                -{settings.currency}{(
+                                  (payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)) +
+                                  totalManualDeductionsAmount
+                                ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
                             <div className="space-y-3">
                               {/* Late deductions */}
-                              <div className="flex justify-between items-center text-xs text-slate-600">
-                                <div className="space-y-0.5">
-                                  <p className="font-semibold text-slate-700">Late Penalties</p>
-                                  <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} • {payslipData.totalLateDeductedHours % 1 === 0 ? payslipData.totalLateDeductedHours : payslipData.totalLateDeductedHours.toFixed(2)} hr{payslipData.totalLateDeductedHours !== 1 ? 's' : ''} deducted)</p>
-                                </div>
-                                <span className="font-bold text-rose-600 tabular-nums whitespace-nowrap">
-                                  -{settings.currency}{(payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                              </div>
-
-                              {/* Manual deduction */}
-                              {(parseFloat(payslipDeductionAmount) || 0) > 0 && (
-                                <div className="flex justify-between items-center text-xs text-slate-600 border-t border-slate-50 pt-3">
+                              {payslipData.lateDeductionsCount > 0 && (
+                                <div className="flex justify-between items-center text-xs text-slate-600">
                                   <div className="space-y-0.5">
-                                    <p className="font-semibold text-slate-700">Other Adjustments</p>
-                                    {payslipDeductionReason && <p className="text-[10px] text-slate-400">({payslipDeductionReason})</p>}
+                                    <p className="font-semibold text-slate-700">Late Penalties</p>
+                                    <p className="text-[10px] text-rose-500 font-medium">({payslipData.lateDeductionsCount} instance{payslipData.lateDeductionsCount !== 1 ? 's' : ''} • {payslipData.totalLateDeductedHours % 1 === 0 ? payslipData.totalLateDeductedHours : payslipData.totalLateDeductedHours.toFixed(2)} hr{payslipData.totalLateDeductedHours !== 1 ? 's' : ''} deducted)</p>
                                   </div>
                                   <span className="font-bold text-rose-600 tabular-nums whitespace-nowrap">
-                                    -{settings.currency}{parseFloat(payslipDeductionAmount).toFixed(2)}
+                                    -{settings.currency}{(payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </span>
                                 </div>
                               )}
 
-                              {(!payslipData.lateDeductionsCount && !(parseFloat(payslipDeductionAmount) || 0)) && (
+                              {/* Manual Deduction Line Items */}
+                              {payslipDeductions.length > 0 && (
+                                <div className={`space-y-2.5 ${payslipData.lateDeductionsCount > 0 ? 'border-t border-slate-50 pt-3' : ''}`}>
+                                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                    <span>Manual Deductions ({payslipDeductions.length})</span>
+                                    {payslipDeductions.length > 1 && (
+                                      <span className="text-rose-600 font-bold">
+                                        -{settings.currency}{totalManualDeductionsAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {payslipDeductions.map((item) => (
+                                    <div key={item.id} className="flex justify-between items-center text-xs text-slate-600 pl-2 border-l-2 border-rose-200">
+                                      <span className="font-medium text-slate-700">{item.reason}</span>
+                                      <span className="font-bold text-rose-600 tabular-nums whitespace-nowrap">
+                                        -{settings.currency}{Number(item.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {(!payslipData.lateDeductionsCount && payslipDeductions.length === 0) && (
                                 <div className="text-xs text-slate-400 italic py-2">
                                   No deductions applied to this pay period.
                                 </div>
@@ -2980,7 +3248,7 @@ export const Attendance: React.FC = () => {
                                 {settings.currency}{(
                                   ((payslipData.totalRegularHours + payslipData.totalLateDeductedHours) * (parseFloat(payslipHourlyRate) || 0)) + 
                                   (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
-                                  (parseFloat(payslipIncentiveAmount) || 0)
+                                  totalIncentivesAmount
                                 ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
@@ -2990,7 +3258,7 @@ export const Attendance: React.FC = () => {
                               <p className="text-lg font-extrabold text-rose-600 mt-0.5 tabular-nums whitespace-nowrap">
                                 {settings.currency}{(
                                   (payslipData.totalLateDeductedHours * (parseFloat(payslipHourlyRate) || 0)) +
-                                  (parseFloat(payslipDeductionAmount) || 0)
+                                  totalManualDeductionsAmount
                                 ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
@@ -3001,8 +3269,8 @@ export const Attendance: React.FC = () => {
                                 {settings.currency}{(
                                   (payslipData.totalRegularHours * (parseFloat(payslipHourlyRate) || 0)) + 
                                   (payslipData.totalOtHours * (parseFloat(payslipOtRate) || 0)) + 
-                                  (parseFloat(payslipIncentiveAmount) || 0) -
-                                  (parseFloat(payslipDeductionAmount) || 0)
+                                  totalIncentivesAmount -
+                                  totalManualDeductionsAmount
                                 ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>

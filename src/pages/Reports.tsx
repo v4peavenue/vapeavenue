@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-utils';
 import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
 import { SearchableProductSelect } from '@/components/SearchableProductSelect';
+import { SearchableSelect, SearchableOption } from '@/components/SearchableSelect';
 import { 
   Select, 
   SelectContent, 
@@ -640,11 +641,48 @@ export const Reports: React.FC = () => {
     return '—';
   };
 
-  const customerFilterOptions = useMemo(() => {
-    const map = new Map<string, string>();
+  const categoryFilterOptions: SearchableOption[] = useMemo(() => {
+    return uniqueCategories.map(cat => ({
+      id: cat,
+      label: cat,
+    }));
+  }, [uniqueCategories]);
+
+  const brandFilterOptions: SearchableOption[] = useMemo(() => {
+    return uniqueBrands.map(brand => ({
+      id: brand,
+      label: brand,
+    }));
+  }, [uniqueBrands]);
+
+  const sellerFilterOptions: SearchableOption[] = useMemo(() => {
+    return usersList.map(u => ({
+      id: u.id,
+      label: u.name || u.email || 'Unknown',
+      subLabel: u.email && u.name ? u.email : undefined,
+      badge: u.role ? String(u.role).toUpperCase() : undefined,
+      badgeClassName: u.role === 'admin' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'
+    }));
+  }, [usersList]);
+
+  const adjustmentCategoryFilterOptions: SearchableOption[] = useMemo(() => {
+    return ADJUSTMENT_CATEGORIES.map(cat => ({
+      id: cat.value,
+      label: cat.label,
+    }));
+  }, []);
+
+  const customerFilterOptions: SearchableOption[] = useMemo(() => {
+    const map = new Map<string, { label: string; subLabel?: string; badge?: string }>();
     customers.forEach(c => {
       if (c.name && c.name.trim()) {
-        map.set(c.id, c.name.trim());
+        const sub = [c.phone, c.email].filter(Boolean).join(' • ');
+        const cardNum = c.loyaltyCardNumber;
+        map.set(c.id, {
+          label: c.name.trim(),
+          subLabel: sub || undefined,
+          badge: cardNum ? `Card: ${cardNum}` : 'Member'
+        });
       }
     });
     sales.forEach(s => {
@@ -652,16 +690,22 @@ export const Reports: React.FC = () => {
       if (name && name !== 'Walk-in Customer') {
         const key = s.customerId && s.customerId !== 'walk-in' ? s.customerId : name;
         if (!map.has(key)) {
-          map.set(key, name);
+          map.set(key, { label: name });
         }
       }
     });
     return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map(([id, info]) => ({ 
+        id, 
+        label: info.label,
+        subLabel: info.subLabel,
+        badge: info.badge,
+        badgeClassName: 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [customers, sales, loyaltyCards]);
 
-  const promoFilterOptions = useMemo(() => {
+  const promoFilterOptions: SearchableOption[] = useMemo(() => {
     const set = new Set<string>();
     promos.forEach(p => {
       if (p.code && p.code.trim()) set.add(p.code.trim().toUpperCase());
@@ -670,7 +714,32 @@ export const Reports: React.FC = () => {
       const code = getSalePromoCode(s);
       if (code && code !== '—') set.add(code.toUpperCase());
     });
-    return Array.from(set).sort();
+    
+    const list: SearchableOption[] = [
+      {
+        id: 'none',
+        label: 'No Promo Applied',
+        subLabel: 'Transactions without promo codes',
+        badge: 'Regular',
+        badgeClassName: 'bg-slate-100 text-slate-600'
+      }
+    ];
+
+    Array.from(set).sort().forEach(code => {
+      const promoObj = promos.find(p => p.code?.toUpperCase() === code);
+      const discountDesc = promoObj 
+        ? `Discount: ₱${promoObj.amount?.toLocaleString() || 0}`
+        : undefined;
+      list.push({
+        id: code,
+        label: code,
+        subLabel: discountDesc,
+        badge: 'Promo',
+        badgeClassName: 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+      });
+    });
+
+    return list;
   }, [promos, sales]);
 
   const processedSales = useMemo(() => {
@@ -1564,54 +1633,42 @@ export const Reports: React.FC = () => {
               {/* Adjustment Category Filter (Specific to Stock Adjustments tab) */}
               {reportType === 'stock-adjustments' && (
                 <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-rose-600 uppercase tracking-wider flex items-center gap-1">
-                    <span>Adjustment Category</span>
-                  </Label>
-                  <Select value={selectedAdjustmentCategory} onValueChange={setSelectedAdjustmentCategory}>
-                    <SelectTrigger className="w-full h-9 text-xs bg-rose-50/40 border-rose-200 font-medium text-slate-900 focus:ring-rose-400">
-                      <SelectValue placeholder="Damaged / Defective Product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ADJUSTMENT_CATEGORIES.map(cat => (
-                        <SelectItem key={cat.value} value={cat.value} className="text-xs">
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={adjustmentCategoryFilterOptions}
+                    value={selectedAdjustmentCategory}
+                    onChange={setSelectedAdjustmentCategory}
+                    label="Adjustment Category"
+                    placeholder="Search adjustment type..."
+                    allowAll={false}
+                    inputClassName="bg-rose-50/40 border-rose-200 text-slate-900 font-medium"
+                  />
                 </div>
               )}
 
               {/* Category Filter */}
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Product Category</Label>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {uniqueCategories.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={categoryFilterOptions}
+                  value={selectedCategory}
+                  onChange={setSelectedCategory}
+                  label="Product Category"
+                  placeholder="All categories or type..."
+                  allowAll={true}
+                  allLabel="All Categories"
+                />
               </div>
 
               {/* Brand / Flavor Filter */}
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Flavor / Brand</Label>
-                <Select value={selectedBrand} onValueChange={setSelectedBrand}>
-                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                    <SelectValue placeholder="All Flavors" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Flavors</SelectItem>
-                    {uniqueBrands.map(brand => (
-                      <SelectItem key={brand} value={brand}>{brand}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={brandFilterOptions}
+                  value={selectedBrand}
+                  onChange={setSelectedBrand}
+                  label="Flavor / Brand"
+                  placeholder="All flavors or type..."
+                  allowAll={true}
+                  allLabel="All Flavors"
+                />
               </div>
 
               {/* Product Filter */}
@@ -1637,56 +1694,44 @@ export const Reports: React.FC = () => {
 
               {/* Seller / Staff Filter */}
               <div className="space-y-1">
-                <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  {reportType === 'stock-adjustments' ? 'Adjusted By' : 'Seller Name'}
-                </Label>
-                <Select value={selectedSeller} onValueChange={setSelectedSeller}>
-                  <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                    <SelectValue placeholder={reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'}</SelectItem>
-                    {usersList.map(u => (
-                      <SelectItem key={u.id} value={u.id}>{u.name || u.email || 'Unknown'}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={sellerFilterOptions}
+                  value={selectedSeller}
+                  onChange={setSelectedSeller}
+                  label={reportType === 'stock-adjustments' ? 'Adjusted By' : 'Seller Name'}
+                  placeholder={reportType === 'stock-adjustments' ? 'All staff or type name...' : 'All sellers or type name...'}
+                  allowAll={true}
+                  allLabel={reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'}
+                />
               </div>
 
               {/* Customer Name Filter (Sales tab only) */}
               {reportType === 'sales' && (
                 <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Customer Name</Label>
-                  <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                    <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                      <SelectValue placeholder="All Customers" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      <SelectItem value="all">All Customers</SelectItem>
-                      {customerFilterOptions.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={customerFilterOptions}
+                    value={selectedCustomer}
+                    onChange={setSelectedCustomer}
+                    label="Customer Name"
+                    placeholder="All customers or type name..."
+                    allowAll={true}
+                    allLabel="All Customers"
+                  />
                 </div>
               )}
 
               {/* Promo Code Filter (Sales tab only) */}
               {reportType === 'sales' && (
                 <div className="space-y-1">
-                  <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Promo Code Filter</Label>
-                  <Select value={selectedPromo} onValueChange={setSelectedPromo}>
-                    <SelectTrigger className="w-full h-9 text-xs bg-white border-slate-200">
-                      <SelectValue placeholder="All Promo Codes" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      <SelectItem value="all">All Promo Codes</SelectItem>
-                      <SelectItem value="none">No Promo Applied</SelectItem>
-                      {promoFilterOptions.map(code => (
-                        <SelectItem key={code} value={code}>{code}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={promoFilterOptions}
+                    value={selectedPromo}
+                    onChange={setSelectedPromo}
+                    label="Promo Code Filter"
+                    placeholder="All promo codes or type..."
+                    allowAll={true}
+                    allLabel="All Promo Codes"
+                  />
                 </div>
               )}
             </div>
