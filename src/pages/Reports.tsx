@@ -20,7 +20,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ShieldCheck,
-  Calculator
+  Calculator,
+  Printer
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, Timestamp, orderBy, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -580,7 +581,11 @@ export const Reports: React.FC = () => {
 
   const handleGeneratePDF = () => {
     if (!isGuardrailApplied) {
-      toast.error('Please run a query via the Date Range Guardrail first to generate a report PDF.');
+      setIsGuardrailApplied(true);
+      toast.info('Applying date range query and preparing report PDF...');
+      setTimeout(() => {
+        window.print();
+      }, 450);
       return;
     }
     window.print();
@@ -1245,6 +1250,356 @@ export const Reports: React.FC = () => {
     }, 0);
   }, [filteredProducts, selectedLocationId]);
 
+  const totalItemsSold = useMemo(() => {
+    return filteredSales.reduce((sum, s) => {
+      const items = (selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all') ? s.matchingItems : s.items;
+      return sum + items.reduce((iSum, item) => iSum + Math.max(0, item.quantity - (item.returnedQuantity || 0)), 0);
+    }, 0);
+  }, [filteredSales, selectedCategory, selectedBrand, selectedProduct]);
+
+  const topSellerInfo = useMemo(() => {
+    if (salesBySellerData.length === 0) return { name: 'None', revenue: 0, orders: 0 };
+    return {
+      name: salesBySellerData[0].sellerName,
+      revenue: salesBySellerData[0].revenue,
+      orders: salesBySellerData[0].ordersCount
+    };
+  }, [salesBySellerData]);
+
+  const inventoryUnitsTotal = useMemo(() => {
+    return filteredProducts.reduce((sum, p) => {
+      const stock = selectedLocationId === 'all' 
+        ? Object.values(p.stocks || {}).reduce((s, val) => (s as number) + Number(val), 0) as number
+        : Number(p.stocks?.[selectedLocationId] || 0);
+      return sum + stock;
+    }, 0);
+  }, [filteredProducts, selectedLocationId]);
+
+  const lowStockCount = useMemo(() => {
+    return filteredProducts.filter(p => {
+      const stock = selectedLocationId === 'all' 
+        ? Object.values(p.stocks || {}).reduce((s, val) => (s as number) + Number(val), 0) as number
+        : Number(p.stocks?.[selectedLocationId] || 0);
+      return stock <= p.lowStockThreshold;
+    }).length;
+  }, [filteredProducts, selectedLocationId]);
+
+  const outOfStockCount = useMemo(() => {
+    return filteredProducts.filter(p => {
+      const stock = selectedLocationId === 'all' 
+        ? Object.values(p.stocks || {}).reduce((s, val) => (s as number) + Number(val), 0) as number
+        : Number(p.stocks?.[selectedLocationId] || 0);
+      return stock <= 0;
+    }).length;
+  }, [filteredProducts, selectedLocationId]);
+
+  const profitTotals = useMemo(() => {
+    const revenue = profitabilityData.reduce((sum, i) => sum + i.revenue, 0);
+    const cost = profitabilityData.reduce((sum, i) => sum + i.cost, 0);
+    const profit = profitabilityData.reduce((sum, i) => sum + i.profit, 0);
+    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+    const units = profitabilityData.reduce((sum, i) => sum + i.unitsSold, 0);
+    return { revenue, cost, profit, margin, units };
+  }, [profitabilityData]);
+
+  const adjustmentTotals = useMemo(() => {
+    const additions = filteredAdjustments.filter(a => a.adjustmentQuantity > 0).reduce((sum, a) => sum + a.adjustmentQuantity, 0);
+    const deductions = filteredAdjustments.filter(a => a.adjustmentQuantity < 0).reduce((sum, a) => sum + Math.abs(a.adjustmentQuantity), 0);
+    const net = filteredAdjustments.reduce((sum, a) => sum + a.adjustmentQuantity, 0);
+    return { additions, deductions, net, count: filteredAdjustments.length };
+  }, [filteredAdjustments]);
+
+  const movementTotals = useMemo(() => {
+    const inflow = filteredMovementEvents.filter(e => e.quantityChange > 0).reduce((sum, e) => sum + e.quantityChange, 0);
+    const outflow = filteredMovementEvents.filter(e => e.quantityChange < 0).reduce((sum, e) => sum + Math.abs(e.quantityChange), 0);
+    const net = filteredMovementEvents.reduce((sum, e) => sum + e.quantityChange, 0);
+    return { inflow, outflow, net, count: filteredMovementEvents.length };
+  }, [filteredMovementEvents]);
+
+  const reportDisplayTitle = useMemo(() => {
+    switch (reportType) {
+      case 'sales':
+        return 'Sales Performance & Transaction Report';
+      case 'sales-by-seller':
+        return 'Sales by Staff / Seller Performance Report';
+      case 'inventory':
+        return 'Inventory Valuation & Stock Status Report';
+      case 'profit':
+        return 'Product Profitability & Margin Analysis Report';
+      case 'stock-adjustments':
+        return 'Stock Adjustments & Audit Trail Report';
+      case 'product-movement':
+        return movementSubView === 'detailed' 
+          ? 'Product Movement Detailed History Log' 
+          : 'Product Movement Per-Product Summary Report';
+      default:
+        return 'Business Performance Report';
+    }
+  }, [reportType, movementSubView]);
+
+  const activeFiltersSummary = useMemo(() => {
+    const filters: string[] = [];
+    if (selectedCategory !== 'all') filters.push(`Category: ${selectedCategory}`);
+    if (selectedBrand !== 'all') filters.push(`Brand: ${selectedBrand}`);
+    if (selectedProduct !== 'all') {
+      const pName = products.find(p => p.id === selectedProduct)?.name || selectedProduct;
+      filters.push(`Product: ${pName}`);
+    }
+    if (selectedSeller !== 'all') {
+      const sName = usersList.find(u => u.id === selectedSeller)?.name || selectedSeller;
+      filters.push(`Staff/Seller: ${sName}`);
+    }
+    if (selectedCustomer !== 'all') {
+      const cName = customers.find(c => c.id === selectedCustomer)?.name || selectedCustomer;
+      filters.push(`Customer: ${cName}`);
+    }
+    if (selectedPromo !== 'all') {
+      filters.push(`Promo: ${selectedPromo === 'none' ? 'No Promo' : selectedPromo}`);
+    }
+    if (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') {
+      const catObj = ADJUSTMENT_CATEGORIES.find(c => c.value === selectedAdjustmentCategory);
+      filters.push(`Adjustment Category: ${catObj?.label || selectedAdjustmentCategory}`);
+    }
+    if (searchTerm) filters.push(`Search: "${searchTerm}"`);
+    return filters.length > 0 ? filters.join(' • ') : 'All records in date range';
+  }, [selectedCategory, selectedBrand, selectedProduct, selectedSeller, selectedCustomer, selectedPromo, reportType, selectedAdjustmentCategory, searchTerm, products, usersList, customers]);
+
+  const renderSaleRow = (sale: typeof processedSales[number]) => (
+    <TableRow key={sale.id} className="hover:bg-slate-50/50 transition-colors">
+      <TableCell className="font-mono text-[10px] text-slate-500">#{sale.id.slice(0, 8)}</TableCell>
+      <TableCell className="text-xs font-medium">
+        {format(sale.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}
+      </TableCell>
+      {selectedLocationId === 'all' && (
+        <TableCell className="text-xs">
+          {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
+        </TableCell>
+      )}
+      <TableCell className="text-xs font-medium text-slate-900">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate max-w-[140px]" title={getSaleCustomerName(sale)}>{getSaleCustomerName(sale)}</span>
+          {sale.customerId && sale.customerId !== 'walk-in' && (
+            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-indigo-50/60 text-indigo-700 border-indigo-200 shrink-0">
+              Member
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-xs">
+        {getSaleLoyaltyCardNumber(sale) !== '—' ? (
+          <Badge variant="outline" className="font-mono text-[10px] bg-amber-50 text-amber-800 border-amber-200 font-semibold whitespace-nowrap">
+            {getSaleLoyaltyCardNumber(sale)}
+          </Badge>
+        ) : (
+          <span className="text-slate-400 font-mono text-[11px]">—</span>
+        )}
+      </TableCell>
+      <TableCell className="text-xs">
+        {getSalePromoCode(sale) !== '—' ? (
+          <Badge variant="outline" className="font-mono text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold whitespace-nowrap">
+            {getSalePromoCode(sale)}
+          </Badge>
+        ) : (
+          <span className="text-slate-400 font-mono text-[11px]">—</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-wrap gap-1">
+          {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' ? sale.matchingItems : sale.items).map((item, idx) => {
+            const netQty = item.quantity - (item.returnedQuantity || 0);
+            return (
+              <Badge key={idx} variant="outline" className="text-[10px] font-normal bg-white">
+                {item.name} x{netQty}
+                {item.returnedQuantity && item.returnedQuantity > 0 ? (
+                  <span className="text-rose-500 font-bold ml-1">({item.returnedQuantity} ret)</span>
+                ) : null}
+              </Badge>
+            );
+          })}
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary" className="text-[10px] font-medium">
+          {getPaymentMethodName(sale.paymentMethod)}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right font-bold text-slate-900">
+        {settings.currency}{sale.netTotal.toFixed(2)}
+      </TableCell>
+    </TableRow>
+  );
+
+  const renderSellerRow = (data: { sellerId: string; sellerName: string; sellerRole: string; ordersCount: number; itemsCount: number; revenue: number; profit: number }) => (
+    <TableRow key={data.sellerId} className="hover:bg-slate-50/50 transition-colors">
+      <TableCell className="font-semibold text-slate-900">{data.sellerName}</TableCell>
+      <TableCell>
+        <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-600 border-slate-200">
+          {data.sellerRole}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-center text-xs font-medium text-slate-700">{data.ordersCount}</TableCell>
+      <TableCell className="text-center text-xs font-medium text-slate-700">{data.itemsCount}</TableCell>
+      <TableCell className="text-right font-bold text-slate-900">
+        {settings.currency}{data.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </TableCell>
+      <TableCell className="text-right font-bold text-emerald-600">
+        {settings.currency}{data.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </TableCell>
+      <TableCell className="text-right font-medium text-indigo-600 text-xs">
+        {settings.currency}{(data.revenue / (data.ordersCount || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </TableCell>
+    </TableRow>
+  );
+
+  const renderProductRow = (product: Product) => {
+    const currentStock = selectedLocationId === 'all' 
+      ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
+      : Number(product.stocks?.[selectedLocationId] || 0);
+
+    return (
+      <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
+        <TableCell className="font-medium">{product.name}</TableCell>
+        <TableCell>
+          <Badge variant="outline" className="text-[10px]">{product.category}</Badge>
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold ${currentStock <= product.lowStockThreshold ? 'text-rose-600' : 'text-slate-700'}`}>
+              {currentStock}
+            </span>
+            {currentStock <= product.lowStockThreshold && (
+              <Badge variant="destructive" className="h-4 px-1 text-[8px]">LOW</Badge>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="text-xs text-slate-500">{settings.currency}{(product.cost ?? 0).toFixed(2)}</TableCell>
+        <TableCell className="text-right font-bold text-slate-900">
+          {settings.currency}{((product.cost ?? 0) * currentStock).toFixed(2)}
+        </TableCell>
+      </TableRow>
+    );
+  };
+
+  const renderProfitRow = ({ product, unitsSold, revenue, cost, profit }: { product: Product; unitsSold: number; revenue: number; cost: number; profit: number }) => (
+    <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
+      <TableCell className="font-medium">{product.name}</TableCell>
+      <TableCell className="text-xs">{unitsSold}</TableCell>
+      <TableCell className="text-xs text-slate-600">{settings.currency}{revenue.toFixed(2)}</TableCell>
+      <TableCell className="text-xs text-slate-400">{settings.currency}{cost.toFixed(2)}</TableCell>
+      <TableCell className="text-right">
+        <span className={`font-bold ${profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          {settings.currency}{profit.toFixed(2)}
+        </span>
+      </TableCell>
+    </TableRow>
+  );
+
+  const renderAdjustmentRow = (adj: StockAdjustment) => (
+    <TableRow key={adj.id} className="hover:bg-slate-50/50 transition-colors">
+      <TableCell className="text-xs whitespace-nowrap">
+        {format(adj.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}
+      </TableCell>
+      <TableCell className="font-medium text-xs">{adj.productName}</TableCell>
+      {selectedLocationId === 'all' && (
+        <TableCell className="text-xs">{adj.locationName}</TableCell>
+      )}
+      <TableCell>
+        {getAdjustmentCategoryBadge(adj)}
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className={cn(
+          "capitalize text-[10px]",
+          adj.type === 'add' ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
+          adj.type === 'subtract' ? "border-rose-200 bg-rose-50 text-rose-700" :
+          "border-indigo-200 bg-indigo-50 text-indigo-700"
+        )}>
+          {adj.type}
+        </Badge>
+      </TableCell>
+      <TableCell className={cn(
+        "text-xs font-bold",
+        adj.adjustmentQuantity > 0 ? "text-emerald-600" : 
+        adj.adjustmentQuantity < 0 ? "text-rose-600" : "text-slate-600"
+      )}>
+        {adj.adjustmentQuantity > 0 ? '+' : ''}{adj.adjustmentQuantity}
+      </TableCell>
+      <TableCell className="text-xs font-bold">{adj.newStock}</TableCell>
+      <TableCell className="text-xs text-slate-500 max-w-[200px] truncate" title={adj.reason}>
+        {adj.reason}
+      </TableCell>
+      <TableCell className="text-xs">{adj.adjustedByName}</TableCell>
+    </TableRow>
+  );
+
+  const renderMovementEventRow = (ev: ProductMovementEvent) => (
+    <TableRow key={ev.id} className="hover:bg-slate-50/50 transition-colors">
+      <TableCell className="text-xs font-medium text-slate-600">
+        {format(ev.timestamp, 'MMM dd, yyyy HH:mm')}
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col">
+          <span className="font-semibold text-xs text-slate-900">{ev.productName}</span>
+          <span className="text-[10px] text-slate-400">{ev.category} • {ev.brand}</span>
+        </div>
+      </TableCell>
+      {selectedLocationId === 'all' && (
+        <TableCell className="text-xs text-slate-600">{ev.locationName}</TableCell>
+      )}
+      <TableCell>
+        <Badge variant="outline" className={cn(
+          "text-[10px] font-medium border-slate-200",
+          ev.type === 'sale' && "bg-rose-50 text-rose-700 border-rose-200",
+          ev.type === 'po_received' && "bg-emerald-50 text-emerald-700 border-emerald-200",
+          ev.type === 'return' && "bg-indigo-50 text-indigo-700 border-indigo-200",
+          ev.type === 'adjustment' && (ev.quantityChange >= 0 ? "bg-teal-50 text-teal-700 border-teal-200" : "bg-amber-50 text-amber-700 border-amber-200")
+        )}>
+          {ev.typeLabel}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-center">
+        <span className={cn(
+          "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold font-mono",
+          ev.quantityChange > 0 ? "bg-emerald-100 text-emerald-800" :
+          ev.quantityChange < 0 ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"
+        )}>
+          {ev.quantityChange > 0 ? `+${ev.quantityChange}` : ev.quantityChange}
+        </span>
+      </TableCell>
+      <TableCell className="text-xs text-slate-600 max-w-[220px] truncate" title={ev.reasonOrNotes}>
+        {ev.reasonOrNotes}
+      </TableCell>
+      <TableCell className="text-xs text-slate-700">{ev.performedBy}</TableCell>
+    </TableRow>
+  );
+
+  const renderMovementSummaryRow = (item: { productId: string; productName: string; category: string; brand: string; inflow: number; outflow: number; netChange: number; currentStock: number; eventsCount: number }) => (
+    <TableRow key={item.productId} className="hover:bg-slate-50/50 transition-colors">
+      <TableCell className="font-semibold text-xs text-slate-900">{item.productName}</TableCell>
+      <TableCell>
+        <Badge variant="outline" className="text-[10px]">{item.category}</Badge>
+      </TableCell>
+      <TableCell className="text-xs text-slate-500">{item.brand}</TableCell>
+      <TableCell className="text-center font-mono text-xs font-bold text-emerald-600">
+        +{item.inflow}
+      </TableCell>
+      <TableCell className="text-center font-mono text-xs font-bold text-rose-600">
+        -{item.outflow}
+      </TableCell>
+      <TableCell className="text-center">
+        <span className={cn(
+          "font-mono text-xs font-bold px-2 py-0.5 rounded-full",
+          item.netChange > 0 ? "bg-emerald-50 text-emerald-700" :
+          item.netChange < 0 ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-600"
+        )}>
+          {item.netChange > 0 ? `+${item.netChange}` : item.netChange}
+        </span>
+      </TableCell>
+      <TableCell className="text-right font-bold text-xs text-slate-900">
+        {item.currentStock} units
+      </TableCell>
+    </TableRow>
+  );
+
   const handleExportCSV = () => {
     let data: any[] = [];
     let name = 'Report';
@@ -1336,8 +1691,63 @@ export const Reports: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8 pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-8 pb-12" id="printable-report-container">
+      {/* Embedded Print Styling */}
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            color: #0f172a !important;
+            font-size: 11px !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          nav, aside, header, .no-print, [role="navigation"] {
+            display: none !important;
+          }
+          #printable-report-container {
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          .print\\:block {
+            display: block !important;
+          }
+          .print\\:grid {
+            display: grid !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+          .print\\:table-row-group {
+            display: table-row-group !important;
+          }
+          table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            page-break-inside: auto !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            page-break-after: auto !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tfoot {
+            display: table-footer-group !important;
+          }
+          th, td {
+            padding: 4px 6px !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+          }
+        }
+      `}</style>
+
+      {/* Screen Header (Hidden on Print) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div>
           <h1 className="text-4xl font-bold text-slate-900 tracking-tight font-heading">Reports & Insights</h1>
           <p className="text-slate-500 mt-1">Detailed breakdown of your business performance and inventory.</p>
@@ -1351,13 +1761,36 @@ export const Reports: React.FC = () => {
             className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 gap-2"
             onClick={handleGeneratePDF}
           >
-            <FileText className="w-4 h-4" />
+            <Printer className="w-4 h-4" />
             Generate PDF
           </Button>
         </div>
       </div>
 
-      {/* Date Range Query Guardrail & Estimator */}
+      {/* Official Print Header (Visible strictly when printing) */}
+      <div className="hidden print:block mb-6 border-b-2 border-slate-900 pb-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase">{(settings as any).storeName || 'POS & INVENTORY MANAGEMENT'}</h1>
+            <h2 className="text-base font-bold text-indigo-700 mt-0.5">{reportDisplayTitle}</h2>
+            <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span><strong>Branch / Location:</strong> {activeLocationName}</span>
+              <span>•</span>
+              <span><strong>Period:</strong> {format(start, 'MMM dd, yyyy')} to {format(end, 'MMM dd, yyyy')}</span>
+            </div>
+          </div>
+          <div className="text-right text-[11px] text-slate-500 space-y-0.5">
+            <div><strong>Generated:</strong> {format(new Date(), 'MMM dd, yyyy HH:mm')}</div>
+            <div><strong>Total Matching Records:</strong> {currentTotalRecords}</div>
+          </div>
+        </div>
+        <div className="mt-2.5 pt-2 border-t border-slate-200 text-[11px] text-slate-600">
+          <span className="font-semibold text-slate-800">Applied Filters:</span> {activeFiltersSummary}
+        </div>
+      </div>
+
+      {/* Date Range Query Guardrail & Estimator (Hidden on Print) */}
+      <div className="no-print">
       <DateRangeQueryGuardrail
         title="REPORTS DATE RANGE QUERY GUARDRAIL"
         badgeLabel="Firestore Cost Protection"
@@ -1400,10 +1833,11 @@ export const Reports: React.FC = () => {
           { label: 'Last 30 Days', key: 'last_30_days' }
         ]}
       />
+      </div>
 
       {/* Conditional Rendering: Awaiting Guardrail Query vs Queried Reports */}
       {!isGuardrailApplied ? (
-        <Card className="border border-emerald-200/80 bg-white/80 backdrop-blur-md rounded-2xl p-8 sm:p-12 text-center shadow-sm animate-in fade-in duration-300">
+        <Card className="border border-emerald-200/80 bg-white/80 backdrop-blur-md rounded-2xl p-8 sm:p-12 text-center shadow-sm animate-in fade-in duration-300 no-print">
           <div className="max-w-xl mx-auto space-y-4">
             <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600 shadow-xs">
               <ShieldCheck className="w-8 h-8 text-emerald-600" />
@@ -1437,55 +1871,327 @@ export const Reports: React.FC = () => {
         </Card>
       ) : (
         <>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="shadow-sm border-slate-200/60 overflow-hidden">
-          <div className="h-1 bg-indigo-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Period Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-indigo-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{settings.currency}{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Total sales in selected range</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm border-slate-200/60 overflow-hidden">
-          <div className="h-1 bg-emerald-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Gross Profit</CardTitle>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{settings.currency}{totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Margin: {((totalProfit / (totalRevenue || 1)) * 100).toFixed(1)}%</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm border-slate-200/60 overflow-hidden">
-          <div className="h-1 bg-amber-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Orders Count</CardTitle>
-            <ShoppingBag className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{filteredSales.length}</div>
-            <p className="text-[10px] text-slate-400 mt-1">Avg: {settings.currency}{(totalRevenue / (filteredSales.length || 1)).toFixed(2)} / order</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm border-slate-200/60 overflow-hidden">
-          <div className="h-1 bg-slate-500" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500">Inventory Value</CardTitle>
-            <Package className="h-4 w-4 text-slate-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900">{settings.currency}{inventoryValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            <p className="text-[10px] text-slate-400 mt-1">{filteredProducts.length} products matching filter</p>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Executive KPI Summary Cards (Screen & Print Visible) */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 print:grid-cols-4 mb-6">
+            {reportType === 'sales' && (
+              <>
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-indigo-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Sales Revenue</CardTitle>
+                    <DollarSign className="h-4 w-4 text-indigo-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{settings.currency}{totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{filteredSales.length} total completed orders</p>
+                  </CardContent>
+                </Card>
 
-      <Card className="shadow-sm border-slate-200/60">
-        <CardHeader className="border-b border-slate-100 bg-slate-50/30">
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-emerald-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gross Profit</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-emerald-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">{settings.currency}{totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Overall Margin: {((totalProfit / (totalRevenue || 1)) * 100).toFixed(1)}%</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-amber-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Units Sold</CardTitle>
+                    <ShoppingBag className="h-4 w-4 text-amber-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{totalItemsSold.toLocaleString()}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Avg {(totalItemsSold / (filteredSales.length || 1)).toFixed(1)} items / order</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-purple-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg Order Value</CardTitle>
+                    <BarChart3 className="h-4 w-4 text-purple-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{settings.currency}{(totalRevenue / (filteredSales.length || 1)).toFixed(2)}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Per receipt / transaction</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {reportType === 'sales-by-seller' && (
+              <>
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-indigo-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Sellers</CardTitle>
+                    <DollarSign className="h-4 w-4 text-indigo-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{salesBySellerData.length}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Staff with recorded sales</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-emerald-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Staff Revenue</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-emerald-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">{settings.currency}{salesBySellerData.reduce((sum, s) => sum + s.revenue, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Across all staff sales</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-amber-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Top Performer</CardTitle>
+                    <ShoppingBag className="h-4 w-4 text-amber-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-base sm:text-lg font-bold text-slate-900 truncate" title={topSellerInfo.name}>{topSellerInfo.name}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{settings.currency}{topSellerInfo.revenue.toFixed(2)} ({topSellerInfo.orders} orders)</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-purple-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Staff Profit</CardTitle>
+                    <BarChart3 className="h-4 w-4 text-purple-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{settings.currency}{salesBySellerData.reduce((sum, s) => sum + s.profit, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Total gross margin from sellers</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {reportType === 'inventory' && (
+              <>
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-indigo-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Inventory Value</CardTitle>
+                    <Package className="h-4 w-4 text-indigo-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{settings.currency}{inventoryValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Based on unit cost value</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-emerald-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Stock On Hand</CardTitle>
+                    <BarChart3 className="h-4 w-4 text-emerald-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">{inventoryUnitsTotal.toLocaleString()} units</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Across {filteredProducts.length} catalog products</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-amber-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Low Stock Items</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-amber-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-amber-600">{lowStockCount}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">At or below reorder threshold</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-rose-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Out of Stock</CardTitle>
+                    <ShoppingBag className="h-4 w-4 text-rose-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-rose-600">{outOfStockCount}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Items with 0 inventory</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {reportType === 'profit' && (
+              <>
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-indigo-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Sales Revenue</CardTitle>
+                    <DollarSign className="h-4 w-4 text-indigo-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{settings.currency}{profitTotals.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{profitTotals.units} total items sold</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-rose-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cost of Goods (COGS)</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-rose-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-700">{settings.currency}{profitTotals.cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Purchase cost of sold goods</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-emerald-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Gross Profit</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-emerald-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">{settings.currency}{profitTotals.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Margin: {profitTotals.margin.toFixed(1)}%</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-purple-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Profitable Products</CardTitle>
+                    <BarChart3 className="h-4 w-4 text-purple-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{profitabilityData.length}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Products analyzed</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {reportType === 'stock-adjustments' && (
+              <>
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-indigo-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Adjustment Records</CardTitle>
+                    <BarChart3 className="h-4 w-4 text-indigo-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{adjustmentTotals.count}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Logged audit events</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-emerald-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Units Added (+)</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-emerald-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">+{adjustmentTotals.additions}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Restocks / Found goods</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-rose-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Units Deducted (-)</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-rose-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-rose-600">-{adjustmentTotals.deductions}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Damaged / Expired / Lost</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-purple-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Stock Impact</CardTitle>
+                    <ArrowLeftRight className="h-4 w-4 text-purple-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className={cn("text-xl sm:text-2xl font-bold", adjustmentTotals.net >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                      {adjustmentTotals.net > 0 ? `+${adjustmentTotals.net}` : adjustmentTotals.net} units
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Overall net change</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {reportType === 'product-movement' && (
+              <>
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-emerald-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Inflow (+)</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-emerald-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">+{movementTotals.inflow} units</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">POs, restocks & additions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-rose-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Outflow (-)</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-rose-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-rose-600">-{movementTotals.outflow} units</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Sales & deductions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-indigo-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Movement Shift</CardTitle>
+                    <ArrowLeftRight className="h-4 w-4 text-indigo-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className={cn("text-xl sm:text-2xl font-bold", movementTotals.net >= 0 ? "text-indigo-600" : "text-amber-600")}>
+                      {movementTotals.net > 0 ? `+${movementTotals.net}` : movementTotals.net} units
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Inflow minus outflow</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-purple-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Movement Events</CardTitle>
+                    <BarChart3 className="h-4 w-4 text-purple-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-slate-900">{movementTotals.count}</div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Logged transactions in period</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+
+      <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-none print:shadow-none">
+        <CardHeader className="border-b border-slate-100 bg-slate-50/30 no-print">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-wrap items-center gap-2 bg-white border border-slate-200 rounded-lg p-1">
@@ -1753,7 +2459,7 @@ export const Reports: React.FC = () => {
                   <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="print:hidden">
                 {filteredSales.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={selectedLocationId === 'all' ? 9 : 8} className="text-center py-12 text-slate-400 italic">
@@ -1761,70 +2467,18 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedSales.map((sale) => (
-                    <TableRow key={sale.id} className="hover:bg-slate-50/50 transition-colors">
-                      <TableCell className="font-mono text-[10px] text-slate-500">#{sale.id.slice(0, 8)}</TableCell>
-                      <TableCell className="text-xs font-medium">
-                        {format(sale.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}
-                      </TableCell>
-                      {selectedLocationId === 'all' && (
-                        <TableCell className="text-xs">
-                          {locations.find(l => l.id === sale.locationId)?.name || 'Unknown'}
-                        </TableCell>
-                      )}
-                      <TableCell className="text-xs font-medium text-slate-900">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate max-w-[140px]" title={getSaleCustomerName(sale)}>{getSaleCustomerName(sale)}</span>
-                          {sale.customerId && sale.customerId !== 'walk-in' && (
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 bg-indigo-50/60 text-indigo-700 border-indigo-200 shrink-0">
-                              Member
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {getSaleLoyaltyCardNumber(sale) !== '—' ? (
-                          <Badge variant="outline" className="font-mono text-[10px] bg-amber-50 text-amber-800 border-amber-200 font-semibold whitespace-nowrap">
-                            {getSaleLoyaltyCardNumber(sale)}
-                          </Badge>
-                        ) : (
-                          <span className="text-slate-400 font-mono text-[11px]">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {getSalePromoCode(sale) !== '—' ? (
-                          <Badge variant="outline" className="font-mono text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold whitespace-nowrap">
-                            {getSalePromoCode(sale)}
-                          </Badge>
-                        ) : (
-                          <span className="text-slate-400 font-mono text-[11px]">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' ? sale.matchingItems : sale.items).map((item, idx) => {
-                            const netQty = item.quantity - (item.returnedQuantity || 0);
-                            return (
-                              <Badge key={idx} variant="outline" className="text-[10px] font-normal bg-white">
-                                {item.name} x{netQty}
-                                {item.returnedQuantity && item.returnedQuantity > 0 ? (
-                                  <span className="text-rose-500 font-bold ml-1">({item.returnedQuantity} ret)</span>
-                                ) : null}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[10px] font-medium">
-                          {getPaymentMethodName(sale.paymentMethod)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-slate-900">
-                        {settings.currency}{sale.netTotal.toFixed(2)}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  paginatedSales.map(renderSaleRow)
+                )}
+              </TableBody>
+              <TableBody className="hidden print:table-row-group">
+                {filteredSales.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={selectedLocationId === 'all' ? 9 : 8} className="text-center py-8 text-slate-400 italic">
+                      No sales records found for this period
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredSales.map(renderSaleRow)
                 )}
               </TableBody>
             </Table>
@@ -1843,7 +2497,7 @@ export const Reports: React.FC = () => {
                   <TableHead className="text-right">Avg Order Value</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="print:hidden">
                 {salesBySellerData.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-slate-400 italic">
@@ -1851,27 +2505,18 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedSalesBySeller.map((data) => (
-                    <TableRow key={data.sellerId} className="hover:bg-slate-50/50 transition-colors">
-                      <TableCell className="font-semibold text-slate-900">{data.sellerName}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-600 border-slate-200">
-                          {data.sellerRole}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center text-xs font-medium text-slate-700">{data.ordersCount}</TableCell>
-                      <TableCell className="text-center text-xs font-medium text-slate-700">{data.itemsCount}</TableCell>
-                      <TableCell className="text-right font-bold text-slate-900">
-                        {settings.currency}{data.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-emerald-600">
-                        {settings.currency}{data.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-indigo-600 text-xs">
-                        {settings.currency}{(data.revenue / (data.ordersCount || 1)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  paginatedSalesBySeller.map(renderSellerRow)
+                )}
+              </TableBody>
+              <TableBody className="hidden print:table-row-group">
+                {salesBySellerData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-slate-400 italic">
+                      No sales records found for this period
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  salesBySellerData.map(renderSellerRow)
                 )}
               </TableBody>
               {salesBySellerData.length > 0 && (
@@ -1910,7 +2555,7 @@ export const Reports: React.FC = () => {
                   <TableHead className="text-right">Total Value</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="print:hidden">
                 {filteredProducts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-12 text-slate-400 italic">
@@ -1918,34 +2563,18 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedProducts.map((product) => {
-                    const currentStock = selectedLocationId === 'all' 
-                      ? Object.values(product.stocks || {}).reduce((sum, val) => (sum as number) + Number(val), 0) as number
-                      : Number(product.stocks?.[selectedLocationId] || 0);
-
-                    return (
-                      <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-[10px]">{product.category}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-bold ${currentStock <= product.lowStockThreshold ? 'text-rose-600' : 'text-slate-700'}`}>
-                              {currentStock}
-                            </span>
-                            {currentStock <= product.lowStockThreshold && (
-                              <Badge variant="destructive" className="h-4 px-1 text-[8px]">LOW</Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs text-slate-500">{settings.currency}{(product.cost ?? 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-bold text-slate-900">
-                          {settings.currency}{((product.cost ?? 0) * currentStock).toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
+                  paginatedProducts.map(renderProductRow)
+                )}
+              </TableBody>
+              <TableBody className="hidden print:table-row-group">
+                {filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-slate-400 italic">
+                      No inventory records match the selected filters
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProducts.map(renderProductRow)
                 )}
               </TableBody>
               {filteredProducts.length > 0 && (
@@ -1986,7 +2615,7 @@ export const Reports: React.FC = () => {
                   <TableHead className="text-right">Gross Profit</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="print:hidden">
                 {profitabilityData.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-12 text-slate-400 italic">
@@ -1994,19 +2623,18 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedProfitability.map(({ product, unitsSold, revenue, cost, profit }) => (
-                    <TableRow key={product.id} className="hover:bg-slate-50/50 transition-colors">
-                      <TableCell className="font-medium">{product.name}</TableCell>
-                      <TableCell className="text-xs">{unitsSold}</TableCell>
-                      <TableCell className="text-xs text-slate-600">{settings.currency}{revenue.toFixed(2)}</TableCell>
-                      <TableCell className="text-xs text-slate-400">{settings.currency}{cost.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={`font-bold ${profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {settings.currency}{profit.toFixed(2)}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  paginatedProfitability.map(renderProfitRow)
+                )}
+              </TableBody>
+              <TableBody className="hidden print:table-row-group">
+                {profitabilityData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-slate-400 italic">
+                      No sales records match the selected filters
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  profitabilityData.map(renderProfitRow)
                 )}
               </TableBody>
               {profitabilityData.length > 0 && (
@@ -2046,7 +2674,7 @@ export const Reports: React.FC = () => {
                   <TableHead>Adjusted By</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="print:hidden">
                 {filteredAdjustments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={selectedLocationId === 'all' ? 9 : 8} className="text-center py-12 text-slate-400 italic">
@@ -2054,42 +2682,18 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedAdjustments.map((adj) => (
-                    <TableRow key={adj.id} className="hover:bg-slate-50/50 transition-colors">
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {format(adj.timestamp.toDate(), 'MMM dd, yyyy HH:mm')}
-                      </TableCell>
-                      <TableCell className="font-medium text-xs">{adj.productName}</TableCell>
-                      {selectedLocationId === 'all' && (
-                        <TableCell className="text-xs">{adj.locationName}</TableCell>
-                      )}
-                      <TableCell>
-                        {getAdjustmentCategoryBadge(adj)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn(
-                          "capitalize text-[10px]",
-                          adj.type === 'add' ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
-                          adj.type === 'subtract' ? "border-rose-200 bg-rose-50 text-rose-700" :
-                          "border-indigo-200 bg-indigo-50 text-indigo-700"
-                        )}>
-                          {adj.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className={cn(
-                        "text-xs font-bold",
-                        adj.adjustmentQuantity > 0 ? "text-emerald-600" : 
-                        adj.adjustmentQuantity < 0 ? "text-rose-600" : "text-slate-600"
-                      )}>
-                        {adj.adjustmentQuantity > 0 ? '+' : ''}{adj.adjustmentQuantity}
-                      </TableCell>
-                      <TableCell className="text-xs font-bold">{adj.newStock}</TableCell>
-                      <TableCell className="text-xs text-slate-500 max-w-[200px] truncate" title={adj.reason}>
-                        {adj.reason}
-                      </TableCell>
-                      <TableCell className="text-xs">{adj.adjustedByName}</TableCell>
-                    </TableRow>
-                  ))
+                  paginatedAdjustments.map(renderAdjustmentRow)
+                )}
+              </TableBody>
+              <TableBody className="hidden print:table-row-group">
+                {filteredAdjustments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={selectedLocationId === 'all' ? 9 : 8} className="text-center py-8 text-slate-400 italic">
+                      No stock adjustments match the selected category and filters
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredAdjustments.map(renderAdjustmentRow)
                 )}
               </TableBody>
             </Table>
@@ -2098,7 +2702,7 @@ export const Reports: React.FC = () => {
           {reportType === 'product-movement' && (
             <div className="space-y-4">
               {/* Summary Header Cards for Movement */}
-              <div className="p-4 bg-slate-50/70 border-b border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-4 bg-slate-50/70 border-b border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-3 no-print">
                 <div className="p-3 bg-white rounded-lg border border-slate-200 shadow-2xs flex flex-col">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                     <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
@@ -2150,7 +2754,7 @@ export const Reports: React.FC = () => {
               </div>
 
               {/* View Selector Sub-Toggle */}
-              <div className="px-4 flex items-center justify-between gap-2">
+              <div className="px-4 flex items-center justify-between gap-2 no-print">
                 <span className="text-xs font-semibold text-slate-700">
                   {movementSubView === 'detailed' ? 'Individual Movement History Log' : 'Product-Level Aggregated Movements'}
                 </span>
@@ -2187,7 +2791,7 @@ export const Reports: React.FC = () => {
                       <TableHead>Performed By</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="print:hidden">
                     {filteredMovementEvents.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={selectedLocationId === 'all' ? 7 : 6} className="text-center py-12 text-slate-400 italic">
@@ -2195,46 +2799,18 @@ export const Reports: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      paginatedMovementEvents.map((ev) => (
-                        <TableRow key={ev.id} className="hover:bg-slate-50/50 transition-colors">
-                          <TableCell className="text-xs font-medium text-slate-600">
-                            {format(ev.timestamp, 'MMM dd, yyyy HH:mm')}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-xs text-slate-900">{ev.productName}</span>
-                              <span className="text-[10px] text-slate-400">{ev.category} • {ev.brand}</span>
-                            </div>
-                          </TableCell>
-                          {selectedLocationId === 'all' && (
-                            <TableCell className="text-xs text-slate-600">{ev.locationName}</TableCell>
-                          )}
-                          <TableCell>
-                            <Badge variant="outline" className={cn(
-                              "text-[10px] font-medium border-slate-200",
-                              ev.type === 'sale' && "bg-rose-50 text-rose-700 border-rose-200",
-                              ev.type === 'po_received' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                              ev.type === 'return' && "bg-indigo-50 text-indigo-700 border-indigo-200",
-                              ev.type === 'adjustment' && (ev.quantityChange >= 0 ? "bg-teal-50 text-teal-700 border-teal-200" : "bg-amber-50 text-amber-700 border-amber-200")
-                            )}>
-                              {ev.typeLabel}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <span className={cn(
-                              "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold font-mono",
-                              ev.quantityChange > 0 ? "bg-emerald-100 text-emerald-800" :
-                              ev.quantityChange < 0 ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"
-                            )}>
-                              {ev.quantityChange > 0 ? `+${ev.quantityChange}` : ev.quantityChange}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-600 max-w-[220px] truncate" title={ev.reasonOrNotes}>
-                            {ev.reasonOrNotes}
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-700">{ev.performedBy}</TableCell>
-                        </TableRow>
-                      ))
+                      paginatedMovementEvents.map(renderMovementEventRow)
+                    )}
+                  </TableBody>
+                  <TableBody className="hidden print:table-row-group">
+                    {filteredMovementEvents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={selectedLocationId === 'all' ? 7 : 6} className="text-center py-8 text-slate-400 italic">
+                          No product movement records found for this period
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredMovementEvents.map(renderMovementEventRow)
                     )}
                   </TableBody>
                 </Table>
@@ -2251,7 +2827,7 @@ export const Reports: React.FC = () => {
                       <TableHead className="text-right">Current Stock</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="print:hidden">
                     {productMovementSummary.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center py-12 text-slate-400 italic">
@@ -2259,33 +2835,18 @@ export const Reports: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      paginatedMovementSummary.map((item) => (
-                        <TableRow key={item.productId} className="hover:bg-slate-50/50 transition-colors">
-                          <TableCell className="font-semibold text-xs text-slate-900">{item.productName}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-[10px]">{item.category}</Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-slate-500">{item.brand}</TableCell>
-                          <TableCell className="text-center font-mono text-xs font-bold text-emerald-600">
-                            +{item.inflow}
-                          </TableCell>
-                          <TableCell className="text-center font-mono text-xs font-bold text-rose-600">
-                            -{item.outflow}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <span className={cn(
-                              "font-mono text-xs font-bold px-2 py-0.5 rounded-full",
-                              item.netChange > 0 ? "bg-emerald-50 text-emerald-700" :
-                              item.netChange < 0 ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-600"
-                            )}>
-                              {item.netChange > 0 ? `+${item.netChange}` : item.netChange}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-xs text-slate-900">
-                            {item.currentStock} units
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      paginatedMovementSummary.map(renderMovementSummaryRow)
+                    )}
+                  </TableBody>
+                  <TableBody className="hidden print:table-row-group">
+                    {productMovementSummary.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-slate-400 italic">
+                          No product movement summary records match the selected filters
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      productMovementSummary.map(renderMovementSummaryRow)
                     )}
                   </TableBody>
                   {productMovementSummary.length > 0 && (
@@ -2317,7 +2878,7 @@ export const Reports: React.FC = () => {
 
           {/* Pagination Controls Footer */}
           {currentTotalRecords > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 bg-slate-50/50 no-print">
               <div className="flex items-center gap-3 text-xs text-slate-600">
                 <span>
                   Showing <strong className="text-slate-900">{Math.min((currentPage - 1) * pageSize + 1, currentTotalRecords)}</strong> to{' '}

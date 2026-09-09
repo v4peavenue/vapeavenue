@@ -3,6 +3,8 @@ import { getAuth } from 'firebase/auth';
 import { 
   initializeFirestore, 
   getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   memoryLocalCache,
   Firestore
 } from 'firebase/firestore';
@@ -35,18 +37,28 @@ if (typeof window !== 'undefined' && window.indexedDB) {
 // Initialize Firebase App
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with memory cache to completely prevent IndexedDB corruption & multi-tab locking crashes
+// Initialize Firestore with robust multi-tab persistent cache for offline persistence and minimal read operations
 let firestoreDb: Firestore;
 const databaseId = firebaseConfig.firestoreDatabaseId || '(default)';
 
 try {
   firestoreDb = initializeFirestore(app, {
-    localCache: memoryLocalCache(),
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    }),
     experimentalForceLongPolling: true,
   }, databaseId);
-} catch {
-  // If already initialized or fails, retrieve default instance
-  firestoreDb = getFirestore(app, databaseId);
+} catch (err) {
+  console.warn("Firestore: Persistent cache initialization failed, falling back to memory cache:", err);
+  try {
+    firestoreDb = initializeFirestore(app, {
+      localCache: memoryLocalCache(),
+      experimentalForceLongPolling: true,
+    }, databaseId);
+  } catch {
+    // If already initialized or fails, retrieve default instance
+    firestoreDb = getFirestore(app, databaseId);
+  }
 }
 
 export const db = firestoreDb;

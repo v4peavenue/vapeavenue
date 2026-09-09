@@ -166,6 +166,11 @@
 }
 
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   aside,
   header,
   .no-print,
@@ -195,6 +200,11 @@
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+  }
+
+  .payslip-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
 

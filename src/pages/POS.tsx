@@ -69,7 +69,20 @@ export const POS: React.FC = () => {
   const { user, profile, isAdmin, isManager } = useAuth();
   const { locations, selectedLocationId } = useLocations();
   const { settings } = useSettings();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const cached = localStorage.getItem('v4_pos_products_cache');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('POS: Error reading cached products from localStorage:', e);
+    }
+    return [];
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -582,22 +595,29 @@ export const POS: React.FC = () => {
   useEffect(() => {
     if (!profile) return;
 
-    // Limit initial product streaming to 100 items (additional products loaded via direct SKU/barcode scanner or search)
-    const q = query(collection(db, 'products'), orderBy('name', 'asc'), limit(100));
+    // Stream full product catalog (up to 3,000 items) to include all products regardless of alphabetical position (e.g. Xforge Pod)
+    // Firestore's multi-tab persistent cache + localStorage ensures cached documents do not incur redundant reads on every reload
+    const q = query(collection(db, 'products'), orderBy('name', 'asc'), limit(3000));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      setProducts(items);
+      try {
+        localStorage.setItem('v4_pos_products_cache', JSON.stringify(items));
+      } catch (e) {
+        // Handled silently if browser storage limit reached
+      }
     }, (error) => {
       console.warn("POS: Error listening to products collection:", error);
     });
 
-    const custQ = query(collection(db, 'customers'), orderBy('name', 'asc'), limit(50));
+    const custQ = query(collection(db, 'customers'), orderBy('name', 'asc'), limit(500));
     const unsubscribeCustomers = onSnapshot(custQ, (snapshot) => {
       setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
     }, (error) => {
       console.warn("POS: Error listening to customers collection:", error);
     });
 
-    const cardsQ = query(collection(db, 'loyaltyCards'), limit(50));
+    const cardsQ = query(collection(db, 'loyaltyCards'), limit(200));
     const unsubscribeCards = onSnapshot(cardsQ, (snapshot) => {
       setLoyaltyCards(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LoyaltyCard)));
     }, (error) => {

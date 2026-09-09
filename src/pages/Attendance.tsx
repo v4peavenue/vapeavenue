@@ -1613,7 +1613,7 @@ export const Attendance: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div>
           <h1 className="text-4xl font-black text-primary tracking-tight font-heading">Attendance</h1>
           <p className="text-muted-foreground mt-1">Manage schedules and track your working hours.</p>
@@ -1629,9 +1629,9 @@ export const Attendance: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 print:block print:w-full">
         {/* Main Action Section */}
-        <div className="lg:col-span-4 xl:col-span-3 2xl:col-span-3 space-y-6">
+        <div className="lg:col-span-4 xl:col-span-3 2xl:col-span-3 space-y-6 no-print">
           <Card className={cn(
             "relative overflow-hidden border-none shadow-2xl transition-all duration-500",
             currentUserAttendance && !currentUserAttendance.timeOut 
@@ -1850,9 +1850,9 @@ export const Attendance: React.FC = () => {
         </div>
 
         {/* View Selection Section */}
-        <div className="lg:col-span-8 xl:col-span-9 2xl:col-span-9">
+        <div className="lg:col-span-8 xl:col-span-9 2xl:col-span-9 print:w-full print:max-w-full print:p-0 print:m-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <div className="mb-6">
+            <div className="mb-6 no-print">
               {/* Mobile Tab Selector (Select Dropdown) */}
               <div className="block md:hidden">
                 <div className="relative">
@@ -2644,49 +2644,58 @@ export const Attendance: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Print styles injected locally */}
+                  {/* Dedicated Print Styles for Payslip */}
                   <style>{`
                     @media print {
-                      /* Force background colors and graphical colors to render exactly */
+                      @page {
+                        size: A4 portrait;
+                        margin: 10mm 10mm 10mm 10mm;
+                      }
                       * {
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
                       }
-                      /* Hide any non-print elements */
                       .no-print, header, footer, nav, aside {
                         display: none !important;
                       }
-                      /* Ensure all parent containers have visible overflow & height auto */
-                      html, body, #root, main, [role="main"], .min-h-screen, div {
+                      html, body, #root, main, [role="main"], .min-h-screen {
+                        background: white !important;
+                        background-color: white !important;
+                        color: #0f172a !important;
                         overflow: visible !important;
                         height: auto !important;
                         min-height: auto !important;
                         max-height: none !important;
-                        position: static !important;
-                      }
-                      body {
-                        background: #f8fafc !important;
-                        color: #0f172a !important;
-                      }
-                      body * {
-                        visibility: hidden !important;
-                      }
-                      #printable-payslip-area, #printable-payslip-area * {
-                        visibility: visible !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
                       }
                       #printable-payslip-area {
-                        position: absolute !important;
-                        left: 0 !important;
-                        right: 0 !important;
-                        top: 0 !important;
+                        display: block !important;
+                        position: static !important;
                         width: 100% !important;
-                        max-width: 800px !important;
+                        max-width: 100% !important;
                         margin: 0 auto !important;
+                        padding: 0 !important;
                         background: white !important;
-                        border: 1px solid rgba(226, 232, 240, 0.8) !important;
-                        border-radius: 24px !important;
-                        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1) !important;
-                        overflow: hidden !important;
+                        border: 1px solid #cbd5e1 !important;
+                        border-radius: 16px !important;
+                        box-shadow: none !important;
+                        overflow: visible !important;
+                        page-break-inside: auto;
+                      }
+                      #printable-payslip-area table {
+                        width: 100% !important;
+                        border-collapse: collapse !important;
+                      }
+                      #printable-payslip-area tr {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                      }
+                      .payslip-avoid-break {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                       }
                     }
                   `}</style>
@@ -2743,7 +2752,7 @@ export const Attendance: React.FC = () => {
                   </CardHeader>
                 </Card>
 
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start print:block print:w-full">
                   {/* Left Side: Manipulation controls (Rates, Incentives, Deductions) */}
                   <div className="xl:col-span-4 2xl:col-span-4 space-y-6 no-print">
                     <Card className="border-none shadow-xl rounded-3xl bg-white">
@@ -3016,24 +3025,32 @@ export const Attendance: React.FC = () => {
                   </div>
 
                   {/* Right Side: Payslip Printable Statement */}
-                  <div className="xl:col-span-8 2xl:col-span-8 space-y-6">
+                  <div className="xl:col-span-8 2xl:col-span-8 space-y-6 print:w-full print:max-w-full print:p-0 print:m-0">
                      {/* Payslip view */}
-                    <Card id="printable-payslip-area" className="border border-slate-200/80 shadow-xl overflow-hidden rounded-3xl bg-white">
-                      <CardContent className="p-8 space-y-8">
+                    <Card id="printable-payslip-area" className="border border-slate-200/80 shadow-xl print:shadow-none print:border-slate-300 print:rounded-2xl print:overflow-visible overflow-hidden rounded-3xl bg-white">
+                      <CardContent className="p-8 space-y-8 print:p-6 print:space-y-6">
                         {/* Header of Payslip */}
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-100 pb-6 gap-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-lg bg-[#1A2B4B] flex items-center justify-center text-white font-black italic">S</div>
-                              <span className="font-black tracking-wider text-slate-800 uppercase">SALARY PAYMENT SLIP</span>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/80 pb-6 gap-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-[#1A2B4B] flex items-center justify-center text-white font-black text-lg italic shrink-0">
+                              {(settings as any).storeName ? (settings as any).storeName.charAt(0).toUpperCase() : 'S'}
                             </div>
-                            <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mt-1">Official Statement of Earnings</p>
+                            <div>
+                              <h3 className="text-base font-black tracking-tight text-slate-900 uppercase">
+                                {(settings as any).storeName || 'POS & INVENTORY MANAGEMENT'}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs font-black text-indigo-700 uppercase tracking-wider">SALARY PAYMENT SLIP</span>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Official Statement of Earnings</span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-left md:text-right">
+                          <div className="text-left sm:text-right">
                             <span className="text-xs font-bold text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-1 rounded-full uppercase tracking-wider text-[10px] border border-[#D4AF37]/20">
                               CONFIDENTIAL
                             </span>
-                            <p className="text-xs text-slate-400 font-semibold mt-1">
+                            <p className="text-xs text-slate-500 font-semibold mt-1">
                               Period: {isValid(new Date(payslipStartDate)) ? format(new Date(payslipStartDate), 'MMM dd, yyyy') : ''} – {isValid(new Date(payslipEndDate)) ? format(new Date(payslipEndDate), 'MMM dd, yyyy') : ''}
                             </p>
                           </div>
@@ -3060,9 +3077,9 @@ export const Attendance: React.FC = () => {
                         </div>
 
                         {/* 1. Daily Work & Earnings Breakdown inside the printable payslip (MOVED TO TOP) */}
-                        <div className="space-y-3">
+                        <div className="space-y-3 payslip-avoid-break">
                           <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest pb-1">1. Daily Work & Earnings Breakdown</h4>
-                          <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+                          <div className="overflow-x-auto print:overflow-visible border border-slate-100 print:border-slate-300 rounded-2xl">
                             <table className="w-full text-left border-collapse">
                               <thead>
                                 <tr className="bg-slate-50/70 border-b border-slate-100">
@@ -3122,7 +3139,7 @@ export const Attendance: React.FC = () => {
                         </div>
 
                         {/* 2. Breakdown grids: Earnings vs Deductions */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2 payslip-avoid-break">
                           {/* Earnings side */}
                           <div className="space-y-4">
                             <div className="flex items-center justify-between border-b border-slate-100 pb-2">
@@ -3239,7 +3256,7 @@ export const Attendance: React.FC = () => {
                         </div>
 
                         {/* 3. Pay summary totals */}
-                        <div className="space-y-3 pt-2">
+                        <div className="space-y-3 pt-2 payslip-avoid-break">
                           <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">3. Payment Totals Summary</h4>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border border-slate-100 p-5 rounded-2xl bg-slate-50/30">
                             <div className="text-center bg-slate-50 p-4 rounded-xl border border-slate-100/50">
@@ -3278,7 +3295,7 @@ export const Attendance: React.FC = () => {
                         </div>
 
                         {/* Bottom notes and signatures */}
-                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 pt-4 text-xs border-t border-slate-100">
+                        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 pt-4 text-xs border-t border-slate-100 payslip-avoid-break">
                           <div className="space-y-1">
                             <p className="font-bold text-slate-700">Remarks & Note:</p>
                             <p className="text-slate-400 text-[11px] leading-relaxed max-w-sm">
@@ -3300,10 +3317,13 @@ export const Attendance: React.FC = () => {
                       </p>
                       <Button 
                         variant="default" 
-                        className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl font-bold text-xs uppercase tracking-wide gap-2 h-10 px-5 shrink-0"
+                        className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl font-bold text-xs uppercase tracking-wide gap-2 h-10 px-5 shrink-0 shadow-sm transition-all"
                         onClick={() => {
-                          window.focus();
-                          window.print();
+                          toast.info('Opening print dialog for salary payment slip...');
+                          setTimeout(() => {
+                            window.focus();
+                            window.print();
+                          }, 150);
                         }}
                       >
                         <Printer className="w-4 h-4 text-white" />
