@@ -37,9 +37,6 @@ export default defineConfig(({mode}) => {
         }
       })
     ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -49,13 +46,16 @@ export default defineConfig(({mode}) => {
       outDir: 'dist',
       emptyOutDir: true,
       sourcemap: false,
-      chunkSizeWarningLimit: 2000,
+      chunkSizeWarningLimit: 1200,
       rollupOptions: {
         output: {
           manualChunks: {
             'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
             'vendor-charts': ['recharts'],
             'vendor-qrcode': ['html5-qrcode'],
+            'vendor-motion': ['motion'],
+            'vendor-icons': ['lucide-react'],
+            'vendor-date': ['date-fns'],
           },
         },
       },
