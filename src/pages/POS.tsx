@@ -91,6 +91,7 @@ export const POS: React.FC = () => {
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [lastSaleId, setLastSaleId] = useState('');
   const [processing, setProcessing] = useState(false);
+  const isCheckingOutRef = useRef(false);
   const [isPendingCheckout, setIsPendingCheckout] = useState(false);
   const [checkoutLocationId, setCheckoutLocationId] = useState<string>('');
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -887,6 +888,7 @@ export const POS: React.FC = () => {
   };
 
   const handleCheckout = async (isPending: boolean = false) => {
+    if (isCheckingOutRef.current || processing) return;
     if (cart.length === 0) return;
     if (!customerDetails.name.trim()) {
       toast.error('Customer name is required');
@@ -907,6 +909,7 @@ export const POS: React.FC = () => {
       }
     }
 
+    isCheckingOutRef.current = true;
     setProcessing(true);
     try {
       let finalCustomerId = selectedCustomerId;
@@ -1205,6 +1208,7 @@ export const POS: React.FC = () => {
       handleFirestoreError(error, OperationType.CREATE, 'sales');
     } finally {
       setProcessing(false);
+      isCheckingOutRef.current = false;
     }
   };
 
@@ -2496,14 +2500,14 @@ export const POS: React.FC = () => {
               variant="outline"
               className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white rounded-xl"
               onClick={() => handleCheckout(true)}
-              disabled={processing}
+              disabled={processing || isCheckingOutRef.current}
             >
               Mark as Pending
             </Button>
             <Button 
               className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl px-8" 
               onClick={() => handleCheckout(false)}
-              disabled={processing}
+              disabled={processing || isCheckingOutRef.current}
             >
               {processing ? 'Processing...' : 'Confirm Payment'}
             </Button>

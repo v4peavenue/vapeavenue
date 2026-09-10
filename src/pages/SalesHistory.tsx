@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import { DataTablePagination } from '@/components/DataTablePagination';
 import { 
@@ -95,7 +95,9 @@ export const SalesHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isVoiding, setIsVoiding] = useState(false);
+  const isVoidingRef = useRef(false);
   const [isPaying, setIsPaying] = useState(false);
+  const isPayingRef = useRef(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
   const [isSplitPayment, setIsSplitPayment] = useState(false);
   const [paymentSplits, setPaymentSplits] = useState<{ methodId: string; methodName: string; amount: number; reference?: string }[]>([]);
@@ -181,6 +183,7 @@ export const SalesHistory: React.FC = () => {
   const [reverseAccountId, setReverseAccountId] = useState<string>('');
   const [isReverseDialogOpen, setIsReverseDialogOpen] = useState(false);
   const [isReversing, setIsReversing] = useState(false);
+  const isReversingRef = useRef(false);
 
   const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
     ? profile.locationId
@@ -630,10 +633,29 @@ export const SalesHistory: React.FC = () => {
     // 3. For any sale marked as voided, ensure there is a void transaction in the ledger
     const fallbackVoidEntries: any[] = [];
     sales.filter(s => s.status === 'voided').forEach(sale => {
-      const existingVoid = rawFinancialTransactions.some(t => 
-        (t.isVoidTransaction || (t.description || '').toLowerCase().includes('void')) &&
-        (t.saleId === sale.id || t.reference === sale.id || (t.description || '').includes(sale.id))
-      );
+      const saleIdFull = (sale.id || '').toLowerCase();
+      const saleIdPrefix = saleIdFull.substring(0, 8);
+
+      const existingVoid = rawFinancialTransactions.some(t => {
+        const isVoid = t.isVoidTransaction || 
+          (t.description || '').toLowerCase().includes('void') || 
+          (t.category || '').toLowerCase() === 'voided sale' ||
+          (t.category || '').toLowerCase() === 'returns';
+        if (!isVoid) return false;
+
+        const tSaleId = (t.saleId || '').toLowerCase();
+        const tRef = (t.reference || '').toLowerCase();
+        const tDesc = (t.description || '').toLowerCase();
+
+        return (
+          tSaleId === saleIdFull ||
+          tRef === saleIdFull ||
+          (tSaleId && tSaleId.startsWith(saleIdPrefix)) ||
+          (tRef && tRef.startsWith(saleIdPrefix)) ||
+          tDesc.includes(saleIdFull) ||
+          tDesc.includes(saleIdPrefix)
+        );
+      });
 
       if (!existingVoid) {
         let accName = 'Sales Account';
@@ -837,14 +859,23 @@ export const SalesHistory: React.FC = () => {
   };
 
   const handleConfirmVoid = async () => {
+    if (isVoidingRef.current || isVoiding) return;
     if (!saleToVoid || !voidAccountId) return;
     
+    if (saleToVoid.status === 'voided') {
+      toast.error('This sale has already been voided.');
+      setIsVoidDialogOpen(false);
+      setSaleToVoid(null);
+      return;
+    }
+
     const account = accounts.find(a => a.id === voidAccountId);
     if (!account) {
       toast.error('Selected account not found');
       return;
     }
 
+    isVoidingRef.current = true;
     setIsVoiding(true);
     try {
       const batch = writeBatch(db);
@@ -923,10 +954,12 @@ export const SalesHistory: React.FC = () => {
       handleFirestoreError(error, OperationType.UPDATE, 'sales');
     } finally {
       setIsVoiding(false);
+      isVoidingRef.current = false;
     }
   };
 
   const handleConfirmReverseReturn = async () => {
+    if (isReversingRef.current || isReversing) return;
     if (!returnToReverse) return;
 
     if (returnToReverse.totalRefund > 0 && !reverseAccountId) {
@@ -940,6 +973,7 @@ export const SalesHistory: React.FC = () => {
       return;
     }
 
+    isReversingRef.current = true;
     setIsReversing(true);
     try {
       const batch = writeBatch(db);
@@ -1044,6 +1078,7 @@ export const SalesHistory: React.FC = () => {
       toast.error('Failed to reverse return transaction.');
     } finally {
       setIsReversing(false);
+      isReversingRef.current = false;
     }
   };
 
@@ -1117,6 +1152,7 @@ export const SalesHistory: React.FC = () => {
   };
 
   const handleMarkAsPaid = async () => {
+    if (isPayingRef.current || isPaying) return;
     if (!selectedSale) return;
 
     if (isSplitPayment) {
@@ -1127,6 +1163,7 @@ export const SalesHistory: React.FC = () => {
       }
     }
     
+    isPayingRef.current = true;
     setIsPaying(true);
     try {
       const batch = writeBatch(db);
@@ -1214,6 +1251,7 @@ export const SalesHistory: React.FC = () => {
       handleFirestoreError(error, OperationType.UPDATE, 'sales');
     } finally {
       setIsPaying(false);
+      isPayingRef.current = false;
     }
   };
 
@@ -2817,7 +2855,7 @@ export const SalesHistory: React.FC = () => {
                 <Button 
                   className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white px-8" 
                   onClick={handleMarkAsPaid}
-                  disabled={isPaying || (isSplitPayment && Math.abs(paymentSplits.reduce((s, i) => s + (i.amount || 0), 0) - selectedSale.total) > 0.01)}
+                  disabled={isPaying || isPayingRef.current || (isSplitPayment && Math.abs(paymentSplits.reduce((s, i) => s + (i.amount || 0), 0) - selectedSale.total) > 0.01)}
                 >
                   {isPaying ? 'Processing...' : 'Confirm Payment'}
                 </Button>
@@ -2912,7 +2950,7 @@ export const SalesHistory: React.FC = () => {
             <Button
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
               onClick={handleConfirmVoid}
-              disabled={isVoiding || !voidAccountId}
+              disabled={isVoiding || isVoidingRef.current || !voidAccountId}
             >
               {isVoiding ? 'Voiding...' : 'Confirm Void'}
             </Button>
@@ -3080,7 +3118,7 @@ export const SalesHistory: React.FC = () => {
             <Button
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
               onClick={handleConfirmReverseReturn}
-              disabled={isReversing || (returnToReverse?.totalRefund > 0 && !reverseAccountId)}
+              disabled={isReversing || isReversingRef.current || (returnToReverse?.totalRefund > 0 && !reverseAccountId)}
             >
               {isReversing ? 'Reversing...' : 'Confirm Reversal'}
             </Button>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   Settings as SettingsIcon, 
   Plus, 
@@ -130,6 +130,7 @@ export const Settings: React.FC = () => {
   const [revertEntityData, setRevertEntityData] = useState<any | null>(null);
   const [revertAccountId, setRevertAccountId] = useState<string>('');
   const [isReverting, setIsReverting] = useState(false);
+  const isRevertingRef = useRef(false);
 
   // Go-Live Reset Wizard states
   const [isResetWizardOpen, setIsResetWizardOpen] = useState(false);
@@ -986,8 +987,10 @@ export const Settings: React.FC = () => {
   };
 
   const handleConfirmRevert = async () => {
+    if (isRevertingRef.current || isReverting) return;
     if (!revertLog || !revertEntityData) return;
 
+    isRevertingRef.current = true;
     setIsReverting(true);
     try {
       const batch = writeBatch(db);
@@ -1525,6 +1528,7 @@ export const Settings: React.FC = () => {
       toast.error('Reversal failed: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsReverting(false);
+      isRevertingRef.current = false;
     }
   };
 
@@ -2298,6 +2302,7 @@ export const Settings: React.FC = () => {
               onClick={handleConfirmRevert} 
               disabled={
                 isReverting || 
+                isRevertingRef.current ||
                 !revertEntityData || 
                 (revertLog?.action === 'RETURN_TRANSACTION' && revertEntityData?.status === 'voided') ||
                 (revertLog?.action === 'VOID_SALE' && revertEntityData?.status !== 'voided') ||
