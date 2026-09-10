@@ -49,6 +49,8 @@
         "locationId": { "type": "string" },
         "customerId": { "type": "string" },
         "customerDetails": { "type": "object" },
+        "voidExcludedFromLedger": { "type": "boolean", "description": "Exclude void entry from unified ledger" },
+        "hideFromLedger": { "type": "boolean", "description": "Hide sale from unified ledger" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["items", "total", "paymentMethod", "status", "timestamp", "locationId", "customerId", "customerDetails"]

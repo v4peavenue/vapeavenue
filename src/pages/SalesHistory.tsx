@@ -26,7 +26,8 @@ import {
   Building2,
   DollarSign,
   CheckCircle2,
-  ShieldCheck
+  ShieldCheck,
+  Trash2
 } from 'lucide-react';
 import { 
   collection, 
@@ -72,6 +73,7 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle,
+  DialogDescription,
   DialogFooter
 } from '@/components/ui/dialog';
 import { 
@@ -184,6 +186,11 @@ export const SalesHistory: React.FC = () => {
   const [isReverseDialogOpen, setIsReverseDialogOpen] = useState(false);
   const [isReversing, setIsReversing] = useState(false);
   const isReversingRef = useRef(false);
+  const [entryToDelete, setEntryToDelete] = useState<any | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [adjustAccountBalance, setAdjustAccountBalance] = useState(true);
+  const [isDeletingEntry, setIsDeletingEntry] = useState(false);
+  const isDeletingEntryRef = useRef(false);
 
   const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
     ? profile.locationId
@@ -551,7 +558,7 @@ export const SalesHistory: React.FC = () => {
     // 1. Transform active completed/returned/voided sales into Sale Record entries (representing the original income sale)
     const saleRecordEntries: any[] = [];
     sales
-      .filter(s => s.status !== 'pending' && s.status !== 'pending_promo_approval' && s.status !== 'pending_total_approval')
+      .filter(s => s.status !== 'pending' && s.status !== 'pending_promo_approval' && s.status !== 'pending_total_approval' && !s.hideFromLedger)
       .forEach(sale => {
         const sellerName = usersList.find(u => u.id === sale.staffId)?.name || sale.staffName || 'Staff';
         const customerName = sale.customerDetails?.name || 'Walk-In';
@@ -632,7 +639,7 @@ export const SalesHistory: React.FC = () => {
 
     // 3. For any sale marked as voided, ensure there is a void transaction in the ledger
     const fallbackVoidEntries: any[] = [];
-    sales.filter(s => s.status === 'voided').forEach(sale => {
+    sales.filter(s => s.status === 'voided' && !s.voidExcludedFromLedger).forEach(sale => {
       const saleIdFull = (sale.id || '').toLowerCase();
       const saleIdPrefix = saleIdFull.substring(0, 8);
 
@@ -1079,6 +1086,114 @@ export const SalesHistory: React.FC = () => {
     } finally {
       setIsReversing(false);
       isReversingRef.current = false;
+    }
+  };
+
+  const handleConfirmDeleteLedgerEntry = async () => {
+    if (!isAdmin && !isManager) {
+      toast.error('Only administrators and managers have access to delete ledger entries.');
+      setIsDeleteDialogOpen(false);
+      setEntryToDelete(null);
+      return;
+    }
+    if (isDeletingEntryRef.current || isDeletingEntry) return;
+    if (!entryToDelete) return;
+
+    isDeletingEntryRef.current = true;
+    setIsDeletingEntry(true);
+
+    try {
+      const batch = writeBatch(db);
+
+      // Case 1: Synthetic fallback void entry
+      if (entryToDelete.id.startsWith('void_') && entryToDelete.saleId) {
+        const saleRef = doc(db, 'sales', entryToDelete.saleId);
+        batch.update(saleRef, {
+          voidExcludedFromLedger: true,
+          updatedAt: Timestamp.now()
+        });
+
+        await batch.commit();
+
+        await logAction(
+          profile,
+          'DELETE_LEDGER_ENTRY',
+          `Removed void line #${entryToDelete.displayId || entryToDelete.id} from Unified Ledger for Sale #${entryToDelete.saleId.substring(0, 8)}`,
+          entryToDelete.saleId,
+          'sale'
+        );
+
+        toast.success('Void line removed from Unified Ledger');
+      } 
+      // Case 2: Synthetic sale record entry
+      else if (entryToDelete.isSaleRecord && entryToDelete.saleId) {
+        const saleRef = doc(db, 'sales', entryToDelete.saleId);
+        batch.update(saleRef, {
+          hideFromLedger: true,
+          updatedAt: Timestamp.now()
+        });
+
+        await batch.commit();
+
+        await logAction(
+          profile,
+          'DELETE_LEDGER_ENTRY',
+          `Removed sale record line #${entryToDelete.displayId || entryToDelete.id} from Unified Ledger for Sale #${entryToDelete.saleId.substring(0, 8)}`,
+          entryToDelete.saleId,
+          'sale'
+        );
+
+        toast.success('Sale record line removed from Unified Ledger');
+      } 
+      // Case 3: Real document in financialTransactions
+      else {
+        const transRef = doc(db, 'financialTransactions', entryToDelete.id);
+        batch.delete(transRef);
+
+        // Optional account balance adjustment
+        if (adjustAccountBalance && entryToDelete.accountId && (entryToDelete.amount || 0) > 0) {
+          const matchedAcc = accounts.find(a => a.id === entryToDelete.accountId || a.name.toLowerCase() === entryToDelete.accountId.toLowerCase());
+          const targetAccId = matchedAcc ? matchedAcc.id : entryToDelete.accountId;
+          
+          if (targetAccId && targetAccId !== 'none') {
+            const accRef = doc(db, 'accounts', targetAccId);
+            const balanceDelta = entryToDelete.type === 'expense' 
+              ? entryToDelete.amount 
+              : entryToDelete.type === 'income' 
+                ? -entryToDelete.amount 
+                : 0;
+            
+            if (balanceDelta !== 0) {
+              batch.set(accRef, {
+                balance: increment(balanceDelta),
+                lastUpdated: Timestamp.now()
+              }, { merge: true });
+            }
+          }
+        }
+
+        await batch.commit();
+
+        await logAction(
+          profile,
+          'DELETE_FINANCIAL_TRANSACTION',
+          `Deleted ledger transaction #${entryToDelete.displayId || entryToDelete.id}: "${entryToDelete.description || entryToDelete.category || 'Transaction'}" (${settings.currency}${(entryToDelete.amount || 0).toFixed(2)}). Account balance reversed: ${adjustAccountBalance ? 'Yes' : 'No'}`,
+          entryToDelete.id,
+          'financialTransaction'
+        );
+
+        toast.success('Transaction deleted from Unified Ledger');
+      }
+
+      setIsDeleteDialogOpen(false);
+      setEntryToDelete(null);
+    } catch (error) {
+      console.error('Error deleting ledger entry:', error);
+      toast.error('Failed to delete ledger entry: ' + (error instanceof Error ? error.message : String(error)));
+      handleFirestoreError(error, OperationType.DELETE, 'financialTransactions');
+    } finally {
+      setIsDeletingEntry(false);
+      isDeletingEntryRef.current = false;
     }
   };
 
@@ -2195,20 +2310,23 @@ export const SalesHistory: React.FC = () => {
                   <TableHead className="w-[14%] px-3 py-3 text-xs font-bold text-slate-700">Date & Time</TableHead>
                   <TableHead className="w-[12%] px-3 py-3 text-xs font-bold text-slate-700">Transaction ID</TableHead>
                   <TableHead className="w-[11%] px-3 py-3 text-xs font-bold text-slate-700">Category</TableHead>
-                  <TableHead className="w-[25%] px-3 py-3 text-xs font-bold text-slate-700">Description</TableHead>
-                  <TableHead className="w-[14%] px-3 py-3 text-xs font-bold text-slate-700">Account</TableHead>
-                  <TableHead className="w-[12%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money In (+)</TableHead>
-                  <TableHead className="w-[12%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money Out (-)</TableHead>
+                  <TableHead className={cn("px-3 py-3 text-xs font-bold text-slate-700", (isAdmin || isManager) ? "w-[23%]" : "w-[27%]")}>Description</TableHead>
+                  <TableHead className={cn("px-3 py-3 text-xs font-bold text-slate-700", (isAdmin || isManager) ? "w-[13%]" : "w-[14%]")}>Account</TableHead>
+                  <TableHead className="w-[11%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money In (+)</TableHead>
+                  <TableHead className="w-[11%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money Out (-)</TableHead>
+                  {(isAdmin || isManager) && (
+                    <TableHead className="w-[6%] px-3 py-3 text-right text-xs font-bold text-slate-700">Actions</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">Loading transactions...</TableCell>
+                    <TableCell colSpan={(isAdmin || isManager) ? 8 : 7} className="h-24 text-center text-slate-500">Loading transactions...</TableCell>
                   </TableRow>
                 ) : displayedLedger.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                    <TableCell colSpan={(isAdmin || isManager) ? 8 : 7} className="h-24 text-center text-slate-500">
                       No transactions found for the selected period and payment mode.
                     </TableCell>
                   </TableRow>
@@ -2270,6 +2388,23 @@ export const SalesHistory: React.FC = () => {
                         <TableCell className="text-right font-bold text-rose-600 text-xs px-3 py-2.5 whitespace-nowrap">
                           {isExpense ? `-${settings.currency}${(t.amount || 0).toFixed(2)}` : '—'}
                         </TableCell>
+                        {(isAdmin || isManager) && (
+                          <TableCell className="text-right px-3 py-2.5 whitespace-nowrap">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Delete line from ledger"
+                              onClick={() => {
+                                setEntryToDelete(t);
+                                setAdjustAccountBalance(true);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })
@@ -3121,6 +3256,100 @@ export const SalesHistory: React.FC = () => {
               disabled={isReversing || isReversingRef.current || (returnToReverse?.totalRefund > 0 && !reverseAccountId)}
             >
               {isReversing ? 'Reversing...' : 'Confirm Reversal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Ledger Entry Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        setIsDeleteDialogOpen(open);
+        if (!open) setEntryToDelete(null);
+      }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-600">
+              <Trash2 className="w-5 h-5" />
+              Delete Ledger Entry
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this line from the Unified Ledger? This will adjust your ledger totals to match.
+            </DialogDescription>
+          </DialogHeader>
+
+          {entryToDelete && (
+            <div className="space-y-4 py-2">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Transaction / Ref:</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {entryToDelete.displayId || entryToDelete.id}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Category:</span>
+                  <span className="font-semibold text-slate-900">{entryToDelete.category || entryToDelete.type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Description:</span>
+                  <span className="font-medium text-slate-800 truncate max-w-[260px]" title={entryToDelete.description}>
+                    {entryToDelete.description || 'No description'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Account:</span>
+                  <span className="font-semibold text-slate-900">{entryToDelete.accountName || 'Cash'}</span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200/80 pt-2 font-bold">
+                  <span className="text-slate-700">Amount:</span>
+                  <span className={entryToDelete.type === 'expense' ? 'text-rose-600' : 'text-emerald-600'}>
+                    {entryToDelete.type === 'expense' ? '-' : '+'}{settings.currency}{(entryToDelete.amount || 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* If it's a real financial transaction with an account, show account balance adjustment toggle */}
+              {!entryToDelete.id.startsWith('void_') && !entryToDelete.isSaleRecord && (entryToDelete.amount || 0) > 0 && (
+                <div className="flex items-start gap-3 p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs text-amber-900">
+                  <input
+                    type="checkbox"
+                    id="adjust-balance-checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-amber-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    checked={adjustAccountBalance}
+                    onChange={(e) => setAdjustAccountBalance(e.target.checked)}
+                  />
+                  <label htmlFor="adjust-balance-checkbox" className="cursor-pointer space-y-0.5">
+                    <span className="font-bold block">
+                      Reverse account balance impact
+                    </span>
+                    <span className="text-[11px] text-amber-800 block">
+                      {entryToDelete.type === 'expense'
+                        ? `Refunds ${settings.currency}${(entryToDelete.amount || 0).toFixed(2)} back to ${entryToDelete.accountName || 'the account'}. Uncheck this if you only want to remove a duplicate log without altering the balance.`
+                        : `Deducts ${settings.currency}${(entryToDelete.amount || 0).toFixed(2)} from ${entryToDelete.accountName || 'the account'}. Uncheck this if you only want to remove a duplicate log without altering the balance.`
+                      }
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {entryToDelete.id.startsWith('void_') && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
+                  This is a void entry generated from Sale #{entryToDelete.saleId?.substring(0, 8)}. Deleting this will permanently exclude the void from the Unified Ledger so the totals match.
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeletingEntry}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+              onClick={handleConfirmDeleteLedgerEntry}
+              disabled={isDeletingEntry || isDeletingEntryRef.current}
+            >
+              {isDeletingEntry ? 'Deleting...' : 'Delete Entry'}
             </Button>
           </DialogFooter>
         </DialogContent>

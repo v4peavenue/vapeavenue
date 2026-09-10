@@ -140,6 +140,8 @@ export interface Sale {
   loyaltyDiscount?: number;
   loyaltyTier1Earned?: number;
   loyaltyTier2Earned?: number;
+  voidExcludedFromLedger?: boolean;
+  hideFromLedger?: boolean;
 }
 
 export interface Supplier {
