@@ -205,7 +205,7 @@ export const Settings: React.FC = () => {
     let unsubscribeInvites: () => void = () => {};
     let unsubscribeAudit: () => void = () => {};
 
-    if (isAdmin) {
+    if (isAdmin || isManager) {
       unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
       }, (error) => {
@@ -216,6 +216,9 @@ export const Settings: React.FC = () => {
       }, (error) => {
         console.warn("Settings: Error listening to invites:", error);
       });
+    }
+
+    if (isAdmin) {
       let auditQuery = query(collection(db, 'audit_logs'), orderBy('timestamp', 'desc'), limit(100));
       if (auditStartDate && auditEndDate) {
         const startTs = Timestamp.fromDate(new Date(`${auditStartDate}T00:00:00`));
@@ -729,13 +732,15 @@ export const Settings: React.FC = () => {
     e.preventDefault();
     if (!newInvite.email.trim()) return;
     try {
+      const inviteRole = !isAdmin ? 'staff' : newInvite.role;
       const docRef = await addDoc(collection(db, 'invites'), {
         ...newInvite,
+        role: inviteRole,
         status: 'pending',
         invitedBy: profile?.id,
         createdAt: new Date()
       });
-      await logAction(profile, 'SEND_INVITE', `Sent ${newInvite.role} invite to ${newInvite.email}`, docRef.id, 'invite');
+      await logAction(profile, 'SEND_INVITE', `Sent ${inviteRole} invite to ${newInvite.email}`, docRef.id, 'invite');
       setNewInvite({ email: '', role: 'staff', locationId: '' });
       toast.success('Invite sent to ' + newInvite.email);
     } catch (error) {
@@ -842,11 +847,21 @@ export const Settings: React.FC = () => {
       toast.error("You cannot change your own role");
       return;
     }
+    const targetUser = users.find(u => u.id === userId);
+    if (!isAdmin && isManager) {
+      if (data.role && data.role !== targetUser?.role) {
+        toast.error("Managers can only change staff branch locations, not roles.");
+        return;
+      }
+      if (targetUser?.role === 'admin') {
+        toast.error("Managers cannot modify administrator accounts.");
+        return;
+      }
+    }
     try {
-      const user = users.find(u => u.id === userId);
       await updateDoc(doc(db, 'users', userId), data);
-      await logAction(profile, 'UPDATE_USER', `Updated settings for ${user?.email || userId}`, userId, 'user');
-      toast.success('User updated');
+      await logAction(profile, 'UPDATE_USER', `Updated location/settings for staff ${targetUser?.name || targetUser?.email || userId}`, userId, 'user');
+      toast.success('Staff location updated');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'users');
     }
@@ -855,11 +870,18 @@ export const Settings: React.FC = () => {
   const handleSaveUserEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+    const existing = users.find(u => u.id === editingUser.id);
+    if (!isAdmin && isManager) {
+      if (existing?.role === 'admin') {
+        toast.error("Managers cannot modify administrator accounts");
+        return;
+      }
+    }
     try {
       const updateData: any = {
         name: editingUser.name || '',
         email: editingUser.email || '',
-        role: editingUser.role || 'staff',
+        role: (!isAdmin && isManager) ? (existing?.role || 'staff') : (editingUser.role || 'staff'),
       };
       if (editingUser.locationId) {
         updateData.locationId = editingUser.locationId;
@@ -1541,32 +1563,47 @@ export const Settings: React.FC = () => {
     >
       <div>
         <h1 className="text-4xl font-bold text-primary tracking-tight font-heading">
-          {isAdmin ? 'System' : 'My Profile'}
+          {isAdmin ? 'System' : isManager ? 'Staff & Profile' : 'My Profile'}
         </h1>
         <p className="text-muted-foreground">
-          {isAdmin ? 'Manage system configurations and user access.' : 'View and update your profile details.'}
+          {isAdmin ? 'Manage system configurations and user access.' : isManager ? 'Manage staff branch assignments, invitations, and view your profile.' : 'View and update your profile details.'}
         </p>
       </div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        {isAdmin && (
+      <Tabs defaultValue={(isManager && !isAdmin) ? "users" : "profile"} className="space-y-6">
+        {(isAdmin || isManager) && (
           <TabsList className="bg-secondary p-1 rounded-xl">
-            <TabsTrigger value="profile" className="gap-2 rounded-lg px-6">
-              <User className="w-4 h-4" />
-              Profile
-            </TabsTrigger>
-            <TabsTrigger value="users" className="gap-2 rounded-lg px-6">
-              <Users className="w-4 h-4" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger value="system" className="gap-2 rounded-lg px-6">
-              <Shield className="w-4 h-4" />
-              Settings
-            </TabsTrigger>
-            <TabsTrigger value="audit" className="gap-2 rounded-lg px-6">
-              <History className="w-4 h-4" />
-              Audit
-            </TabsTrigger>
+            {(isManager && !isAdmin) ? (
+              <>
+                <TabsTrigger value="users" className="gap-2 rounded-lg px-6">
+                  <Users className="w-4 h-4" />
+                  Staff
+                </TabsTrigger>
+                <TabsTrigger value="profile" className="gap-2 rounded-lg px-6">
+                  <User className="w-4 h-4" />
+                  Profile
+                </TabsTrigger>
+              </>
+            ) : (
+              <>
+                <TabsTrigger value="profile" className="gap-2 rounded-lg px-6">
+                  <User className="w-4 h-4" />
+                  Profile
+                </TabsTrigger>
+                <TabsTrigger value="users" className="gap-2 rounded-lg px-6">
+                  <Users className="w-4 h-4" />
+                  Users & Staff
+                </TabsTrigger>
+                <TabsTrigger value="system" className="gap-2 rounded-lg px-6">
+                  <Shield className="w-4 h-4" />
+                  Settings
+                </TabsTrigger>
+                <TabsTrigger value="audit" className="gap-2 rounded-lg px-6">
+                  <History className="w-4 h-4" />
+                  Audit
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
         )}
 
@@ -1643,13 +1680,14 @@ export const Settings: React.FC = () => {
                     <Select 
                       value={newInvite.role} 
                       onValueChange={(v: 'admin' | 'manager' | 'staff') => setNewInvite({ ...newInvite, role: v })}
+                      disabled={!isAdmin}
                     >
                       <SelectTrigger className="bg-white border-slate-200">
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Administrator</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
+                        {isAdmin && <SelectItem value="admin">Administrator</SelectItem>}
+                        {isAdmin && <SelectItem value="manager">Manager</SelectItem>}
                         <SelectItem value="staff">Staff</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1744,6 +1782,7 @@ export const Settings: React.FC = () => {
                                   <Select 
                                     value={u.locationId || 'none'} 
                                     onValueChange={(v: string) => handleUpdateUser(u.id, { locationId: v === 'none' ? deleteField() as any : v })}
+                                    disabled={!isAdmin && (!isManager || u.role === 'admin')}
                                   >
                                     <SelectTrigger className="w-[150px] h-8 text-xs bg-white border-slate-200 font-medium">
                                       <SelectValue placeholder="Location">
@@ -1763,7 +1802,7 @@ export const Settings: React.FC = () => {
                                   <Select 
                                     value={u.role} 
                                     onValueChange={(v: 'admin' | 'manager' | 'staff') => handleUpdateUser(u.id, { role: v })}
-                                    disabled={isCurrentUser}
+                                    disabled={isCurrentUser || !isAdmin}
                                   >
                                     <SelectTrigger className="w-[110px] h-8 text-xs bg-white border-slate-200 font-medium">
                                       <SelectValue>
@@ -1780,15 +1819,17 @@ export const Settings: React.FC = () => {
 
                                 <TableCell className="py-3 text-right">
                                   <div className="flex items-center justify-end gap-1">
-                                    <Button 
-                                      variant="outline" 
-                                      size="sm" 
-                                      className="h-8 text-xs font-semibold gap-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 border-slate-200"
-                                      onClick={() => setEditingUser(u)}
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" /> Edit
-                                    </Button>
-                                    {!isCurrentUser && (
+                                    {((isAdmin || isManager) && (isAdmin || u.role !== 'admin')) && (
+                                      <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-8 text-xs font-semibold gap-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 border-slate-200"
+                                        onClick={() => setEditingUser(u)}
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" /> Edit
+                                      </Button>
+                                    )}
+                                    {!isCurrentUser && isAdmin && (
                                       <Button 
                                         variant="ghost" 
                                         size="icon" 
@@ -2575,14 +2616,14 @@ export const Settings: React.FC = () => {
                   <Select 
                     value={editingUser.role} 
                     onValueChange={(v: 'admin' | 'manager' | 'staff') => setEditingUser({ ...editingUser, role: v })}
-                    disabled={editingUser.id === profile?.id}
+                    disabled={editingUser.id === profile?.id || !isAdmin}
                   >
                     <SelectTrigger className="h-10 text-xs font-bold">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Admin</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
+                      {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                      {isAdmin && <SelectItem value="manager">Manager</SelectItem>}
                       <SelectItem value="staff">Staff</SelectItem>
                     </SelectContent>
                   </Select>
@@ -2593,6 +2634,7 @@ export const Settings: React.FC = () => {
                   <Select 
                     value={editingUser.locationId || 'none'} 
                     onValueChange={(v: string) => setEditingUser({ ...editingUser, locationId: v === 'none' ? undefined : v })}
+                    disabled={!isAdmin && (!isManager || editingUser.role === 'admin')}
                   >
                     <SelectTrigger className="h-10 text-xs font-bold">
                       <SelectValue placeholder="Select Location" />

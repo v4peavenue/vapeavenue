@@ -1090,8 +1090,8 @@ export const SalesHistory: React.FC = () => {
   };
 
   const handleConfirmDeleteLedgerEntry = async () => {
-    if (!isAdmin && !isManager) {
-      toast.error('Only administrators and managers have access to delete ledger entries.');
+    if (!isAdmin) {
+      toast.error('Only administrators have access to delete ledger entries.');
       setIsDeleteDialogOpen(false);
       setEntryToDelete(null);
       return;
@@ -2310,11 +2310,11 @@ export const SalesHistory: React.FC = () => {
                   <TableHead className="w-[14%] px-3 py-3 text-xs font-bold text-slate-700">Date & Time</TableHead>
                   <TableHead className="w-[12%] px-3 py-3 text-xs font-bold text-slate-700">Transaction ID</TableHead>
                   <TableHead className="w-[11%] px-3 py-3 text-xs font-bold text-slate-700">Category</TableHead>
-                  <TableHead className={cn("px-3 py-3 text-xs font-bold text-slate-700", (isAdmin || isManager) ? "w-[23%]" : "w-[27%]")}>Description</TableHead>
-                  <TableHead className={cn("px-3 py-3 text-xs font-bold text-slate-700", (isAdmin || isManager) ? "w-[13%]" : "w-[14%]")}>Account</TableHead>
+                  <TableHead className={cn("px-3 py-3 text-xs font-bold text-slate-700", isAdmin ? "w-[23%]" : "w-[27%]")}>Description</TableHead>
+                  <TableHead className={cn("px-3 py-3 text-xs font-bold text-slate-700", isAdmin ? "w-[13%]" : "w-[14%]")}>Account</TableHead>
                   <TableHead className="w-[11%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money In (+)</TableHead>
                   <TableHead className="w-[11%] px-3 py-3 text-right text-xs font-bold text-slate-700">Money Out (-)</TableHead>
-                  {(isAdmin || isManager) && (
+                  {isAdmin && (
                     <TableHead className="w-[6%] px-3 py-3 text-right text-xs font-bold text-slate-700">Actions</TableHead>
                   )}
                 </TableRow>
@@ -2322,11 +2322,11 @@ export const SalesHistory: React.FC = () => {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={(isAdmin || isManager) ? 8 : 7} className="h-24 text-center text-slate-500">Loading transactions...</TableCell>
+                    <TableCell colSpan={isAdmin ? 8 : 7} className="h-24 text-center text-slate-500">Loading transactions...</TableCell>
                   </TableRow>
                 ) : displayedLedger.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={(isAdmin || isManager) ? 8 : 7} className="h-24 text-center text-slate-500">
+                    <TableCell colSpan={isAdmin ? 8 : 7} className="h-24 text-center text-slate-500">
                       No transactions found for the selected period and payment mode.
                     </TableCell>
                   </TableRow>
@@ -2388,7 +2388,7 @@ export const SalesHistory: React.FC = () => {
                         <TableCell className="text-right font-bold text-rose-600 text-xs px-3 py-2.5 whitespace-nowrap">
                           {isExpense ? `-${settings.currency}${(t.amount || 0).toFixed(2)}` : '—'}
                         </TableCell>
-                        {(isAdmin || isManager) && (
+                        {isAdmin && (
                           <TableCell className="text-right px-3 py-2.5 whitespace-nowrap">
                             <Button
                               variant="ghost"

@@ -43,6 +43,7 @@ import {
   setDoc,
   doc, 
   deleteDoc,
+  deleteField,
   Timestamp,
   serverTimestamp,
   getDocs,
@@ -1003,6 +1004,30 @@ export const Attendance: React.FC = () => {
     } catch (error) {
       console.error('Error deleting schedule:', error);
       toast.error('Failed to delete schedule. Please try again.');
+    }
+  };
+
+  const handleUpdateStaffLocation = async (userId: string, newLocationId: string) => {
+    if (!isAdmin && !isManager) {
+      toast.error('Only administrators and managers can change staff locations.');
+      return;
+    }
+    const staffUser = allUsers.find(u => u.id === userId);
+    if (!isAdmin && staffUser?.role === 'admin') {
+      toast.error('Managers cannot modify administrator locations.');
+      return;
+    }
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        locationId: newLocationId === 'none' ? deleteField() : newLocationId
+      });
+      const locName = locations.find(l => l.id === newLocationId)?.name || 'No Location';
+      await logAction(profile, 'UPDATE_STAFF_LOCATION', `Updated location for ${staffUser?.name || staffUser?.email || userId} to ${locName}`, userId, 'user');
+      toast.success(`Assigned ${staffUser?.name || 'staff'} to ${locName}`);
+    } catch (error: any) {
+      console.error('Error updating staff location:', error);
+      toast.error('Failed to update staff location');
     }
   };
 
@@ -2141,6 +2166,7 @@ export const Attendance: React.FC = () => {
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100">
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Staff Name</th>
+                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Branch Location</th>
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Worked Hours</th>
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lates (Min)</th>
                         <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Absences</th>
@@ -2152,7 +2178,37 @@ export const Attendance: React.FC = () => {
                         const stats = calculateStaffStats(user.id);
                         return (
                           <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 font-black text-sm text-primary">{user.name || user.email || user.id}</td>
+                            <td className="px-6 py-4 font-black text-sm text-primary">
+                              <div>{user.name || user.email || user.id}</div>
+                              <span className="text-[10px] text-slate-400 font-bold capitalize">{user.role || 'staff'}</span>
+                            </td>
+                            <td className="px-6 py-4">
+                              {(isAdmin || isManager) ? (
+                                <Select
+                                  value={user.locationId || 'none'}
+                                  onValueChange={(val) => handleUpdateStaffLocation(user.id, val)}
+                                  disabled={!isAdmin && user.role === 'admin'}
+                                >
+                                  <SelectTrigger className="w-[160px] h-8 text-xs bg-white border border-slate-200 font-semibold shadow-xs">
+                                    <SelectValue placeholder="Select Branch">
+                                      {user.locationId ? (locations.find(l => l.id === user.locationId)?.name || 'Branch') : 'No Location'}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No Location</SelectItem>
+                                    {locations.filter(l => l.id !== 'all').map(loc => (
+                                      <SelectItem key={loc.id} value={loc.id} className="text-xs font-semibold">
+                                        {loc.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Badge variant="outline" className="text-xs font-semibold text-slate-700">
+                                  {user.locationId ? (locations.find(l => l.id === user.locationId)?.name || 'Location') : 'No Location'}
+                                </Badge>
+                              )}
+                            </td>
                             <td className="px-6 py-4 text-xs font-bold text-slate-500 tabular-nums">
                               <Badge className="bg-[#1A2B4B]/5 text-[#1A2B4B] border-[#1A2B4B]/10 font-black">
                                 {stats.totalHours} hrs
