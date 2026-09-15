@@ -90,7 +90,7 @@ import { exportToCSV } from '@/lib/export';
 
 export const SalesHistory: React.FC = () => {
   const { user, profile, isAdmin, isManager } = useAuth();
-  const { selectedLocationId, locations } = useLocations();
+  const { selectedLocationId, setSelectedLocationId, locations } = useLocations();
   const { settings } = useSettings();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
@@ -192,12 +192,12 @@ export const SalesHistory: React.FC = () => {
   const [isDeletingEntry, setIsDeletingEntry] = useState(false);
   const isDeletingEntryRef = useRef(false);
 
-  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
-    ? profile.locationId
-    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
+    ? selectedLocationId
+    : (profile?.locationId || null);
 
   const activeLocationName = effectiveLocationId
-    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
     : undefined;
 
   const calculateSalesHistoryDocs = async (startStr: string, endStr: string): Promise<number> => {
@@ -265,6 +265,9 @@ export const SalesHistory: React.FC = () => {
   const handleApplyGuardedDateRange = (sDate: string, eDate: string) => {
     setQueryDateRange({ start: sDate, end: eDate });
     setDateRange({ start: sDate, end: eDate });
+    if (profile?.locationId && selectedLocationId === 'all') {
+      setSelectedLocationId(profile.locationId);
+    }
   };
 
   const handleResetGuardedDateRange = () => {

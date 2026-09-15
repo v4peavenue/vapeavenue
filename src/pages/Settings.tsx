@@ -1198,6 +1198,7 @@ export const Settings: React.FC = () => {
         const saleRef = doc(db, 'sales', saleToRestore.id);
         batch.update(saleRef, {
           status: 'completed',
+          stockDeducted: true,
           updatedAt: Timestamp.now()
         });
 

@@ -102,7 +102,7 @@ import {
 
 export const Dashboard: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
-  const { selectedLocationId, locations } = useLocations();
+  const { selectedLocationId, setSelectedLocationId, locations } = useLocations();
   const { settings } = useSettings();
   const [stats, setStats] = useState({
     totalSales: 0,
@@ -121,12 +121,12 @@ export const Dashboard: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
-    ? profile.locationId
-    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
+    ? selectedLocationId
+    : (profile?.locationId || null);
 
   const activeLocationName = effectiveLocationId
-    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
     : undefined;
 
   // New states for filters
@@ -874,6 +874,9 @@ export const Dashboard: React.FC = () => {
           setCustomStartDate(sDate);
           setCustomEndDate(eDate);
           setTimeRange('custom');
+          if (profile?.locationId && selectedLocationId === 'all') {
+            setSelectedLocationId(profile.locationId);
+          }
           setIsGuardrailApplied(true);
         }}
         onReset={() => {

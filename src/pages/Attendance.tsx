@@ -82,7 +82,7 @@ import { logAction } from '@/lib/audit';
 
 export const Attendance: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
-  const { locations, selectedLocationId } = useLocations();
+  const { locations, selectedLocationId, setSelectedLocationId } = useLocations();
   const { settings } = useSettings();
   
   const [currentUserAttendance, setCurrentUserAttendance] = useState<AttendanceType | null>(null);
@@ -237,12 +237,12 @@ export const Attendance: React.FC = () => {
     }
   }, [reportStartDate, reportEndDate, guardrailReportStart, guardrailReportEnd, isReportGuardrailApplied]);
 
-  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
-    ? profile.locationId
-    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
+    ? selectedLocationId
+    : (profile?.locationId || null);
 
   const activeLocationName = effectiveLocationId
-    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
     : undefined;
 
   const calculateAttendanceDocs = async (startStr: string, endStr: string): Promise<number> => {
@@ -2138,6 +2138,9 @@ export const Attendance: React.FC = () => {
                   onApplyQuery={(sDate, eDate) => {
                     setReportStartDate(sDate);
                     setReportEndDate(eDate);
+                    if (profile?.locationId && selectedLocationId === 'all') {
+                      setSelectedLocationId(profile.locationId);
+                    }
                     setIsReportGuardrailApplied(true);
                   }}
                   onReset={() => {

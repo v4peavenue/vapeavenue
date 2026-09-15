@@ -152,6 +152,8 @@ export interface ProductMovementEvent {
   type: 'sale' | 'return' | 'adjustment' | 'po_received';
   typeLabel: string;
   quantityChange: number;
+  endCount?: number;
+  adjNewStock?: number;
   reasonOrNotes: string;
   referenceId: string;
   performedBy: string;
@@ -192,7 +194,7 @@ const getStoredReportsCache = (): ReportsCacheState | null => {
 
 export const Reports: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
-  const { selectedLocationId, locations } = useLocations();
+  const { selectedLocationId, setSelectedLocationId, locations } = useLocations();
   const { settings } = useSettings();
 
   const initialCache = useMemo(() => getStoredReportsCache(), []);
@@ -278,12 +280,12 @@ export const Reports: React.FC = () => {
     pageSize
   ]);
 
-  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
-    ? profile.locationId
-    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
+    ? selectedLocationId
+    : (profile?.locationId || null);
 
   const activeLocationName = effectiveLocationId
-    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
     : undefined;
 
   const calculateReportDocs = async (startStr: string, endStr: string): Promise<number> => {
@@ -976,7 +978,7 @@ export const Reports: React.FC = () => {
       if (s.status === 'voided') return;
       const saleDate = s.timestamp?.toDate ? s.timestamp.toDate() : new Date();
       if (saleDate < start || saleDate > end) return;
-      if (selectedLocationId !== 'all' && s.locationId !== selectedLocationId) return;
+      if (effectiveLocationId && s.locationId !== effectiveLocationId) return;
 
       const locName = locations.find(l => l.id === s.locationId)?.name || 'Unknown';
       const staffName = usersList.find(u => u.id === s.staffId)?.name || s.staffName || 'Staff';
@@ -1009,7 +1011,7 @@ export const Reports: React.FC = () => {
     returnTransactions.forEach(r => {
       const retDate = r.timestamp?.toDate ? r.timestamp.toDate() : new Date();
       if (retDate < start || retDate > end) return;
-      if (selectedLocationId !== 'all' && r.locationId !== selectedLocationId) return;
+      if (effectiveLocationId && r.locationId !== effectiveLocationId) return;
 
       const locName = locations.find(l => l.id === r.locationId)?.name || 'Unknown';
       const staffName = r.staffName || 'Staff';
@@ -1041,7 +1043,7 @@ export const Reports: React.FC = () => {
     adjustments.forEach(a => {
       const adjDate = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
       if (adjDate < start || adjDate > end) return;
-      if (selectedLocationId !== 'all' && a.locationId !== selectedLocationId) return;
+      if (effectiveLocationId && a.locationId !== effectiveLocationId) return;
 
       const prod = prodMap.get(a.productId);
       const locName = locations.find(l => l.id === a.locationId)?.name || a.locationName || 'Unknown';
@@ -1065,6 +1067,7 @@ export const Reports: React.FC = () => {
         type: 'adjustment',
         typeLabel: a.type === 'add' ? 'Stock Addition' : a.type === 'subtract' ? 'Stock Deduction / Loss' : 'Stock Set Count',
         quantityChange: qtyChange,
+        adjNewStock: a.newStock,
         reasonOrNotes: a.reason || 'Manual Adjustment',
         referenceId: a.id,
         performedBy: a.adjustedByName || 'Staff'
@@ -1076,7 +1079,7 @@ export const Reports: React.FC = () => {
       if (po.status !== 'received' && po.status !== 'partially_received') return;
       const poDate = po.receivedAt?.toDate ? po.receivedAt.toDate() : (po.updatedAt?.toDate ? po.updatedAt.toDate() : (po.createdAt?.toDate ? po.createdAt.toDate() : new Date()));
       if (poDate < start || poDate > end) return;
-      if (selectedLocationId !== 'all' && po.locationId !== selectedLocationId) return;
+      if (effectiveLocationId && po.locationId !== effectiveLocationId) return;
 
       const locName = locations.find(l => l.id === po.locationId)?.name || 'Unknown';
 
@@ -1104,9 +1107,40 @@ export const Reports: React.FC = () => {
       });
     });
 
+    // Group events by (productId, locationId) to calculate running End Count for each product at each branch
+    const eventsByProdLoc = new Map<string, ProductMovementEvent[]>();
+    events.forEach(ev => {
+      const key = `${ev.productId}_${ev.locationId}`;
+      if (!eventsByProdLoc.has(key)) {
+        eventsByProdLoc.set(key, []);
+      }
+      eventsByProdLoc.get(key)!.push(ev);
+    });
+
+    eventsByProdLoc.forEach((groupEvents) => {
+      // Sort newest to oldest
+      groupEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+      const firstEv = groupEvents[0];
+      const prod = prodMap.get(firstEv.productId);
+      const locStock = prod?.stocks?.[firstEv.locationId] ?? (firstEv.locationId === selectedLocationId ? (prod?.stock ?? 0) : (prod?.stock ?? 0));
+
+      let runningStock = locStock;
+      for (let i = 0; i < groupEvents.length; i++) {
+        const ev = groupEvents[i];
+        if (ev.adjNewStock !== undefined) {
+          ev.endCount = ev.adjNewStock;
+          runningStock = ev.adjNewStock - ev.quantityChange;
+        } else {
+          ev.endCount = runningStock;
+          runningStock = runningStock - ev.quantityChange;
+        }
+      }
+    });
+
     events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     return events;
-  }, [sales, returnTransactions, adjustments, purchaseOrders, products, locations, usersList, selectedLocationId, start, end]);
+  }, [sales, returnTransactions, adjustments, purchaseOrders, products, locations, usersList, effectiveLocationId, selectedLocationId, start, end]);
 
   const filteredMovementEvents = useMemo(() => {
     return productMovementEvents.filter(ev => {
@@ -1145,9 +1179,9 @@ export const Reports: React.FC = () => {
     filteredMovementEvents.forEach(ev => {
       if (!summaryMap[ev.productId]) {
         const prod = products.find(p => p.id === ev.productId);
-        const currStock = selectedLocationId === 'all' 
-          ? (prod?.stock ?? 0) 
-          : (prod?.stocks?.[selectedLocationId] ?? 0);
+        const currStock = effectiveLocationId 
+          ? (prod?.stocks?.[effectiveLocationId] ?? 0)
+          : (prod?.stock ?? 0);
 
         summaryMap[ev.productId] = {
           productId: ev.productId,
@@ -1173,7 +1207,7 @@ export const Reports: React.FC = () => {
     });
 
     return Object.values(summaryMap).sort((a, b) => b.eventsCount - a.eventsCount);
-  }, [filteredMovementEvents, products, selectedLocationId]);
+  }, [filteredMovementEvents, products, effectiveLocationId]);
 
   const totalRevenue = useMemo(() => {
     return filteredSales.reduce((sum, s) => sum + s.netTotal, 0);
@@ -1542,7 +1576,7 @@ export const Reports: React.FC = () => {
           <span className="text-[10px] text-slate-400">{ev.category} • {ev.brand}</span>
         </div>
       </TableCell>
-      {selectedLocationId === 'all' && (
+      {!effectiveLocationId && (
         <TableCell className="text-xs text-slate-600">{ev.locationName}</TableCell>
       )}
       <TableCell>
@@ -1563,6 +1597,11 @@ export const Reports: React.FC = () => {
           ev.quantityChange < 0 ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700"
         )}>
           {ev.quantityChange > 0 ? `+${ev.quantityChange}` : ev.quantityChange}
+        </span>
+      </TableCell>
+      <TableCell className="text-center">
+        <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100/80 px-2 py-0.5 rounded-md border border-slate-200/60">
+          {ev.endCount !== undefined ? `${ev.endCount}` : '—'}
         </span>
       </TableCell>
       <TableCell className="text-xs text-slate-600 max-w-[220px] truncate" title={ev.reasonOrNotes}>
@@ -1594,8 +1633,10 @@ export const Reports: React.FC = () => {
           {item.netChange > 0 ? `+${item.netChange}` : item.netChange}
         </span>
       </TableCell>
-      <TableCell className="text-right font-bold text-xs text-slate-900">
-        {item.currentStock} units
+      <TableCell className="text-right font-mono font-black text-xs text-slate-900">
+        <span className="bg-emerald-50 text-emerald-900 px-2 py-0.5 rounded-md border border-emerald-200">
+          {item.currentStock} units
+        </span>
       </TableCell>
     </TableRow>
   );
@@ -1668,17 +1709,31 @@ export const Reports: React.FC = () => {
       }));
     } else if (reportType === 'product-movement') {
       name = 'Product_Movement_Report';
-      data = filteredMovementEvents.map(e => ({
-        Date: format(e.timestamp, 'yyyy-MM-dd HH:mm'),
-        Product: e.productName,
-        Category: e.category,
-        Brand: e.brand,
-        Location: e.locationName,
-        Type: e.typeLabel,
-        'Qty Change': e.quantityChange > 0 ? `+${e.quantityChange}` : `${e.quantityChange}`,
-        'Reference / Notes': e.reasonOrNotes,
-        'Performed By': e.performedBy
-      }));
+      if (movementSubView === 'summary') {
+        data = productMovementSummary.map(s => ({
+          Product: s.productName,
+          Category: s.category,
+          Brand: s.brand,
+          'Inflow (+)': s.inflow,
+          'Outflow (-)': s.outflow,
+          'Net Shift': s.netChange,
+          'End Count (Current Stock)': s.currentStock,
+          'Movement Events': s.eventsCount
+        }));
+      } else {
+        data = filteredMovementEvents.map(e => ({
+          Date: format(e.timestamp, 'yyyy-MM-dd HH:mm'),
+          Product: e.productName,
+          Category: e.category,
+          Brand: e.brand,
+          Location: e.locationName,
+          Type: e.typeLabel,
+          'Qty Change': e.quantityChange > 0 ? `+${e.quantityChange}` : `${e.quantityChange}`,
+          'End Count': e.endCount !== undefined ? e.endCount : '',
+          'Reference / Notes': e.reasonOrNotes,
+          'Performed By': e.performedBy
+        }));
+      }
     }
 
     if (data.length === 0) {
@@ -1810,6 +1865,10 @@ export const Reports: React.FC = () => {
           setGuardrailStartDate(sDate);
           setGuardrailEndDate(eDate);
           setDateRange('custom');
+          // If the user has an assigned location and currently at 'all', lock to their current location
+          if (profile?.locationId && selectedLocationId === 'all') {
+            setSelectedLocationId(profile.locationId);
+          }
           setIsGuardrailApplied(true);
         }}
         onReset={() => {
@@ -2784,9 +2843,10 @@ export const Reports: React.FC = () => {
                     <TableRow>
                       <TableHead>Date & Time</TableHead>
                       <TableHead>Product Name</TableHead>
-                      {selectedLocationId === 'all' && <TableHead>Location</TableHead>}
+                      {!effectiveLocationId && <TableHead>Location</TableHead>}
                       <TableHead>Movement Type</TableHead>
                       <TableHead className="text-center">Qty Change</TableHead>
+                      <TableHead className="text-center">End Count</TableHead>
                       <TableHead>Reference / Reason</TableHead>
                       <TableHead>Performed By</TableHead>
                     </TableRow>
@@ -2794,7 +2854,7 @@ export const Reports: React.FC = () => {
                   <TableBody className="print:hidden">
                     {filteredMovementEvents.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={selectedLocationId === 'all' ? 7 : 6} className="text-center py-12 text-slate-400 italic">
+                        <TableCell colSpan={!effectiveLocationId ? 8 : 7} className="text-center py-12 text-slate-400 italic">
                           No product movement records found for this period
                         </TableCell>
                       </TableRow>
@@ -2805,7 +2865,7 @@ export const Reports: React.FC = () => {
                   <TableBody className="hidden print:table-row-group">
                     {filteredMovementEvents.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={selectedLocationId === 'all' ? 7 : 6} className="text-center py-8 text-slate-400 italic">
+                        <TableCell colSpan={!effectiveLocationId ? 8 : 7} className="text-center py-8 text-slate-400 italic">
                           No product movement records found for this period
                         </TableCell>
                       </TableRow>
@@ -2824,7 +2884,7 @@ export const Reports: React.FC = () => {
                       <TableHead className="text-center text-emerald-700">Inflow (+)</TableHead>
                       <TableHead className="text-center text-rose-700">Outflow (-)</TableHead>
                       <TableHead className="text-center">Net Shift</TableHead>
-                      <TableHead className="text-right">Current Stock</TableHead>
+                      <TableHead className="text-right">End Count (Stock)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="print:hidden">

@@ -57,10 +57,12 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // Non-admin and non-manager staff are locked to their assigned location
         setSelectedLocationId(profile.locationId);
       } else if (isAdmin || isManager) {
-        // Admins and Managers can use stored preference or default to 'all'
+        // Admins and Managers can use stored preference or default to assigned location
         const stored = localStorage.getItem('selectedLocationId');
         if (stored && (stored === 'all' || locations.some(l => l.id === stored))) {
           setSelectedLocationId(stored);
+        } else if (profile?.locationId) {
+          setSelectedLocationId(profile.locationId);
         } else {
           setSelectedLocationId('all');
         }

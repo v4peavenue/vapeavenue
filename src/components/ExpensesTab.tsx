@@ -42,14 +42,14 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
 }) => {
   const { settings } = useSettings();
   const { user, profile, isAdmin, isManager } = useAuth();
-  const { selectedLocationId, locations } = useLocations();
+  const { selectedLocationId, setSelectedLocationId, locations } = useLocations();
 
-  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
-    ? profile.locationId
-    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
+    ? selectedLocationId
+    : (profile?.locationId || null);
 
   const activeLocationName = effectiveLocationId
-    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
     : undefined;
 
   // Date Range Read Estimator state
@@ -268,6 +268,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         isQueryApplied={!!dateRange}
         activeLoadedRange={dateRange ? { start: dateRange.startDate, end: dateRange.endDate } : null}
         onApplyQuery={(s, e) => {
+          if (profile?.locationId && selectedLocationId === 'all') {
+            setSelectedLocationId(profile.locationId);
+          }
           if (onApplyDateRange) {
             onApplyDateRange(s, e);
           }

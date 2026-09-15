@@ -62,7 +62,7 @@ import {
 export const Purchasing: React.FC = () => {
   const { user, profile, isAdmin, isManager } = useAuth();
   const { settings } = useSettings();
-  const { selectedLocationId, locations: globalLocations } = useLocations();
+  const { selectedLocationId, setSelectedLocationId, locations: globalLocations } = useLocations();
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -79,12 +79,12 @@ export const Purchasing: React.FC = () => {
   const [isReceiving, setIsReceiving] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
 
-  const effectiveLocationId = (!isAdmin && !isManager && profile?.locationId)
-    ? profile.locationId
-    : (selectedLocationId !== 'all' ? selectedLocationId : null);
+  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
+    ? selectedLocationId
+    : (profile?.locationId || null);
 
   const activeLocationName = effectiveLocationId
-    ? ((globalLocations.length ? globalLocations : locations).find(l => l.id === effectiveLocationId)?.name || 'Selected Branch')
+    ? ((globalLocations.length ? globalLocations : locations).find(l => l.id === effectiveLocationId)?.name || 'Current Location')
     : undefined;
 
   const PURCHASING_CACHE_KEY = 'v4_purchasing_query_cache';
@@ -522,6 +522,9 @@ export const Purchasing: React.FC = () => {
         activeLoadedRange={appliedDateRange}
         onApplyQuery={(sDate, eDate) => {
           setAppliedDateRange({ start: sDate, end: eDate });
+          if (profile?.locationId && selectedLocationId === 'all') {
+            setSelectedLocationId(profile.locationId);
+          }
         }}
         onReset={() => {
           const now = new Date();
