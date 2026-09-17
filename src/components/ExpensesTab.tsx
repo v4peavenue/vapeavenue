@@ -44,9 +44,9 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   const { user, profile, isAdmin, isManager } = useAuth();
   const { selectedLocationId, setSelectedLocationId, locations } = useLocations();
 
-  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
-    ? selectedLocationId
-    : (profile?.locationId || null);
+  const effectiveLocationId = (!isAdmin && !isManager)
+    ? (profile?.locationId || null)
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
 
   const activeLocationName = effectiveLocationId
     ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
@@ -216,8 +216,8 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
     
     // Admins and Managers can view all store/location expenses
     if (isAdmin || isManager) {
-      if (profile?.locationId) {
-        return !t.locationId || t.locationId === profile.locationId;
+      if (selectedLocationId !== 'all') {
+        return !t.locationId || t.locationId === selectedLocationId;
       }
       return true;
     }
@@ -268,9 +268,6 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
         isQueryApplied={!!dateRange}
         activeLoadedRange={dateRange ? { start: dateRange.startDate, end: dateRange.endDate } : null}
         onApplyQuery={(s, e) => {
-          if (profile?.locationId && selectedLocationId === 'all') {
-            setSelectedLocationId(profile.locationId);
-          }
           if (onApplyDateRange) {
             onApplyDateRange(s, e);
           }

@@ -79,9 +79,9 @@ export const Purchasing: React.FC = () => {
   const [isReceiving, setIsReceiving] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
 
-  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
-    ? selectedLocationId
-    : (profile?.locationId || null);
+  const effectiveLocationId = (!isAdmin && !isManager)
+    ? (profile?.locationId || null)
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
 
   const activeLocationName = effectiveLocationId
     ? ((globalLocations.length ? globalLocations : locations).find(l => l.id === effectiveLocationId)?.name || 'Current Location')
@@ -522,9 +522,6 @@ export const Purchasing: React.FC = () => {
         activeLoadedRange={appliedDateRange}
         onApplyQuery={(sDate, eDate) => {
           setAppliedDateRange({ start: sDate, end: eDate });
-          if (profile?.locationId && selectedLocationId === 'all') {
-            setSelectedLocationId(profile.locationId);
-          }
         }}
         onReset={() => {
           const now = new Date();

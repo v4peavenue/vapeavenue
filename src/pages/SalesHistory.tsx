@@ -192,9 +192,9 @@ export const SalesHistory: React.FC = () => {
   const [isDeletingEntry, setIsDeletingEntry] = useState(false);
   const isDeletingEntryRef = useRef(false);
 
-  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
-    ? selectedLocationId
-    : (profile?.locationId || null);
+  const effectiveLocationId = (!isAdmin && !isManager)
+    ? (profile?.locationId || null)
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
 
   const activeLocationName = effectiveLocationId
     ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
@@ -265,9 +265,6 @@ export const SalesHistory: React.FC = () => {
   const handleApplyGuardedDateRange = (sDate: string, eDate: string) => {
     setQueryDateRange({ start: sDate, end: eDate });
     setDateRange({ start: sDate, end: eDate });
-    if (profile?.locationId && selectedLocationId === 'all') {
-      setSelectedLocationId(profile.locationId);
-    }
   };
 
   const handleResetGuardedDateRange = () => {

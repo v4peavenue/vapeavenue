@@ -280,9 +280,9 @@ export const Reports: React.FC = () => {
     pageSize
   ]);
 
-  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
-    ? selectedLocationId
-    : (profile?.locationId || null);
+  const effectiveLocationId = (!isAdmin && !isManager)
+    ? (profile?.locationId || null)
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
 
   const activeLocationName = effectiveLocationId
     ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
@@ -1865,10 +1865,6 @@ export const Reports: React.FC = () => {
           setGuardrailStartDate(sDate);
           setGuardrailEndDate(eDate);
           setDateRange('custom');
-          // If the user has an assigned location and currently at 'all', lock to their current location
-          if (profile?.locationId && selectedLocationId === 'all') {
-            setSelectedLocationId(profile.locationId);
-          }
           setIsGuardrailApplied(true);
         }}
         onReset={() => {

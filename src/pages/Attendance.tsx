@@ -237,9 +237,9 @@ export const Attendance: React.FC = () => {
     }
   }, [reportStartDate, reportEndDate, guardrailReportStart, guardrailReportEnd, isReportGuardrailApplied]);
 
-  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
-    ? selectedLocationId
-    : (profile?.locationId || null);
+  const effectiveLocationId = (!isAdmin && !isManager)
+    ? (profile?.locationId || null)
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
 
   const activeLocationName = effectiveLocationId
     ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
@@ -2138,9 +2138,6 @@ export const Attendance: React.FC = () => {
                   onApplyQuery={(sDate, eDate) => {
                     setReportStartDate(sDate);
                     setReportEndDate(eDate);
-                    if (profile?.locationId && selectedLocationId === 'all') {
-                      setSelectedLocationId(profile.locationId);
-                    }
                     setIsReportGuardrailApplied(true);
                   }}
                   onReset={() => {

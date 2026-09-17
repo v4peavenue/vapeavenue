@@ -121,9 +121,9 @@ export const Dashboard: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const effectiveLocationId = (selectedLocationId && selectedLocationId !== 'all')
-    ? selectedLocationId
-    : (profile?.locationId || null);
+  const effectiveLocationId = (!isAdmin && !isManager)
+    ? (profile?.locationId || null)
+    : (selectedLocationId !== 'all' ? selectedLocationId : null);
 
   const activeLocationName = effectiveLocationId
     ? (locations.find(l => l.id === effectiveLocationId)?.name || 'Current Location')
@@ -874,9 +874,6 @@ export const Dashboard: React.FC = () => {
           setCustomStartDate(sDate);
           setCustomEndDate(eDate);
           setTimeRange('custom');
-          if (profile?.locationId && selectedLocationId === 'all') {
-            setSelectedLocationId(profile.locationId);
-          }
           setIsGuardrailApplied(true);
         }}
         onReset={() => {
