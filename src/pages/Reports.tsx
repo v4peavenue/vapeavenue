@@ -21,7 +21,11 @@ import {
   ChevronsRight,
   ShieldCheck,
   Calculator,
-  Printer
+  Printer,
+  ArrowUp,
+  ArrowDown,
+  X,
+  Layers
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, Timestamp, orderBy, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -159,6 +163,104 @@ export interface ProductMovementEvent {
   performedBy: string;
 }
 
+export interface SortRule {
+  id: string;
+  desc: boolean;
+}
+
+export const REPORT_COLUMN_LABELS: Record<string, string> = {
+  orderId: 'Order ID',
+  date: 'Date & Time',
+  location: 'Location',
+  customer: 'Customer Name',
+  loyaltyCard: 'Loyalty Card #',
+  promoCode: 'Promo Code #',
+  items: 'Items',
+  method: 'Payment Method',
+  amount: 'Amount',
+  sellerName: 'Seller Name',
+  role: 'Role',
+  ordersCount: 'Orders Count',
+  itemsSold: 'Items Sold',
+  revenue: 'Total Revenue',
+  profit: 'Gross Profit',
+  avgOrderValue: 'Avg Order Value',
+  name: 'Product Name',
+  category: 'Category',
+  stock: 'Stock Level',
+  cost: 'Unit Cost',
+  totalValue: 'Total Value',
+  unitsSold: 'Units Sold',
+  productName: 'Product Name',
+  type: 'Adjustment Type',
+  adjustmentQuantity: 'Adjustment Qty',
+  newStock: 'New Stock',
+  reason: 'Reason / Notes',
+  adjustedByName: 'Adjusted By',
+  typeLabel: 'Movement Type',
+  quantityChange: 'Qty Change',
+  endCount: 'End Count',
+  performedBy: 'Performed By',
+  brand: 'Brand',
+  inflow: 'Inflow (+)',
+  outflow: 'Outflow (-)',
+  netChange: 'Net Shift',
+  currentStock: 'End Count (Stock)'
+};
+
+export const parseTimestampDate = (ts: any): Date => {
+  if (!ts) return new Date(0);
+  if (typeof ts.toDate === 'function') {
+    try {
+      return ts.toDate();
+    } catch {
+      // fallback
+    }
+  }
+  if (ts instanceof Date) return ts;
+  if (typeof ts === 'string' || typeof ts === 'number') {
+    const d = new Date(ts);
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (ts.seconds !== undefined) {
+    return new Date(ts.seconds * 1000);
+  }
+  return new Date(0);
+};
+
+export function applyMultiSort<T>(
+  items: T[],
+  rules: SortRule[],
+  getValue: (item: T, columnId: string) => any
+): T[] {
+  if (!rules || rules.length === 0) return items;
+
+  return [...items].sort((a, b) => {
+    for (const rule of rules) {
+      const valA = getValue(a, rule.id);
+      const valB = getValue(b, rule.id);
+
+      if (valA === valB) continue;
+      if (valA == null || valA === '') return 1;
+      if (valB == null || valB === '') return -1;
+
+      let comp = 0;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        comp = valA - valB;
+      } else if (valA instanceof Date && valB instanceof Date) {
+        comp = valA.getTime() - valB.getTime();
+      } else {
+        comp = String(valA).localeCompare(String(valB), undefined, { numeric: true, sensitivity: 'base' });
+      }
+
+      if (comp !== 0) {
+        return rule.desc ? -comp : comp;
+      }
+    }
+    return 0;
+  });
+}
+
 const REPORTS_CACHE_KEY = 'v4_reports_query_cache';
 
 interface ReportsCacheState {
@@ -179,6 +281,8 @@ interface ReportsCacheState {
   selectedProduct?: string;
   selectedAdjustmentCategory?: string;
   pageSize?: number;
+  sortRulesByReport?: Record<string, SortRule[]>;
+  multiSortMode?: boolean;
 }
 
 const getStoredReportsCache = (): ReportsCacheState | null => {
@@ -234,6 +338,94 @@ export const Reports: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(() => initialCache?.pageSize || 20);
 
+  // Multi-column sorting state per report
+  const [sortRulesByReport, setSortRulesByReport] = useState<Record<string, SortRule[]>>(() => {
+    return initialCache?.sortRulesByReport || {
+      sales: [{ id: 'date', desc: true }],
+      'sales-by-seller': [{ id: 'revenue', desc: true }],
+      inventory: [{ id: 'name', desc: false }],
+      profit: [{ id: 'revenue', desc: true }],
+      'stock-adjustments': [{ id: 'date', desc: true }],
+      'product-movement-detailed': [{ id: 'date', desc: true }],
+      'product-movement-summary': [{ id: 'inflow', desc: true }]
+    };
+  });
+  const [multiSortMode, setMultiSortMode] = useState<boolean>(() => !!initialCache?.multiSortMode);
+
+  const activeSortKey = reportType === 'product-movement'
+    ? (movementSubView === 'detailed' ? 'product-movement-detailed' : 'product-movement-summary')
+    : reportType;
+
+  const activeRules = useMemo(() => {
+    return sortRulesByReport[activeSortKey] || [];
+  }, [sortRulesByReport, activeSortKey]);
+
+  const handleColumnSort = (columnId: string, event?: React.MouseEvent) => {
+    const isMulti = !!(event?.shiftKey || multiSortMode);
+
+    setSortRulesByReport(prev => {
+      const current = prev[activeSortKey] ? [...prev[activeSortKey]] : [];
+      const existingIdx = current.findIndex(r => r.id === columnId);
+
+      if (isMulti) {
+        if (existingIdx >= 0) {
+          if (!current[existingIdx].desc) {
+            current[existingIdx] = { ...current[existingIdx], desc: true };
+          } else {
+            current.splice(existingIdx, 1);
+          }
+        } else {
+          current.push({ id: columnId, desc: false });
+        }
+        return { ...prev, [activeSortKey]: current };
+      } else {
+        if (current.length === 1 && current[0].id === columnId) {
+          if (!current[0].desc) {
+            return { ...prev, [activeSortKey]: [{ id: columnId, desc: true }] };
+          } else {
+            return { ...prev, [activeSortKey]: [] };
+          }
+        } else {
+          return { ...prev, [activeSortKey]: [{ id: columnId, desc: false }] };
+        }
+      }
+    });
+
+    setCurrentPage(1);
+  };
+
+  const handleToggleRuleDirection = (columnId: string) => {
+    setSortRulesByReport(prev => {
+      const current = prev[activeSortKey] ? [...prev[activeSortKey]] : [];
+      const idx = current.findIndex(r => r.id === columnId);
+      if (idx >= 0) {
+        current[idx] = { ...current[idx], desc: !current[idx].desc };
+        return { ...prev, [activeSortKey]: current };
+      }
+      return prev;
+    });
+    setCurrentPage(1);
+  };
+
+  const handleRemoveRule = (columnId: string) => {
+    setSortRulesByReport(prev => {
+      const current = prev[activeSortKey] ? [...prev[activeSortKey]] : [];
+      return {
+        ...prev,
+        [activeSortKey]: current.filter(r => r.id !== columnId)
+      };
+    });
+    setCurrentPage(1);
+  };
+
+  const handleClearSorts = () => {
+    setSortRulesByReport(prev => ({
+      ...prev,
+      [activeSortKey]: []
+    }));
+    setCurrentPage(1);
+  };
+
   // Sync state to sessionStorage whenever query, tab, or filter parameters update
   useEffect(() => {
     try {
@@ -254,7 +446,9 @@ export const Reports: React.FC = () => {
         selectedBrand,
         selectedProduct,
         selectedAdjustmentCategory,
-        pageSize
+        pageSize,
+        sortRulesByReport,
+        multiSortMode
       };
       sessionStorage.setItem(REPORTS_CACHE_KEY, JSON.stringify(stateToSave));
     } catch (e) {
@@ -277,7 +471,9 @@ export const Reports: React.FC = () => {
     selectedBrand,
     selectedProduct,
     selectedAdjustmentCategory,
-    pageSize
+    pageSize,
+    sortRulesByReport,
+    multiSortMode
   ]);
 
   const effectiveLocationId = (!isAdmin && !isManager)
@@ -1241,41 +1437,161 @@ export const Reports: React.FC = () => {
     return Math.max(1, Math.ceil(currentTotalRecords / pageSize));
   }, [currentTotalRecords, pageSize]);
 
+  // Sorted datasets reflecting active multi-column sort rules
+  const sortedSales = useMemo(() => {
+    const rules = sortRulesByReport['sales'] || [];
+    return applyMultiSort(filteredSales, rules, (sale, colId) => {
+      switch (colId) {
+        case 'orderId': return sale.id;
+        case 'date': return parseTimestampDate(sale.timestamp).getTime();
+        case 'location': return locations.find(l => l.id === sale.locationId)?.name || '';
+        case 'customer': return getSaleCustomerName(sale);
+        case 'loyaltyCard': return getSaleLoyaltyCardNumber(sale);
+        case 'promoCode': return getSalePromoCode(sale);
+        case 'items': {
+          const items = (selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all') ? sale.matchingItems : sale.items;
+          return items.reduce((sum, item) => sum + Math.max(0, item.quantity - (item.returnedQuantity || 0)), 0);
+        }
+        case 'method': return getPaymentMethodName(sale.paymentMethod);
+        case 'amount': return sale.netTotal;
+        default: return '';
+      }
+    });
+  }, [filteredSales, sortRulesByReport, locations, selectedCategory, selectedBrand, selectedProduct]);
+
+  const sortedSalesBySeller = useMemo(() => {
+    const rules = sortRulesByReport['sales-by-seller'] || [];
+    return applyMultiSort(salesBySellerData, rules, (d, colId) => {
+      switch (colId) {
+        case 'sellerName': return d.sellerName;
+        case 'role': return d.sellerRole;
+        case 'ordersCount': return d.ordersCount;
+        case 'itemsSold': return d.itemsCount;
+        case 'revenue': return d.revenue;
+        case 'profit': return d.profit;
+        case 'avgOrderValue': return d.revenue / (d.ordersCount || 1);
+        default: return '';
+      }
+    });
+  }, [salesBySellerData, sortRulesByReport]);
+
+  const sortedProducts = useMemo(() => {
+    const rules = sortRulesByReport['inventory'] || [];
+    return applyMultiSort(filteredProducts, rules, (p, colId) => {
+      const stock = selectedLocationId === 'all' 
+        ? Object.values(p.stocks || {}).reduce((s, val) => (s as number) + Number(val), 0) as number
+        : Number(p.stocks?.[selectedLocationId] || 0);
+      switch (colId) {
+        case 'name': return p.name;
+        case 'category': return p.category;
+        case 'stock': return stock;
+        case 'cost': return p.cost ?? 0;
+        case 'totalValue': return (p.cost ?? 0) * stock;
+        default: return '';
+      }
+    });
+  }, [filteredProducts, sortRulesByReport, selectedLocationId]);
+
+  const sortedProfitability = useMemo(() => {
+    const rules = sortRulesByReport['profit'] || [];
+    return applyMultiSort(profitabilityData, rules, (item, colId) => {
+      switch (colId) {
+        case 'name': return item.product.name;
+        case 'unitsSold': return item.unitsSold;
+        case 'revenue': return item.revenue;
+        case 'cost': return item.cost;
+        case 'profit': return item.profit;
+        default: return '';
+      }
+    });
+  }, [profitabilityData, sortRulesByReport]);
+
+  const sortedAdjustments = useMemo(() => {
+    const rules = sortRulesByReport['stock-adjustments'] || [];
+    return applyMultiSort(filteredAdjustments, rules, (adj, colId) => {
+      switch (colId) {
+        case 'date': return parseTimestampDate(adj.timestamp).getTime();
+        case 'productName': return adj.productName || '';
+        case 'location': return adj.locationName || '';
+        case 'category': return adj.reasonCategory || adj.reason || '';
+        case 'type': return adj.type || '';
+        case 'adjustmentQuantity': return adj.adjustmentQuantity;
+        case 'newStock': return adj.newStock;
+        case 'reason': return adj.reason || '';
+        case 'adjustedByName': return adj.adjustedByName || '';
+        default: return '';
+      }
+    });
+  }, [filteredAdjustments, sortRulesByReport]);
+
+  const sortedMovementEvents = useMemo(() => {
+    const rules = sortRulesByReport['product-movement-detailed'] || [];
+    return applyMultiSort(filteredMovementEvents, rules, (ev, colId) => {
+      switch (colId) {
+        case 'date': return ev.timestamp.getTime();
+        case 'productName': return ev.productName;
+        case 'location': return ev.locationName;
+        case 'typeLabel': return ev.typeLabel;
+        case 'quantityChange': return ev.quantityChange;
+        case 'endCount': return ev.endCount ?? 0;
+        case 'reason': return ev.reasonOrNotes;
+        case 'performedBy': return ev.performedBy;
+        default: return '';
+      }
+    });
+  }, [filteredMovementEvents, sortRulesByReport]);
+
+  const sortedMovementSummary = useMemo(() => {
+    const rules = sortRulesByReport['product-movement-summary'] || [];
+    return applyMultiSort(productMovementSummary, rules, (item, colId) => {
+      switch (colId) {
+        case 'productName': return item.productName;
+        case 'category': return item.category;
+        case 'brand': return item.brand;
+        case 'inflow': return item.inflow;
+        case 'outflow': return item.outflow;
+        case 'netChange': return item.netChange;
+        case 'currentStock': return item.currentStock;
+        default: return '';
+      }
+    });
+  }, [productMovementSummary, sortRulesByReport]);
+
   // Paginated slices for each dataset
   const paginatedSales = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return filteredSales.slice(startIdx, startIdx + pageSize);
-  }, [filteredSales, currentPage, pageSize]);
+    return sortedSales.slice(startIdx, startIdx + pageSize);
+  }, [sortedSales, currentPage, pageSize]);
 
   const paginatedSalesBySeller = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return salesBySellerData.slice(startIdx, startIdx + pageSize);
-  }, [salesBySellerData, currentPage, pageSize]);
+    return sortedSalesBySeller.slice(startIdx, startIdx + pageSize);
+  }, [sortedSalesBySeller, currentPage, pageSize]);
 
   const paginatedProducts = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return filteredProducts.slice(startIdx, startIdx + pageSize);
-  }, [filteredProducts, currentPage, pageSize]);
+    return sortedProducts.slice(startIdx, startIdx + pageSize);
+  }, [sortedProducts, currentPage, pageSize]);
 
   const paginatedProfitability = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return profitabilityData.slice(startIdx, startIdx + pageSize);
-  }, [profitabilityData, currentPage, pageSize]);
+    return sortedProfitability.slice(startIdx, startIdx + pageSize);
+  }, [sortedProfitability, currentPage, pageSize]);
 
   const paginatedAdjustments = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return filteredAdjustments.slice(startIdx, startIdx + pageSize);
-  }, [filteredAdjustments, currentPage, pageSize]);
+    return sortedAdjustments.slice(startIdx, startIdx + pageSize);
+  }, [sortedAdjustments, currentPage, pageSize]);
 
   const paginatedMovementEvents = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return filteredMovementEvents.slice(startIdx, startIdx + pageSize);
-  }, [filteredMovementEvents, currentPage, pageSize]);
+    return sortedMovementEvents.slice(startIdx, startIdx + pageSize);
+  }, [sortedMovementEvents, currentPage, pageSize]);
 
   const paginatedMovementSummary = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
-    return productMovementSummary.slice(startIdx, startIdx + pageSize);
-  }, [productMovementSummary, currentPage, pageSize]);
+    return sortedMovementSummary.slice(startIdx, startIdx + pageSize);
+  }, [sortedMovementSummary, currentPage, pageSize]);
 
   const inventoryValue = useMemo(() => {
     return filteredProducts.reduce((sum, p) => {
@@ -1648,11 +1964,11 @@ export const Reports: React.FC = () => {
 
     if (reportType === 'sales') {
       name = 'Sales_Report';
-      data = filteredSales.map(s => {
+      data = sortedSales.map(s => {
         const itemsToExport = hasItemFilter ? s.matchingItems : s.items;
         return {
           ID: s.id,
-          Date: format(s.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
+          Date: format(parseTimestampDate(s.timestamp), 'yyyy-MM-dd HH:mm'),
           Location: locations.find(l => l.id === s.locationId)?.name || 'Unknown',
           'Customer Name': getSaleCustomerName(s),
           'Loyalty Card Number': getSaleLoyaltyCardNumber(s),
@@ -1667,7 +1983,7 @@ export const Reports: React.FC = () => {
       });
     } else if (reportType === 'inventory') {
       name = 'Inventory_Report';
-      data = filteredProducts.map(p => ({
+      data = sortedProducts.map(p => ({
         Name: p.name,
         Category: p.category,
         Brand: p.brand || 'N/A',
@@ -1677,7 +1993,7 @@ export const Reports: React.FC = () => {
       }));
     } else if (reportType === 'profit') {
       name = 'Profitability_Report';
-      data = profitabilityData.map(item => ({
+      data = sortedProfitability.map(item => ({
         Name: item.product.name,
         UnitsSold: item.unitsSold,
         Revenue: item.revenue.toFixed(2),
@@ -1686,8 +2002,8 @@ export const Reports: React.FC = () => {
       }));
     } else if (reportType === 'stock-adjustments') {
       name = 'Adjustments_Report';
-      data = filteredAdjustments.map(a => ({
-        Date: format(a.timestamp.toDate(), 'yyyy-MM-dd HH:mm'),
+      data = sortedAdjustments.map(a => ({
+        Date: format(parseTimestampDate(a.timestamp), 'yyyy-MM-dd HH:mm'),
         Product: a.productName,
         Location: a.locationName,
         Category: a.reasonCategory || 'defective',
@@ -1698,7 +2014,7 @@ export const Reports: React.FC = () => {
       }));
     } else if (reportType === 'sales-by-seller') {
       name = 'Sales_by_Seller_Report';
-      data = salesBySellerData.map(d => ({
+      data = sortedSalesBySeller.map(d => ({
         'Seller Name': d.sellerName,
         Role: d.sellerRole,
         'Orders Count': d.ordersCount,
@@ -1710,7 +2026,7 @@ export const Reports: React.FC = () => {
     } else if (reportType === 'product-movement') {
       name = 'Product_Movement_Report';
       if (movementSubView === 'summary') {
-        data = productMovementSummary.map(s => ({
+        data = sortedMovementSummary.map(s => ({
           Product: s.productName,
           Category: s.category,
           Brand: s.brand,
@@ -1721,7 +2037,7 @@ export const Reports: React.FC = () => {
           'Movement Events': s.eventsCount
         }));
       } else {
-        data = filteredMovementEvents.map(e => ({
+        data = sortedMovementEvents.map(e => ({
           Date: format(e.timestamp, 'yyyy-MM-dd HH:mm'),
           Product: e.productName,
           Category: e.category,
@@ -1743,6 +2059,60 @@ export const Reports: React.FC = () => {
 
     exportToCSV(data, name);
     toast.success(`${name.replace('_', ' ')} exported`);
+  };
+
+  const renderSortableHeader = (
+    columnId: string,
+    label: string,
+    options?: {
+      className?: string;
+      align?: 'left' | 'center' | 'right';
+    }
+  ) => {
+    const align = options?.align || 'left';
+    const ruleIndex = activeRules.findIndex(r => r.id === columnId);
+    const isSorted = ruleIndex >= 0;
+    const rule = isSorted ? activeRules[ruleIndex] : null;
+
+    return (
+      <TableHead
+        key={columnId}
+        onClick={(e) => handleColumnSort(columnId, e)}
+        className={cn(
+          "cursor-pointer select-none transition-colors hover:bg-slate-100 hover:text-slate-900 group py-2.5",
+          isSorted && "text-indigo-900 bg-indigo-50/70 font-semibold",
+          align === 'right' && "text-right",
+          align === 'center' && "text-center",
+          options?.className
+        )}
+        title={`Click to sort by ${label}. Hold Shift or enable Multi-Sort to sort across multiple columns.`}
+      >
+        <div className={cn(
+          "inline-flex items-center gap-1.5 w-full",
+          align === 'right' && "justify-end",
+          align === 'center' && "justify-center",
+          align === 'left' && "justify-start"
+        )}>
+          <span className="truncate">{label}</span>
+          <span className="inline-flex items-center shrink-0">
+            {isSorted ? (
+              rule?.desc ? (
+                <ArrowDown className="w-3.5 h-3.5 text-indigo-600 font-bold" />
+              ) : (
+                <ArrowUp className="w-3.5 h-3.5 text-indigo-600 font-bold" />
+              )
+            ) : (
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+            )}
+            {activeRules.length > 1 && isSorted && (
+              <span className="ml-1 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold">
+                {ruleIndex + 1}
+              </span>
+            )}
+          </span>
+        </div>
+      </TableHead>
+    );
   };
 
   return (
@@ -2499,19 +2869,99 @@ export const Reports: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {/* Multi-Column Sorting Toolbar */}
+          <div className="px-4 py-2.5 bg-slate-50/90 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2.5 text-xs no-print">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-slate-700 font-medium shrink-0">
+                <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Sort by:</span>
+              </div>
+
+              {activeRules.length === 0 ? (
+                <span className="text-slate-400 italic text-[11px]">
+                  Click any column header to sort. Hold Shift or enable Multi-Sort to sort across multiple columns.
+                </span>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {activeRules.map((rule, idx) => (
+                    <Badge
+                      key={rule.id}
+                      variant="outline"
+                      className="bg-white border-indigo-200 text-indigo-950 font-medium pl-2 pr-1 py-0.5 text-[11px] flex items-center gap-1 shadow-2xs hover:bg-indigo-50/60 transition-colors"
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[9px] inline-flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleRuleDirection(rule.id)}
+                        className="hover:underline flex items-center gap-1 font-medium text-slate-800"
+                        title="Click to toggle ascending/descending"
+                      >
+                        <span>{REPORT_COLUMN_LABELS[rule.id] || rule.id}</span>
+                        {rule.desc ? (
+                          <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />
+                        ) : (
+                          <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRule(rule.id)}
+                        className="ml-0.5 p-0.5 rounded-full hover:bg-slate-200/80 text-slate-400 hover:text-slate-700 transition-colors"
+                        title="Remove column from sort"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </Badge>
+                  ))}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearSorts}
+                    className="h-6 px-2 text-[11px] text-slate-500 hover:text-rose-600 hover:bg-rose-50"
+                  >
+                    Clear Sort
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant={multiSortMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMultiSortMode(!multiSortMode)}
+                className={cn(
+                  "h-7 text-xs px-2.5 gap-1.5 font-medium transition-all shadow-2xs",
+                  multiSortMode 
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600" 
+                    : "bg-white text-slate-700 hover:bg-slate-50 border-slate-200"
+                )}
+                title={multiSortMode 
+                  ? "Multi-Sort is ACTIVE: clicking headers adds or adjusts secondary sort columns" 
+                  : "Enable Multi-Sort mode to chain column sorts without pressing Shift"}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Multi-Sort: {multiSortMode ? 'ON' : 'OFF'}</span>
+              </Button>
+            </div>
+          </div>
+
           {reportType === 'sales' && (
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  <TableHead className="w-[100px]">Order ID</TableHead>
-                  <TableHead>Date & Time</TableHead>
-                  {selectedLocationId === 'all' && <TableHead>Location</TableHead>}
-                  <TableHead>Customer Name</TableHead>
-                  <TableHead>Loyalty Card #</TableHead>
-                  <TableHead>Promo Code #</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  {renderSortableHeader('orderId', 'Order ID', { className: 'w-[100px]' })}
+                  {renderSortableHeader('date', 'Date & Time')}
+                  {selectedLocationId === 'all' && renderSortableHeader('location', 'Location')}
+                  {renderSortableHeader('customer', 'Customer Name')}
+                  {renderSortableHeader('loyaltyCard', 'Loyalty Card #')}
+                  {renderSortableHeader('promoCode', 'Promo Code #')}
+                  {renderSortableHeader('items', 'Items')}
+                  {renderSortableHeader('method', 'Method')}
+                  {renderSortableHeader('amount', 'Amount', { align: 'right' })}
                 </TableRow>
               </TableHeader>
               <TableBody className="print:hidden">
@@ -2533,7 +2983,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredSales.map(renderSaleRow)
+                  sortedSales.map(renderSaleRow)
                 )}
               </TableBody>
             </Table>
@@ -2543,13 +2993,13 @@ export const Reports: React.FC = () => {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  <TableHead>Seller Name</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="text-center">Orders Count</TableHead>
-                  <TableHead className="text-center">Items Sold</TableHead>
-                  <TableHead className="text-right">Total Revenue</TableHead>
-                  <TableHead className="text-right">Gross Profit</TableHead>
-                  <TableHead className="text-right">Avg Order Value</TableHead>
+                  {renderSortableHeader('sellerName', 'Seller Name')}
+                  {renderSortableHeader('role', 'Role')}
+                  {renderSortableHeader('ordersCount', 'Orders Count', { align: 'center' })}
+                  {renderSortableHeader('itemsSold', 'Items Sold', { align: 'center' })}
+                  {renderSortableHeader('revenue', 'Total Revenue', { align: 'right' })}
+                  {renderSortableHeader('profit', 'Gross Profit', { align: 'right' })}
+                  {renderSortableHeader('avgOrderValue', 'Avg Order Value', { align: 'right' })}
                 </TableRow>
               </TableHeader>
               <TableBody className="print:hidden">
@@ -2571,7 +3021,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  salesBySellerData.map(renderSellerRow)
+                  sortedSalesBySeller.map(renderSellerRow)
                 )}
               </TableBody>
               {salesBySellerData.length > 0 && (
@@ -2603,11 +3053,11 @@ export const Reports: React.FC = () => {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Stock Level</TableHead>
-                  <TableHead>Unit Cost</TableHead>
-                  <TableHead className="text-right">Total Value</TableHead>
+                  {renderSortableHeader('name', 'Product Name')}
+                  {renderSortableHeader('category', 'Category')}
+                  {renderSortableHeader('stock', 'Stock Level')}
+                  {renderSortableHeader('cost', 'Unit Cost')}
+                  {renderSortableHeader('totalValue', 'Total Value', { align: 'right' })}
                 </TableRow>
               </TableHeader>
               <TableBody className="print:hidden">
@@ -2629,7 +3079,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredProducts.map(renderProductRow)
+                  sortedProducts.map(renderProductRow)
                 )}
               </TableBody>
               {filteredProducts.length > 0 && (
@@ -2663,11 +3113,11 @@ export const Reports: React.FC = () => {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Units Sold</TableHead>
-                  <TableHead>Revenue</TableHead>
-                  <TableHead>Cost of Goods</TableHead>
-                  <TableHead className="text-right">Gross Profit</TableHead>
+                  {renderSortableHeader('name', 'Product Name')}
+                  {renderSortableHeader('unitsSold', 'Units Sold')}
+                  {renderSortableHeader('revenue', 'Revenue')}
+                  {renderSortableHeader('cost', 'Cost of Goods')}
+                  {renderSortableHeader('profit', 'Gross Profit', { align: 'right' })}
                 </TableRow>
               </TableHeader>
               <TableBody className="print:hidden">
@@ -2689,7 +3139,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  profitabilityData.map(renderProfitRow)
+                  sortedProfitability.map(renderProfitRow)
                 )}
               </TableBody>
               {profitabilityData.length > 0 && (
@@ -2718,15 +3168,15 @@ export const Reports: React.FC = () => {
             <Table>
               <TableHeader className="bg-slate-50/50">
                 <TableRow>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Product</TableHead>
-                  {selectedLocationId === 'all' && <TableHead>Location</TableHead>}
-                  <TableHead>Category</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Adjustment</TableHead>
-                  <TableHead>New Stock</TableHead>
-                  <TableHead>Reason / Notes</TableHead>
-                  <TableHead>Adjusted By</TableHead>
+                  {renderSortableHeader('date', 'Date & Time')}
+                  {renderSortableHeader('productName', 'Product')}
+                  {selectedLocationId === 'all' && renderSortableHeader('location', 'Location')}
+                  {renderSortableHeader('category', 'Category')}
+                  {renderSortableHeader('type', 'Type')}
+                  {renderSortableHeader('adjustmentQuantity', 'Adjustment')}
+                  {renderSortableHeader('newStock', 'New Stock')}
+                  {renderSortableHeader('reason', 'Reason / Notes')}
+                  {renderSortableHeader('adjustedByName', 'Adjusted By')}
                 </TableRow>
               </TableHeader>
               <TableBody className="print:hidden">
@@ -2748,7 +3198,7 @@ export const Reports: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAdjustments.map(renderAdjustmentRow)
+                  sortedAdjustments.map(renderAdjustmentRow)
                 )}
               </TableBody>
             </Table>
@@ -2837,14 +3287,14 @@ export const Reports: React.FC = () => {
                 <Table>
                   <TableHeader className="bg-slate-50/50">
                     <TableRow>
-                      <TableHead>Date & Time</TableHead>
-                      <TableHead>Product Name</TableHead>
-                      {!effectiveLocationId && <TableHead>Location</TableHead>}
-                      <TableHead>Movement Type</TableHead>
-                      <TableHead className="text-center">Qty Change</TableHead>
-                      <TableHead className="text-center">End Count</TableHead>
-                      <TableHead>Reference / Reason</TableHead>
-                      <TableHead>Performed By</TableHead>
+                      {renderSortableHeader('date', 'Date & Time')}
+                      {renderSortableHeader('productName', 'Product Name')}
+                      {!effectiveLocationId && renderSortableHeader('location', 'Location')}
+                      {renderSortableHeader('typeLabel', 'Movement Type')}
+                      {renderSortableHeader('quantityChange', 'Qty Change', { align: 'center' })}
+                      {renderSortableHeader('endCount', 'End Count', { align: 'center' })}
+                      {renderSortableHeader('reason', 'Reference / Reason')}
+                      {renderSortableHeader('performedBy', 'Performed By')}
                     </TableRow>
                   </TableHeader>
                   <TableBody className="print:hidden">
@@ -2866,7 +3316,7 @@ export const Reports: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredMovementEvents.map(renderMovementEventRow)
+                      sortedMovementEvents.map(renderMovementEventRow)
                     )}
                   </TableBody>
                 </Table>
@@ -2874,13 +3324,13 @@ export const Reports: React.FC = () => {
                 <Table>
                   <TableHeader className="bg-slate-50/50">
                     <TableRow>
-                      <TableHead>Product Name</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Brand</TableHead>
-                      <TableHead className="text-center text-emerald-700">Inflow (+)</TableHead>
-                      <TableHead className="text-center text-rose-700">Outflow (-)</TableHead>
-                      <TableHead className="text-center">Net Shift</TableHead>
-                      <TableHead className="text-right">End Count (Stock)</TableHead>
+                      {renderSortableHeader('productName', 'Product Name')}
+                      {renderSortableHeader('category', 'Category')}
+                      {renderSortableHeader('brand', 'Brand')}
+                      {renderSortableHeader('inflow', 'Inflow (+)', { align: 'center', className: 'text-emerald-700' })}
+                      {renderSortableHeader('outflow', 'Outflow (-)', { align: 'center', className: 'text-rose-700' })}
+                      {renderSortableHeader('netChange', 'Net Shift', { align: 'center' })}
+                      {renderSortableHeader('currentStock', 'End Count (Stock)', { align: 'right' })}
                     </TableRow>
                   </TableHeader>
                   <TableBody className="print:hidden">
@@ -2902,7 +3352,7 @@ export const Reports: React.FC = () => {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      productMovementSummary.map(renderMovementSummaryRow)
+                      sortedMovementSummary.map(renderMovementSummaryRow)
                     )}
                   </TableBody>
                   {productMovementSummary.length > 0 && (

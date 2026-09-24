@@ -76,6 +76,7 @@ interface LowStockAlert {
 import { 
   format, 
   startOfDay, 
+  endOfDay,
   subDays, 
   isSameDay, 
   eachDayOfInterval, 
@@ -99,6 +100,18 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
+
+const parseTimestampDate = (ts: any): Date => {
+  if (!ts) return new Date(0);
+  if (typeof ts.toDate === 'function') return ts.toDate();
+  if (ts.seconds !== undefined && ts.seconds !== null) return new Date(ts.seconds * 1000);
+  if (ts instanceof Date) return ts;
+  if (typeof ts === 'string' || typeof ts === 'number') {
+    const parsed = new Date(ts);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date(0);
+};
 
 export const Dashboard: React.FC = () => {
   const { profile, isAdmin, isManager } = useAuth();
@@ -205,8 +218,8 @@ export const Dashboard: React.FC = () => {
       end = endOfYear(subYears(now, 1));
     }
     else if (timeRange === 'custom') {
-      start = startOfDay(new Date(customStartDate));
-      end = startOfDay(addDays(new Date(customEndDate), 1)); // inclusive end of day
+      start = startOfDay(new Date(`${customStartDate}T00:00:00`));
+      end = endOfDay(new Date(`${customEndDate}T23:59:59`));
     }
     return { start, end };
   }, [timeRange, customStartDate, customEndDate]);
@@ -335,8 +348,7 @@ export const Dashboard: React.FC = () => {
       collection(db, 'sales'),
       where('timestamp', '>=', Timestamp.fromDate(startDate)),
       where('timestamp', '<=', Timestamp.fromDate(endDate)),
-      orderBy('timestamp', 'desc'),
-      limit(1000)
+      orderBy('timestamp', 'desc')
     );
 
     const unsubscribeSales = onSnapshot(salesQuery, (snapshot) => {
@@ -390,15 +402,15 @@ export const Dashboard: React.FC = () => {
         let subLabel = '';
 
         if (groupBy === 'day') {
-          bucketSales = sales.filter(s => isSameDay(s.timestamp.toDate(), date));
+          bucketSales = sales.filter(s => isSameDay(parseTimestampDate(s.timestamp), date));
           label = format(date, 'dd');
           subLabel = format(date, 'MMM yy');
         } else if (groupBy === 'month') {
-          bucketSales = sales.filter(s => isSameMonth(s.timestamp.toDate(), date));
+          bucketSales = sales.filter(s => isSameMonth(parseTimestampDate(s.timestamp), date));
           label = format(date, 'MMM');
           subLabel = format(date, 'yyyy');
         } else {
-          bucketSales = sales.filter(s => isSameYear(s.timestamp.toDate(), date));
+          bucketSales = sales.filter(s => isSameYear(parseTimestampDate(s.timestamp), date));
           label = format(date, 'yyyy');
         }
 
@@ -426,11 +438,11 @@ export const Dashboard: React.FC = () => {
         locations.forEach(loc => {
           let locSales = sales.filter(s => s.locationId === loc.id);
           if (groupBy === 'day') {
-            locSales = locSales.filter(s => isSameDay(s.timestamp.toDate(), date));
+            locSales = locSales.filter(s => isSameDay(parseTimestampDate(s.timestamp), date));
           } else if (groupBy === 'month') {
-            locSales = locSales.filter(s => isSameMonth(s.timestamp.toDate(), date));
+            locSales = locSales.filter(s => isSameMonth(parseTimestampDate(s.timestamp), date));
           } else {
-            locSales = locSales.filter(s => isSameYear(s.timestamp.toDate(), date));
+            locSales = locSales.filter(s => isSameYear(parseTimestampDate(s.timestamp), date));
           }
           item[loc.name] = locSales.reduce((sum, s) => {
             const returnedAmount = (s.items || []).reduce((subSum, item) => subSum + ((item.price ?? 0) * (item.returnedQuantity || 0)), 0);
@@ -555,11 +567,11 @@ export const Dashboard: React.FC = () => {
     const quantityTrendData = chartData.map(d => {
       let bucketSales = [];
       if (groupBy === 'day') {
-        bucketSales = filteredSales.filter(s => isSameDay(s.timestamp.toDate(), d.fullDate));
+        bucketSales = filteredSales.filter(s => isSameDay(parseTimestampDate(s.timestamp), d.fullDate));
       } else if (groupBy === 'month') {
-        bucketSales = filteredSales.filter(s => isSameMonth(s.timestamp.toDate(), d.fullDate));
+        bucketSales = filteredSales.filter(s => isSameMonth(parseTimestampDate(s.timestamp), d.fullDate));
       } else {
-        bucketSales = filteredSales.filter(s => isSameYear(s.timestamp.toDate(), d.fullDate));
+        bucketSales = filteredSales.filter(s => isSameYear(parseTimestampDate(s.timestamp), d.fullDate));
       }
 
       const units = bucketSales.reduce((sum, s) => {
@@ -593,7 +605,7 @@ export const Dashboard: React.FC = () => {
   const employeePerformanceData = useMemo(() => {
     // 1. Filter attendance logs by active range & location
     const filteredAttendance = allAttendance.filter(log => {
-      const logDate = log.timeIn?.toDate?.() || new Date(log.date);
+      const logDate = log.timeIn ? parseTimestampDate(log.timeIn) : new Date(log.date);
       const inRange = logDate >= activeDateRange.start && logDate <= activeDateRange.end;
       const matchesLocation = selectedLocationId === 'all' || log.locationId === selectedLocationId;
       return inRange && matchesLocation;
@@ -627,8 +639,8 @@ export const Dashboard: React.FC = () => {
       
       const totalMinutesWorked = userAttendance.reduce((sum, log) => {
         if (!log.timeIn || !log.timeOut) return sum;
-        const inTime = log.timeIn.toDate();
-        const outTime = log.timeOut.toDate();
+        const inTime = parseTimestampDate(log.timeIn);
+        const outTime = parseTimestampDate(log.timeOut);
         return sum + Math.max(0, Math.floor((outTime.getTime() - inTime.getTime()) / 60000));
       }, 0);
 
@@ -1202,7 +1214,7 @@ export const Dashboard: React.FC = () => {
                       {sale.items.map(i => i.name).join(', ')}
                     </p>
                     <p className="text-[10px] text-slate-500">
-                      {format(sale.timestamp.toDate(), 'HH:mm')} • {getPaymentMethodName(sale.paymentMethod)}
+                      {format(parseTimestampDate(sale.timestamp), 'HH:mm')} • {getPaymentMethodName(sale.paymentMethod)}
                     </p>
                   </div>
                   <div className="text-right flex flex-col items-end gap-0.5">
@@ -1301,7 +1313,7 @@ export const Dashboard: React.FC = () => {
                         {log.userName[0]}
                       </div>
                       <p className="text-[9px] text-slate-400">
-                        {format(log.timestamp.toDate(), 'HH:mm')} • {log.userName}
+                        {format(parseTimestampDate(log.timestamp), 'HH:mm')} • {log.userName}
                       </p>
                     </div>
                   </div>
