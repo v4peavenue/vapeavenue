@@ -25,14 +25,18 @@ import {
   ArrowUp,
   ArrowDown,
   X,
-  Layers
+  Layers,
+  Wallet,
+  Building2,
+  CreditCard,
+  Banknote
 } from 'lucide-react';
 import { collection, onSnapshot, query, where, Timestamp, orderBy, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocations } from '@/contexts/LocationContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Sale, Product, StockAdjustment, PurchaseOrder, ReturnTransaction, Customer, PromoCode, LoyaltyCard } from '@/types';
+import { Sale, Product, StockAdjustment, PurchaseOrder, ReturnTransaction, Customer, PromoCode, LoyaltyCard, Transaction, FinancialAccount } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,7 +66,7 @@ import { format, startOfMonth, endOfMonth, startOfDay, endOfDay, subDays, subMon
 import { cn } from '@/lib/utils';
 import { exportToCSV } from '@/lib/export';
 
-type ReportType = 'sales' | 'inventory' | 'profit' | 'stock-adjustments' | 'sales-by-seller' | 'product-movement';
+type ReportType = 'sales' | 'inventory' | 'profit' | 'stock-adjustments' | 'sales-by-seller' | 'product-movement' | 'expense-liquidity';
 
 export const ADJUSTMENT_CATEGORIES = [
   { value: 'all', label: 'All Adjustment Categories' },
@@ -205,7 +209,14 @@ export const REPORT_COLUMN_LABELS: Record<string, string> = {
   inflow: 'Inflow (+)',
   outflow: 'Outflow (-)',
   netChange: 'Net Shift',
-  currentStock: 'End Count (Stock)'
+  currentStock: 'End Count (Stock)',
+  expenseDescription: 'Expense / Memo',
+  sourceOfFunds: 'Source of Funds',
+  expenseCategory: 'Category',
+  branch: 'Branch / Location',
+  expenseAmount: 'Expense Amount',
+  accountBalance: 'Balance Remaining',
+  recordedBy: 'Recorded By'
 };
 
 export const parseTimestampDate = (ts: any): Date => {
@@ -280,6 +291,9 @@ interface ReportsCacheState {
   selectedBrand?: string;
   selectedProduct?: string;
   selectedAdjustmentCategory?: string;
+  selectedExpenseSource?: string;
+  selectedExpenseCategory?: string;
+  selectedExpenseBranch?: string;
   pageSize?: number;
   sortRulesByReport?: Record<string, SortRule[]>;
   multiSortMode?: boolean;
@@ -333,6 +347,10 @@ export const Reports: React.FC = () => {
   const [selectedBrand, setSelectedBrand] = useState<string>(() => initialCache?.selectedBrand || 'all');
   const [selectedProduct, setSelectedProduct] = useState<string>(() => initialCache?.selectedProduct || 'all');
   const [selectedAdjustmentCategory, setSelectedAdjustmentCategory] = useState<string>(() => initialCache?.selectedAdjustmentCategory || 'defective');
+  const [selectedExpenseSource, setSelectedExpenseSource] = useState<string>(() => initialCache?.selectedExpenseSource || 'all');
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string>(() => initialCache?.selectedExpenseCategory || 'all');
+  const [selectedExpenseBranch, setSelectedExpenseBranch] = useState<string>(() => initialCache?.selectedExpenseBranch || 'all');
+  const [expenseTransactions, setExpenseTransactions] = useState<Transaction[]>([]);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -347,7 +365,8 @@ export const Reports: React.FC = () => {
       profit: [{ id: 'revenue', desc: true }],
       'stock-adjustments': [{ id: 'date', desc: true }],
       'product-movement-detailed': [{ id: 'date', desc: true }],
-      'product-movement-summary': [{ id: 'inflow', desc: true }]
+      'product-movement-summary': [{ id: 'inflow', desc: true }],
+      'expense-liquidity': [{ id: 'date', desc: true }]
     };
   });
   const [multiSortMode, setMultiSortMode] = useState<boolean>(() => !!initialCache?.multiSortMode);
@@ -446,6 +465,9 @@ export const Reports: React.FC = () => {
         selectedBrand,
         selectedProduct,
         selectedAdjustmentCategory,
+        selectedExpenseSource,
+        selectedExpenseCategory,
+        selectedExpenseBranch,
         pageSize,
         sortRulesByReport,
         multiSortMode
@@ -471,6 +493,9 @@ export const Reports: React.FC = () => {
     selectedBrand,
     selectedProduct,
     selectedAdjustmentCategory,
+    selectedExpenseSource,
+    selectedExpenseCategory,
+    selectedExpenseBranch,
     pageSize,
     sortRulesByReport,
     multiSortMode
@@ -514,19 +539,28 @@ export const Reports: React.FC = () => {
           where('createdAt', '>=', startTs),
           where('createdAt', '<=', endTs)
         );
+        const qExpenses = query(
+          collection(db, 'financialTransactions'),
+          where('locationId', '==', effectiveLocationId),
+          where('type', '==', 'expense'),
+          where('timestamp', '>=', startTs),
+          where('timestamp', '<=', endTs)
+        );
 
-        const [snapSales, snapAdj, snapReturns, snapPOs] = await Promise.all([
+        const [snapSales, snapAdj, snapReturns, snapPOs, snapExpenses] = await Promise.all([
           getCountFromServer(qSales),
           getCountFromServer(qAdj),
           getCountFromServer(qReturns),
-          getCountFromServer(qPOs)
+          getCountFromServer(qPOs),
+          getCountFromServer(qExpenses)
         ]);
 
         return (
           (snapSales.data().count || 0) +
           (snapAdj.data().count || 0) +
           (snapReturns.data().count || 0) +
-          (snapPOs.data().count || 0)
+          (snapPOs.data().count || 0) +
+          (snapExpenses.data().count || 0)
         );
       }
     } catch (e: any) {
@@ -553,21 +587,28 @@ export const Reports: React.FC = () => {
       where('createdAt', '>=', startTs),
       where('createdAt', '<=', endTs)
     );
+    const qExpenses = query(
+      collection(db, 'financialTransactions'),
+      where('type', '==', 'expense'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs)
+    );
 
-    const [snapSales, snapAdj, snapReturns, snapPOs] = await Promise.all([
+    const [snapSales, snapAdj, snapReturns, snapPOs, snapExpenses] = await Promise.all([
       getCountFromServer(qSales),
       getCountFromServer(qAdj),
       getCountFromServer(qReturns),
-      getCountFromServer(qPOs)
+      getCountFromServer(qPOs),
+      getCountFromServer(qExpenses)
     ]);
 
-    return (snapSales.data().count || 0) + (snapAdj.data().count || 0) + (snapReturns.data().count || 0) + (snapPOs.data().count || 0);
+    return (snapSales.data().count || 0) + (snapAdj.data().count || 0) + (snapReturns.data().count || 0) + (snapPOs.data().count || 0) + (snapExpenses.data().count || 0);
   };
 
   // Reset to page 1 whenever tab or filter criteria change
   useEffect(() => {
     setCurrentPage(1);
-  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCustomer, selectedPromo, selectedCategory, selectedBrand, selectedProduct, selectedAdjustmentCategory, selectedLocationId]);
+  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCustomer, selectedPromo, selectedCategory, selectedBrand, selectedProduct, selectedAdjustmentCategory, selectedExpenseSource, selectedExpenseCategory, selectedExpenseBranch, selectedLocationId]);
 
   const getPaymentMethodName = (methodId: string) => {
     if (!methodId) return 'N/A';
@@ -769,11 +810,30 @@ export const Reports: React.FC = () => {
       console.warn("Reports: Error listening to return transactions:", error);
     });
 
+    const expQ = query(
+      collection(db, 'financialTransactions'),
+      where('type', '==', 'expense'),
+      where('timestamp', '>=', startTs),
+      where('timestamp', '<=', endTs),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsubscribeExpenses = onSnapshot(expQ, (snapshot) => {
+      let expList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      if (effectiveLocationId) {
+        expList = expList.filter(e => !e.locationId || e.locationId === effectiveLocationId);
+      }
+      setExpenseTransactions(expList);
+    }, (error) => {
+      console.warn("Reports: Error listening to financial expenses:", error);
+    });
+
     return () => {
       unsubscribeSales();
       unsubscribeAdjustments();
       unsubscribePOs();
       unsubscribeReturns();
+      unsubscribeExpenses();
     };
   }, [isGuardrailApplied, start.getTime(), end.getTime(), effectiveLocationId, profile?.id, isAdmin]);
 
@@ -944,6 +1004,65 @@ export const Reports: React.FC = () => {
 
     return list;
   }, [promos, sales]);
+
+  const DEFAULT_EXPENSE_CATEGORIES = useMemo(() => [
+    'Supplies',
+    'Utilities',
+    'Rent',
+    'Salary',
+    'Maintenance',
+    'Marketing',
+    'Taxes',
+    'Delivery/Shipping Fee',
+    'General'
+  ], []);
+
+  const uniqueExpenseCategories = useMemo(() => {
+    const set = new Set<string>(DEFAULT_EXPENSE_CATEGORIES);
+    expenseTransactions.forEach(e => {
+      if (e.category && e.category.trim()) set.add(e.category.trim());
+    });
+    return Array.from(set).sort();
+  }, [expenseTransactions, DEFAULT_EXPENSE_CATEGORIES]);
+
+  const expenseCategoryFilterOptions: SearchableOption[] = useMemo(() => {
+    return uniqueExpenseCategories.map(cat => ({
+      id: cat,
+      label: cat
+    }));
+  }, [uniqueExpenseCategories]);
+
+  const sourceOfFundsFilterOptions: SearchableOption[] = useMemo(() => {
+    return accounts.map(acc => ({
+      id: acc.id,
+      label: acc.name,
+      subLabel: acc.type ? `${acc.type.toUpperCase()} • Bal: ${settings.currency}${(acc.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined,
+      badge: acc.type ? acc.type.toUpperCase() : undefined,
+      badgeClassName: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    }));
+  }, [accounts, settings.currency]);
+
+  const branchFilterOptions: SearchableOption[] = useMemo(() => {
+    const list: SearchableOption[] = [
+      {
+        id: 'central',
+        label: 'Central / Head Office',
+        subLabel: 'Unassigned or central expenditures',
+        badge: 'HQ',
+        badgeClassName: 'bg-slate-100 text-slate-700'
+      }
+    ];
+    locations.forEach(loc => {
+      list.push({
+        id: loc.id,
+        label: loc.name,
+        subLabel: [loc.city, loc.municipality].filter(Boolean).join(', ') || undefined,
+        badge: loc.isWarehouse ? 'Warehouse' : 'Branch Store',
+        badgeClassName: loc.isWarehouse ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'
+      });
+    });
+    return list;
+  }, [locations]);
 
   const processedSales = useMemo(() => {
     return sales.map(s => {
@@ -1405,6 +1524,99 @@ export const Reports: React.FC = () => {
     return Object.values(summaryMap).sort((a, b) => b.eventsCount - a.eventsCount);
   }, [filteredMovementEvents, products, effectiveLocationId]);
 
+  const filteredExpenses = useMemo(() => {
+    return expenseTransactions.filter(e => {
+      // 1. Branch filter
+      if (selectedExpenseBranch !== 'all') {
+        if (selectedExpenseBranch === 'central') {
+          if (e.locationId && e.locationId !== '') return false;
+        } else {
+          if (e.locationId !== selectedExpenseBranch) return false;
+        }
+      } else if (effectiveLocationId) {
+        if (e.locationId && e.locationId !== effectiveLocationId) return false;
+      }
+
+      // 2. Source of funds filter
+      if (selectedExpenseSource !== 'all') {
+        if (e.accountId !== selectedExpenseSource) return false;
+      }
+
+      // 3. Category filter
+      if (selectedExpenseCategory !== 'all') {
+        if ((e.category || '').toLowerCase() !== selectedExpenseCategory.toLowerCase()) return false;
+      }
+
+      // 4. Staff / Recorded by filter
+      if (selectedSeller !== 'all') {
+        if (e.createdBy !== selectedSeller) return false;
+      }
+
+      // 5. Search term
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        const descMatch = (e.description || '').toLowerCase().includes(q);
+        const catMatch = (e.category || '').toLowerCase().includes(q);
+        const accMatch = (e.accountName || '').toLowerCase().includes(q);
+        const branchMatch = (e.locationName || '').toLowerCase().includes(q);
+        const actorMatch = (e.createdByName || '').toLowerCase().includes(q);
+        const idMatch = (e.id || '').toLowerCase().includes(q);
+        if (!descMatch && !catMatch && !accMatch && !branchMatch && !actorMatch && !idMatch) return false;
+      }
+
+      return true;
+    });
+  }, [expenseTransactions, selectedExpenseBranch, effectiveLocationId, selectedExpenseSource, selectedExpenseCategory, selectedSeller, searchTerm]);
+
+  const expenseTotals = useMemo(() => {
+    const totalAmount = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    const byAccount: Record<string, { accountId: string; accountName: string; amount: number; count: number; currentBalance: number; accountType: string }> = {};
+    filteredExpenses.forEach(e => {
+      const accId = e.accountId || 'unspecified';
+      if (!byAccount[accId]) {
+        const acc = accounts.find(a => a.id === e.accountId);
+        byAccount[accId] = {
+          accountId: accId,
+          accountName: e.accountName || acc?.name || 'Unspecified Account',
+          amount: 0,
+          count: 0,
+          currentBalance: acc?.balance ?? 0,
+          accountType: acc?.type || 'cash'
+        };
+      }
+      byAccount[accId].amount += (e.amount || 0);
+      byAccount[accId].count += 1;
+    });
+
+    const accountList = Object.values(byAccount).sort((a, b) => b.amount - a.amount);
+    const topAccount = accountList[0] || null;
+
+    const byCat: Record<string, { category: string; amount: number; count: number }> = {};
+    filteredExpenses.forEach(e => {
+      const cat = e.category || 'General';
+      if (!byCat[cat]) {
+        byCat[cat] = { category: cat, amount: 0, count: 0 };
+      }
+      byCat[cat].amount += (e.amount || 0);
+      byCat[cat].count += 1;
+    });
+    const categoryList = Object.values(byCat).sort((a, b) => b.amount - a.amount);
+    const topCategory = categoryList[0] || null;
+
+    const totalCurrentLiquidity = accounts.reduce((sum, a) => sum + (a.balance || 0), 0);
+
+    return {
+      totalAmount,
+      count: filteredExpenses.length,
+      byAccount: accountList,
+      topAccount,
+      byCategory: categoryList,
+      topCategory,
+      totalCurrentLiquidity
+    };
+  }, [filteredExpenses, accounts]);
+
   const totalRevenue = useMemo(() => {
     return filteredSales.reduce((sum, s) => sum + s.netTotal, 0);
   }, [filteredSales]);
@@ -1428,10 +1640,12 @@ export const Reports: React.FC = () => {
         return filteredAdjustments.length;
       case 'product-movement':
         return movementSubView === 'detailed' ? filteredMovementEvents.length : productMovementSummary.length;
+      case 'expense-liquidity':
+        return filteredExpenses.length;
       default:
         return 0;
     }
-  }, [reportType, movementSubView, filteredSales.length, salesBySellerData.length, filteredProducts.length, profitabilityData.length, filteredAdjustments.length, filteredMovementEvents.length, productMovementSummary.length]);
+  }, [reportType, movementSubView, filteredSales.length, salesBySellerData.length, filteredProducts.length, profitabilityData.length, filteredAdjustments.length, filteredMovementEvents.length, productMovementSummary.length, filteredExpenses.length]);
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(currentTotalRecords / pageSize));
@@ -1557,6 +1771,23 @@ export const Reports: React.FC = () => {
     });
   }, [productMovementSummary, sortRulesByReport]);
 
+  const sortedExpenses = useMemo(() => {
+    const rules = sortRulesByReport['expense-liquidity'] || [];
+    return applyMultiSort(filteredExpenses, rules, (exp, colId) => {
+      switch (colId) {
+        case 'date': return parseTimestampDate(exp.timestamp).getTime();
+        case 'expenseDescription': return exp.description || '';
+        case 'expenseCategory': return exp.category || '';
+        case 'sourceOfFunds': return exp.accountName || '';
+        case 'branch': return exp.locationName || (locations.find(l => l.id === exp.locationId)?.name) || 'Central';
+        case 'expenseAmount': return exp.amount || 0;
+        case 'accountBalance': return exp.accountBalance ?? 0;
+        case 'recordedBy': return exp.createdByName || '';
+        default: return '';
+      }
+    });
+  }, [filteredExpenses, sortRulesByReport, locations]);
+
   // Paginated slices for each dataset
   const paginatedSales = useMemo(() => {
     const startIdx = (currentPage - 1) * pageSize;
@@ -1592,6 +1823,11 @@ export const Reports: React.FC = () => {
     const startIdx = (currentPage - 1) * pageSize;
     return sortedMovementSummary.slice(startIdx, startIdx + pageSize);
   }, [sortedMovementSummary, currentPage, pageSize]);
+
+  const paginatedExpenses = useMemo(() => {
+    const startIdx = (currentPage - 1) * pageSize;
+    return sortedExpenses.slice(startIdx, startIdx + pageSize);
+  }, [sortedExpenses, currentPage, pageSize]);
 
   const inventoryValue = useMemo(() => {
     return filteredProducts.reduce((sum, p) => {
@@ -1682,6 +1918,8 @@ export const Reports: React.FC = () => {
         return movementSubView === 'detailed' 
           ? 'Product Movement Detailed History Log' 
           : 'Product Movement Per-Product Summary Report';
+      case 'expense-liquidity':
+        return 'Liquidity of Expenses & Cash Outflow Report';
       default:
         return 'Business Performance Report';
     }
@@ -1689,30 +1927,52 @@ export const Reports: React.FC = () => {
 
   const activeFiltersSummary = useMemo(() => {
     const filters: string[] = [];
-    if (selectedCategory !== 'all') filters.push(`Category: ${selectedCategory}`);
-    if (selectedBrand !== 'all') filters.push(`Brand: ${selectedBrand}`);
-    if (selectedProduct !== 'all') {
-      const pName = products.find(p => p.id === selectedProduct)?.name || selectedProduct;
-      filters.push(`Product: ${pName}`);
-    }
-    if (selectedSeller !== 'all') {
-      const sName = usersList.find(u => u.id === selectedSeller)?.name || selectedSeller;
-      filters.push(`Staff/Seller: ${sName}`);
-    }
-    if (selectedCustomer !== 'all') {
-      const cName = customers.find(c => c.id === selectedCustomer)?.name || selectedCustomer;
-      filters.push(`Customer: ${cName}`);
-    }
-    if (selectedPromo !== 'all') {
-      filters.push(`Promo: ${selectedPromo === 'none' ? 'No Promo' : selectedPromo}`);
-    }
-    if (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') {
-      const catObj = ADJUSTMENT_CATEGORIES.find(c => c.value === selectedAdjustmentCategory);
-      filters.push(`Adjustment Category: ${catObj?.label || selectedAdjustmentCategory}`);
+    if (reportType === 'expense-liquidity') {
+      if (selectedExpenseSource !== 'all') {
+        const acc = accounts.find(a => a.id === selectedExpenseSource);
+        filters.push(`Source of Funds: ${acc?.name || selectedExpenseSource}`);
+      }
+      if (selectedExpenseCategory !== 'all') {
+        filters.push(`Category: ${selectedExpenseCategory}`);
+      }
+      if (selectedExpenseBranch !== 'all') {
+        if (selectedExpenseBranch === 'central') {
+          filters.push(`Branch: Central / Head Office`);
+        } else {
+          const loc = locations.find(l => l.id === selectedExpenseBranch);
+          filters.push(`Branch: ${loc?.name || selectedExpenseBranch}`);
+        }
+      }
+      if (selectedSeller !== 'all') {
+        const sName = usersList.find(u => u.id === selectedSeller)?.name || selectedSeller;
+        filters.push(`Recorded By: ${sName}`);
+      }
+    } else {
+      if (selectedCategory !== 'all') filters.push(`Category: ${selectedCategory}`);
+      if (selectedBrand !== 'all') filters.push(`Brand: ${selectedBrand}`);
+      if (selectedProduct !== 'all') {
+        const pName = products.find(p => p.id === selectedProduct)?.name || selectedProduct;
+        filters.push(`Product: ${pName}`);
+      }
+      if (selectedSeller !== 'all') {
+        const sName = usersList.find(u => u.id === selectedSeller)?.name || selectedSeller;
+        filters.push(`Staff/Seller: ${sName}`);
+      }
+      if (selectedCustomer !== 'all') {
+        const cName = customers.find(c => c.id === selectedCustomer)?.name || selectedCustomer;
+        filters.push(`Customer: ${cName}`);
+      }
+      if (selectedPromo !== 'all') {
+        filters.push(`Promo: ${selectedPromo === 'none' ? 'No Promo' : selectedPromo}`);
+      }
+      if (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') {
+        const catObj = ADJUSTMENT_CATEGORIES.find(c => c.value === selectedAdjustmentCategory);
+        filters.push(`Adjustment Category: ${catObj?.label || selectedAdjustmentCategory}`);
+      }
     }
     if (searchTerm) filters.push(`Search: "${searchTerm}"`);
     return filters.length > 0 ? filters.join(' • ') : 'All records in date range';
-  }, [selectedCategory, selectedBrand, selectedProduct, selectedSeller, selectedCustomer, selectedPromo, reportType, selectedAdjustmentCategory, searchTerm, products, usersList, customers]);
+  }, [selectedCategory, selectedBrand, selectedProduct, selectedSeller, selectedCustomer, selectedPromo, reportType, selectedAdjustmentCategory, selectedExpenseSource, selectedExpenseCategory, selectedExpenseBranch, searchTerm, products, usersList, customers, accounts, locations]);
 
   const renderSaleRow = (sale: typeof processedSales[number]) => (
     <TableRow key={sale.id} className="hover:bg-slate-50/50 transition-colors">
@@ -1957,6 +2217,55 @@ export const Reports: React.FC = () => {
     </TableRow>
   );
 
+  const renderExpenseRow = (exp: Transaction) => {
+    const branchName = exp.locationName || (locations.find(l => l.id === exp.locationId)?.name) || 'Central';
+    return (
+      <TableRow key={exp.id} className="hover:bg-slate-50/50 transition-colors">
+        <TableCell className="text-xs font-medium text-slate-700 whitespace-nowrap">
+          {format(parseTimestampDate(exp.timestamp), 'MMM dd, yyyy HH:mm')}
+        </TableCell>
+        <TableCell className="text-xs font-semibold text-slate-900">
+          <div className="flex flex-col">
+            <span>{exp.description || 'Operational Expense'}</span>
+            <span className="font-mono text-[10px] text-slate-400">ID: #{exp.id.slice(0, 8)}</span>
+          </div>
+        </TableCell>
+        <TableCell className="text-xs">
+          <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+            <Wallet className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            {exp.accountName || 'Unknown Account'}
+          </span>
+        </TableCell>
+        <TableCell className="text-xs">
+          <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 text-[10px] font-medium">
+            {exp.category || 'General'}
+          </Badge>
+        </TableCell>
+        <TableCell className="text-xs text-slate-700">
+          <div className="flex items-center gap-1">
+            <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+            <span>{branchName}</span>
+          </div>
+        </TableCell>
+        <TableCell className="text-right font-bold text-rose-600 font-mono text-xs whitespace-nowrap">
+          -{settings.currency}{(exp.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </TableCell>
+        <TableCell className="text-right font-mono text-xs text-slate-600 whitespace-nowrap">
+          {exp.accountBalance !== undefined ? (
+            <span className="bg-slate-50 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+              {settings.currency}{Number(exp.accountBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          ) : (
+            <span className="text-slate-400 italic text-[11px]">—</span>
+          )}
+        </TableCell>
+        <TableCell className="text-xs text-slate-600 whitespace-nowrap">
+          {exp.createdByName || 'Staff'}
+        </TableCell>
+      </TableRow>
+    );
+  };
+
   const handleExportCSV = () => {
     let data: any[] = [];
     let name = 'Report';
@@ -2050,6 +2359,19 @@ export const Reports: React.FC = () => {
           'Performed By': e.performedBy
         }));
       }
+    } else if (reportType === 'expense-liquidity') {
+      name = 'Expense_Liquidity_Report';
+      data = sortedExpenses.map(exp => ({
+        ID: exp.id,
+        Date: format(parseTimestampDate(exp.timestamp), 'yyyy-MM-dd HH:mm'),
+        'Expense / Memo': exp.description || 'Operational Expense',
+        'Source of Funds': exp.accountName || 'Unknown Account',
+        Category: exp.category || 'General',
+        Branch: exp.locationName || (locations.find(l => l.id === exp.locationId)?.name) || 'Central',
+        'Expense Amount': exp.amount || 0,
+        'Account Balance': exp.accountBalance !== undefined ? exp.accountBalance : '',
+        'Recorded By': exp.createdByName || ''
+      }));
     }
 
     if (data.length === 0) {
@@ -2613,6 +2935,70 @@ export const Reports: React.FC = () => {
                 </Card>
               </>
             )}
+
+            {reportType === 'expense-liquidity' && (
+              <>
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-rose-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Expense Outflow</CardTitle>
+                    <TrendingDown className="h-4 w-4 text-rose-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-rose-600">
+                      -{settings.currency}{expenseTotals.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">{expenseTotals.count} recorded expense transactions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-emerald-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Available Liquidity</CardTitle>
+                    <Wallet className="h-4 w-4 text-emerald-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600">
+                      {settings.currency}{expenseTotals.totalCurrentLiquidity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Across {accounts.length} active financial accounts</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-indigo-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Top Expense Category</CardTitle>
+                    <Layers className="h-4 w-4 text-indigo-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-base sm:text-lg font-bold text-slate-900 truncate" title={expenseTotals.topCategory?.category || 'None'}>
+                      {expenseTotals.topCategory?.category || 'None'}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {expenseTotals.topCategory ? `${settings.currency}${expenseTotals.topCategory.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${expenseTotals.topCategory.count} txns)` : 'No records'}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-slate-300 print:shadow-none">
+                  <div className="h-1 bg-amber-500" />
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1.5 pt-3 px-4">
+                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Primary Funding Source</CardTitle>
+                    <CreditCard className="h-4 w-4 text-amber-500 no-print" />
+                  </CardHeader>
+                  <CardContent className="px-4 pb-3">
+                    <div className="text-base sm:text-lg font-bold text-slate-900 truncate" title={expenseTotals.topAccount?.accountName || 'None'}>
+                      {expenseTotals.topAccount?.accountName || 'None'}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-0.5">
+                      {expenseTotals.topAccount ? `${settings.currency}${expenseTotals.topAccount.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} disbursed` : 'No records'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
 
       <Card className="shadow-sm border-slate-200/60 overflow-hidden print:border-none print:shadow-none">
@@ -2668,6 +3054,15 @@ export const Reports: React.FC = () => {
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-500" />
                   Product Movement
+                </Button>
+                <Button 
+                  variant={reportType === 'expense-liquidity' ? 'secondary' : 'ghost'} 
+                  size="sm" 
+                  className="text-xs h-8 flex items-center gap-1.5"
+                  onClick={() => setReportType('expense-liquidity')}
+                >
+                  <Banknote className="w-3.5 h-3.5 text-rose-500" />
+                  Expense Liquidity
                 </Button>
               </div>
               <div className="h-6 w-px bg-slate-200 hidden md:block" />
@@ -2735,7 +3130,7 @@ export const Reports: React.FC = () => {
                 <Filter className="w-3.5 h-3.5 text-indigo-500" />
                 Filter Report Data
               </span>
-              {(selectedSeller !== 'all' || selectedCustomer !== 'all' || selectedPromo !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') || searchTerm !== '') && (
+              {(selectedSeller !== 'all' || selectedCustomer !== 'all' || selectedPromo !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') || (reportType === 'expense-liquidity' && (selectedExpenseSource !== 'all' || selectedExpenseCategory !== 'all' || selectedExpenseBranch !== 'all')) || searchTerm !== '') && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -2747,6 +3142,9 @@ export const Reports: React.FC = () => {
                     setSelectedBrand('all');
                     setSelectedProduct('all');
                     setSelectedAdjustmentCategory('all');
+                    setSelectedExpenseSource('all');
+                    setSelectedExpenseCategory('all');
+                    setSelectedExpenseBranch('all');
                     setSearchTerm('');
                   }}
                   className="text-xs h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
@@ -2756,116 +3154,176 @@ export const Reports: React.FC = () => {
               )}
             </div>
             
-            <div className={cn(
-              "grid grid-cols-1 sm:grid-cols-2 gap-3",
-              reportType === 'sales' ? "lg:grid-cols-3 xl:grid-cols-6" :
-              reportType === 'stock-adjustments' ? "lg:grid-cols-5" : "lg:grid-cols-4"
-            )}>
-              {/* Adjustment Category Filter (Specific to Stock Adjustments tab) */}
-              {reportType === 'stock-adjustments' && (
+            {reportType === 'expense-liquidity' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 animate-in fade-in duration-200">
+                {/* Source of Funds Filter */}
                 <div className="space-y-1">
                   <SearchableSelect
-                    options={adjustmentCategoryFilterOptions}
-                    value={selectedAdjustmentCategory}
-                    onChange={setSelectedAdjustmentCategory}
-                    label="Adjustment Category"
-                    placeholder="Search adjustment type..."
-                    allowAll={false}
-                    inputClassName="bg-rose-50/40 border-rose-200 text-slate-900 font-medium"
-                  />
-                </div>
-              )}
-
-              {/* Category Filter */}
-              <div className="space-y-1">
-                <SearchableSelect
-                  options={categoryFilterOptions}
-                  value={selectedCategory}
-                  onChange={setSelectedCategory}
-                  label="Product Category"
-                  placeholder="All categories or type..."
-                  allowAll={true}
-                  allLabel="All Categories"
-                />
-              </div>
-
-              {/* Brand / Flavor Filter */}
-              <div className="space-y-1">
-                <SearchableSelect
-                  options={brandFilterOptions}
-                  value={selectedBrand}
-                  onChange={setSelectedBrand}
-                  label="Flavor / Brand"
-                  placeholder="All flavors or type..."
-                  allowAll={true}
-                  allLabel="All Flavors"
-                />
-              </div>
-
-              {/* Product Filter */}
-              <div className="space-y-1">
-                <SearchableProductSelect
-                  products={selectableProducts}
-                  value={selectedProduct}
-                  onChange={(prod) => {
-                    if (prod === 'all' || !prod) {
-                      setSelectedProduct('all');
-                    } else {
-                      setSelectedProduct(prod.id);
-                    }
-                  }}
-                  label="Product"
-                  placeholder="All products or type SKU / Name..."
-                  allowAll={true}
-                  allLabel="All Products"
-                  showStock={false}
-                  inputClassName="bg-white border-slate-200 h-9"
-                />
-              </div>
-
-              {/* Seller / Staff Filter */}
-              <div className="space-y-1">
-                <SearchableSelect
-                  options={sellerFilterOptions}
-                  value={selectedSeller}
-                  onChange={setSelectedSeller}
-                  label={reportType === 'stock-adjustments' ? 'Adjusted By' : 'Seller Name'}
-                  placeholder={reportType === 'stock-adjustments' ? 'All staff or type name...' : 'All sellers or type name...'}
-                  allowAll={true}
-                  allLabel={reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'}
-                />
-              </div>
-
-              {/* Customer Name Filter (Sales tab only) */}
-              {reportType === 'sales' && (
-                <div className="space-y-1">
-                  <SearchableSelect
-                    options={customerFilterOptions}
-                    value={selectedCustomer}
-                    onChange={setSelectedCustomer}
-                    label="Customer Name"
-                    placeholder="All customers or type name..."
+                    options={sourceOfFundsFilterOptions}
+                    value={selectedExpenseSource}
+                    onChange={setSelectedExpenseSource}
+                    label="Source of Funds (Account)"
+                    placeholder="All accounts or type name..."
                     allowAll={true}
-                    allLabel="All Customers"
+                    allLabel="All Accounts / Sources"
+                    inputClassName="bg-white border-slate-200 h-9"
                   />
                 </div>
-              )}
 
-              {/* Promo Code Filter (Sales tab only) */}
-              {reportType === 'sales' && (
+                {/* Expense Category Filter */}
                 <div className="space-y-1">
                   <SearchableSelect
-                    options={promoFilterOptions}
-                    value={selectedPromo}
-                    onChange={setSelectedPromo}
-                    label="Promo Code Filter"
-                    placeholder="All promo codes or type..."
+                    options={expenseCategoryFilterOptions}
+                    value={selectedExpenseCategory}
+                    onChange={setSelectedExpenseCategory}
+                    label="Expense Category"
+                    placeholder="All categories or type..."
                     allowAll={true}
-                    allLabel="All Promo Codes"
+                    allLabel="All Expense Categories"
+                    inputClassName="bg-white border-slate-200 h-9"
                   />
                 </div>
-              )}
-            </div>
+
+                {/* Branch / Location Filter */}
+                <div className="space-y-1">
+                  <SearchableSelect
+                    options={branchFilterOptions}
+                    value={selectedExpenseBranch}
+                    onChange={setSelectedExpenseBranch}
+                    label="Branch / Location"
+                    placeholder="All branches or type name..."
+                    allowAll={true}
+                    allLabel="All Branches & Central"
+                    inputClassName="bg-white border-slate-200 h-9"
+                  />
+                </div>
+
+                {/* Recorded By Staff Filter */}
+                <div className="space-y-1">
+                  <SearchableSelect
+                    options={sellerFilterOptions}
+                    value={selectedSeller}
+                    onChange={setSelectedSeller}
+                    label="Recorded By (Staff)"
+                    placeholder="All staff or type name..."
+                    allowAll={true}
+                    allLabel="All Staff Members"
+                    inputClassName="bg-white border-slate-200 h-9"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className={cn(
+                "grid grid-cols-1 sm:grid-cols-2 gap-3",
+                reportType === 'sales' ? "lg:grid-cols-3 xl:grid-cols-6" :
+                reportType === 'stock-adjustments' ? "lg:grid-cols-5" : "lg:grid-cols-4"
+              )}>
+                {/* Adjustment Category Filter (Specific to Stock Adjustments tab) */}
+                {reportType === 'stock-adjustments' && (
+                  <div className="space-y-1">
+                    <SearchableSelect
+                      options={adjustmentCategoryFilterOptions}
+                      value={selectedAdjustmentCategory}
+                      onChange={setSelectedAdjustmentCategory}
+                      label="Adjustment Category"
+                      placeholder="Search adjustment type..."
+                      allowAll={false}
+                      inputClassName="bg-rose-50/40 border-rose-200 text-slate-900 font-medium"
+                    />
+                  </div>
+                )}
+
+                {/* Category Filter */}
+                <div className="space-y-1">
+                  <SearchableSelect
+                    options={categoryFilterOptions}
+                    value={selectedCategory}
+                    onChange={setSelectedCategory}
+                    label="Product Category"
+                    placeholder="All categories or type..."
+                    allowAll={true}
+                    allLabel="All Categories"
+                  />
+                </div>
+
+                {/* Brand / Flavor Filter */}
+                <div className="space-y-1">
+                  <SearchableSelect
+                    options={brandFilterOptions}
+                    value={selectedBrand}
+                    onChange={setSelectedBrand}
+                    label="Flavor / Brand"
+                    placeholder="All flavors or type..."
+                    allowAll={true}
+                    allLabel="All Flavors"
+                  />
+                </div>
+
+                {/* Product Filter */}
+                <div className="space-y-1">
+                  <SearchableProductSelect
+                    products={selectableProducts}
+                    value={selectedProduct}
+                    onChange={(prod) => {
+                      if (prod === 'all' || !prod) {
+                        setSelectedProduct('all');
+                      } else {
+                        setSelectedProduct(prod.id);
+                      }
+                    }}
+                    label="Product"
+                    placeholder="All products or type SKU / Name..."
+                    allowAll={true}
+                    allLabel="All Products"
+                    showStock={false}
+                    inputClassName="bg-white border-slate-200 h-9"
+                  />
+                </div>
+
+                {/* Seller / Staff Filter */}
+                <div className="space-y-1">
+                  <SearchableSelect
+                    options={sellerFilterOptions}
+                    value={selectedSeller}
+                    onChange={setSelectedSeller}
+                    label={reportType === 'stock-adjustments' ? 'Adjusted By' : 'Seller Name'}
+                    placeholder={reportType === 'stock-adjustments' ? 'All staff or type name...' : 'All sellers or type name...'}
+                    allowAll={true}
+                    allLabel={reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'}
+                  />
+                </div>
+
+                {/* Customer Name Filter (Sales tab only) */}
+                {reportType === 'sales' && (
+                  <div className="space-y-1">
+                    <SearchableSelect
+                      options={customerFilterOptions}
+                      value={selectedCustomer}
+                      onChange={setSelectedCustomer}
+                      label="Customer Name"
+                      placeholder="All customers or type name..."
+                      allowAll={true}
+                      allLabel="All Customers"
+                    />
+                  </div>
+                )}
+
+                {/* Promo Code Filter (Sales tab only) */}
+                {reportType === 'sales' && (
+                  <div className="space-y-1">
+                    <SearchableSelect
+                      options={promoFilterOptions}
+                      value={selectedPromo}
+                      onChange={setSelectedPromo}
+                      label="Promo Code Filter"
+                      placeholder="All promo codes or type..."
+                      allowAll={true}
+                      allLabel="All Promo Codes"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -3380,6 +3838,61 @@ export const Reports: React.FC = () => {
                 </Table>
               )}
             </div>
+          )}
+
+          {reportType === 'expense-liquidity' && (
+            <Table>
+              <TableHeader className="bg-slate-50/50">
+                <TableRow>
+                  {renderSortableHeader('date', 'Date & Time')}
+                  {renderSortableHeader('expenseDescription', 'Expense / Memo')}
+                  {renderSortableHeader('sourceOfFunds', 'Source of Funds')}
+                  {renderSortableHeader('expenseCategory', 'Category')}
+                  {renderSortableHeader('branch', 'Branch / Location')}
+                  {renderSortableHeader('expenseAmount', 'Expense Amount', { align: 'right' })}
+                  {renderSortableHeader('accountBalance', 'Balance Remaining', { align: 'right' })}
+                  {renderSortableHeader('recordedBy', 'Recorded By')}
+                </TableRow>
+              </TableHeader>
+              <TableBody className="print:hidden">
+                {filteredExpenses.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-12 text-slate-400 italic">
+                      No expense records found matching the selected filters in this date range
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedExpenses.map(renderExpenseRow)
+                )}
+              </TableBody>
+              <TableBody className="hidden print:table-row-group">
+                {filteredExpenses.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-slate-400 italic">
+                      No expense records found matching the selected filters in this date range
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sortedExpenses.map(renderExpenseRow)
+                )}
+              </TableBody>
+              {filteredExpenses.length > 0 && (
+                <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-200">
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-xs">
+                      TOTAL EXPENSES ({filteredExpenses.length} transaction{filteredExpenses.length === 1 ? '' : 's'})
+                    </TableCell>
+                    <TableCell className="text-right text-xs font-mono font-bold text-rose-600">
+                      -{settings.currency}{expenseTotals.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell colSpan={2} className="text-xs text-slate-500">
+                      <span className="text-[11px] font-normal">Active Liquidity: </span>
+                      <span className="font-semibold text-slate-700">{settings.currency}{expenseTotals.totalCurrentLiquidity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </TableCell>
+                  </TableRow>
+                </tfoot>
+              )}
+            </Table>
           )}
 
           {/* Pagination Controls Footer */}
