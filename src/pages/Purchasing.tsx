@@ -121,32 +121,37 @@ export const Purchasing: React.FC = () => {
   }, [guardrailStartDate, guardrailEndDate, appliedDateRange]);
 
   const calculatePurchasingDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
-    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
-
     try {
+      const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
+
       if (effectiveLocationId) {
-        const q = query(
-          collection(db, 'purchaseOrders'),
-          where('locationId', '==', effectiveLocationId),
-          where('createdAt', '>=', startTs),
-          where('createdAt', '<=', endTs)
-        );
-        const snapshot = await getCountFromServer(q);
-        return snapshot.data().count || 0;
+        try {
+          const q = query(
+            collection(db, 'purchaseOrders'),
+            where('locationId', '==', effectiveLocationId),
+            where('createdAt', '>=', startTs),
+            where('createdAt', '<=', endTs)
+          );
+          const snapshot = await getCountFromServer(q);
+          return snapshot.data().count || 0;
+        } catch (e: any) {
+          console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+        }
       }
-    } catch (e: any) {
-      console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+
+      const q = query(
+        collection(db, 'purchaseOrders'),
+        where('createdAt', '>=', startTs),
+        where('createdAt', '<=', endTs)
+      );
+
+      const snapshot = await getCountFromServer(q);
+      return snapshot.data().count || 0;
+    } catch (err: any) {
+      console.warn("calculatePurchasingDocs failed, returning 0:", err?.message);
+      return 0;
     }
-
-    const q = query(
-      collection(db, 'purchaseOrders'),
-      where('createdAt', '>=', startTs),
-      where('createdAt', '<=', endTs)
-    );
-
-    const snapshot = await getCountFromServer(q);
-    return snapshot.data().count || 0;
   };
 
   useEffect(() => {

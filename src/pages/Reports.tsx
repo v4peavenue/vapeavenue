@@ -510,99 +510,71 @@ export const Reports: React.FC = () => {
     : undefined;
 
   const calculateReportDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
-    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
-
     try {
-      if (effectiveLocationId) {
-        const qSales = query(
-          collection(db, 'sales'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
-        const qAdj = query(
-          collection(db, 'stockAdjustments'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
-        const qReturns = query(
-          collection(db, 'returnTransactions'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
-        const qPOs = query(
-          collection(db, 'purchaseOrders'),
-          where('locationId', '==', effectiveLocationId),
-          where('createdAt', '>=', startTs),
-          where('createdAt', '<=', endTs)
-        );
-        const qExpenses = query(
-          collection(db, 'financialTransactions'),
-          where('locationId', '==', effectiveLocationId),
-          where('type', '==', 'expense'),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
+      const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-        const [snapSales, snapAdj, snapReturns, snapPOs, snapExpenses] = await Promise.all([
-          getCountFromServer(qSales),
-          getCountFromServer(qAdj),
-          getCountFromServer(qReturns),
-          getCountFromServer(qPOs),
-          getCountFromServer(qExpenses)
+      const safeCount = async (colName: string, dateField: string = 'timestamp'): Promise<number> => {
+        // 1. Try location-scoped query if location filter is active
+        if (effectiveLocationId) {
+          try {
+            const locQ = query(
+              collection(db, colName),
+              where('locationId', '==', effectiveLocationId),
+              where(dateField, '>=', startTs),
+              where(dateField, '<=', endTs)
+            );
+            const snap = await getCountFromServer(locQ);
+            return snap.data().count || 0;
+          } catch (e: any) {
+            console.warn(`Location composite count query for ${colName} (missing index), falling back to date range count:`, e?.message);
+          }
+        }
+
+        // 2. Single-field date range query (Firestore built-in single field index, never requires composite index)
+        try {
+          const dateQ = query(
+            collection(db, colName),
+            where(dateField, '>=', startTs),
+            where(dateField, '<=', endTs)
+          );
+          const snap = await getCountFromServer(dateQ);
+          return snap.data().count || 0;
+        } catch (e: any) {
+          console.warn(`Single-field count query for ${colName} failed:`, e?.message);
+          return 0;
+        }
+      };
+
+      // Calculate matching documents tailored to the current report view
+      if (reportType === 'expense-liquidity') {
+        return await safeCount('financialTransactions', 'timestamp');
+      } else if (reportType === 'stock-adjustments') {
+        return await safeCount('stockAdjustments', 'timestamp');
+      } else if (reportType === 'profit') {
+        const [salesCount, expCount] = await Promise.all([
+          safeCount('sales', 'timestamp'),
+          safeCount('financialTransactions', 'timestamp')
         ]);
-
-        return (
-          (snapSales.data().count || 0) +
-          (snapAdj.data().count || 0) +
-          (snapReturns.data().count || 0) +
-          (snapPOs.data().count || 0) +
-          (snapExpenses.data().count || 0)
-        );
+        return salesCount + expCount;
+      } else if (reportType === 'product-movement') {
+        const [salesCount, adjCount, retCount, poCount] = await Promise.all([
+          safeCount('sales', 'timestamp'),
+          safeCount('stockAdjustments', 'timestamp'),
+          safeCount('returnTransactions', 'timestamp'),
+          safeCount('purchaseOrders', 'createdAt')
+        ]);
+        return salesCount + adjCount + retCount + poCount;
+      } else if (reportType === 'inventory') {
+        return products.length;
+      } else {
+        // 'sales', 'sales-by-seller', etc.
+        return await safeCount('sales', 'timestamp');
       }
-    } catch (e: any) {
-      console.warn("Composite query failed in calculateReportDocs (missing index), falling back to date-range count:", e?.message);
+    } catch (err: any) {
+      console.warn("calculateReportDocs top-level error, returning fallback 0:", err?.message);
+      return 0;
     }
-
-    const qSales = query(
-      collection(db, 'sales'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const qAdj = query(
-      collection(db, 'stockAdjustments'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const qReturns = query(
-      collection(db, 'returnTransactions'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const qPOs = query(
-      collection(db, 'purchaseOrders'),
-      where('createdAt', '>=', startTs),
-      where('createdAt', '<=', endTs)
-    );
-    const qExpenses = query(
-      collection(db, 'financialTransactions'),
-      where('type', '==', 'expense'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-
-    const [snapSales, snapAdj, snapReturns, snapPOs, snapExpenses] = await Promise.all([
-      getCountFromServer(qSales),
-      getCountFromServer(qAdj),
-      getCountFromServer(qReturns),
-      getCountFromServer(qPOs),
-      getCountFromServer(qExpenses)
-    ]);
-
-    return (snapSales.data().count || 0) + (snapAdj.data().count || 0) + (snapReturns.data().count || 0) + (snapPOs.data().count || 0) + (snapExpenses.data().count || 0);
   };
 
   // Reset to page 1 whenever tab or filter criteria change
@@ -812,14 +784,15 @@ export const Reports: React.FC = () => {
 
     const expQ = query(
       collection(db, 'financialTransactions'),
-      where('type', '==', 'expense'),
       where('timestamp', '>=', startTs),
       where('timestamp', '<=', endTs),
       orderBy('timestamp', 'desc')
     );
 
     const unsubscribeExpenses = onSnapshot(expQ, (snapshot) => {
-      let expList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+      let expList = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Transaction))
+        .filter(t => t.type === 'expense');
       if (effectiveLocationId) {
         expList = expList.filter(e => !e.locationId || e.locationId === effectiveLocationId);
       }

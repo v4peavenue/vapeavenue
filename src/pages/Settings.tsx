@@ -115,15 +115,20 @@ export const Settings: React.FC = () => {
   const [isAuditGuardrailApplied, setIsAuditGuardrailApplied] = useState(false);
 
   const calculateAuditDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
-    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
-    const q = query(
-      collection(db, 'audit_logs'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const snap = await getCountFromServer(q);
-    return snap.data().count || 0;
+    try {
+      const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
+      const q = query(
+        collection(db, 'audit_logs'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      const snap = await getCountFromServer(q);
+      return snap.data().count || 0;
+    } catch (err: any) {
+      console.warn("calculateAuditDocs failed, returning 0:", err?.message);
+      return 0;
+    }
   };
   const [isRevertDialogOpen, setIsRevertDialogOpen] = useState(false);
   const [revertLog, setRevertLog] = useState<AuditLog | null>(null);

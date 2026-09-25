@@ -57,31 +57,36 @@ export const ExpensesTab: React.FC<ExpensesTabProps> = ({
   const [filterEndDate, setFilterEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const calculateExpenseDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
-    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
-
     try {
-      if (effectiveLocationId) {
-        const countQuery = query(
-          collection(db, 'financialTransactions'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
-        const snapshot = await getCountFromServer(countQuery);
-        return snapshot.data().count || 0;
-      }
-    } catch (e: any) {
-      console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
-    }
+      const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    const fallbackQuery = query(
-      collection(db, 'financialTransactions'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const snapshot = await getCountFromServer(fallbackQuery);
-    return snapshot.data().count || 0;
+      if (effectiveLocationId) {
+        try {
+          const countQuery = query(
+            collection(db, 'financialTransactions'),
+            where('locationId', '==', effectiveLocationId),
+            where('timestamp', '>=', startTs),
+            where('timestamp', '<=', endTs)
+          );
+          const snapshot = await getCountFromServer(countQuery);
+          return snapshot.data().count || 0;
+        } catch (e: any) {
+          console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+        }
+      }
+
+      const fallbackQuery = query(
+        collection(db, 'financialTransactions'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      const snapshot = await getCountFromServer(fallbackQuery);
+      return snapshot.data().count || 0;
+    } catch (err: any) {
+      console.warn("calculateExpenseDocs failed, returning 0:", err?.message);
+      return 0;
+    }
   };
 
   const handleDeleteExpense = async (id: string, amount: number, accountId: string, description: string) => {

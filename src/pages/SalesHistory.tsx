@@ -201,65 +201,50 @@ export const SalesHistory: React.FC = () => {
     : undefined;
 
   const calculateSalesHistoryDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
-    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
-
     try {
-      if (effectiveLocationId) {
-        const qSales = query(
-          collection(db, 'sales'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
-        const qTrans = query(
-          collection(db, 'financialTransactions'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
-        const qReturns = query(
-          collection(db, 'returnTransactions'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
+      const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-        const [snapSales, snapTrans, snapReturns] = await Promise.all([
-          getCountFromServer(qSales),
-          getCountFromServer(qTrans),
-          getCountFromServer(qReturns)
-        ]);
+      const safeCount = async (colName: string): Promise<number> => {
+        if (effectiveLocationId) {
+          try {
+            const locQ = query(
+              collection(db, colName),
+              where('locationId', '==', effectiveLocationId),
+              where('timestamp', '>=', startTs),
+              where('timestamp', '<=', endTs)
+            );
+            const snap = await getCountFromServer(locQ);
+            return snap.data().count || 0;
+          } catch (e: any) {
+            console.warn(`Location count for ${colName} failed (missing index), trying fallback:`, e?.message);
+          }
+        }
+        try {
+          const dateQ = query(
+            collection(db, colName),
+            where('timestamp', '>=', startTs),
+            where('timestamp', '<=', endTs)
+          );
+          const snap = await getCountFromServer(dateQ);
+          return snap.data().count || 0;
+        } catch (e: any) {
+          console.warn(`Date range count for ${colName} failed:`, e?.message);
+          return 0;
+        }
+      };
 
-        return (snapSales.data().count || 0) + (snapTrans.data().count || 0) + (snapReturns.data().count || 0);
-      }
-    } catch (e: any) {
-      console.warn("Composite query failed in calculateSalesHistoryDocs (missing index), falling back to date-range count:", e?.message);
+      const [countSales, countTrans, countReturns] = await Promise.all([
+        safeCount('sales'),
+        safeCount('financialTransactions'),
+        safeCount('returnTransactions')
+      ]);
+
+      return countSales + countTrans + countReturns;
+    } catch (err: any) {
+      console.warn("calculateSalesHistoryDocs top-level error:", err?.message);
+      return 0;
     }
-
-    const qSales = query(
-      collection(db, 'sales'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const qTrans = query(
-      collection(db, 'financialTransactions'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const qReturns = query(
-      collection(db, 'returnTransactions'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-
-    const [snapSales, snapTrans, snapReturns] = await Promise.all([
-      getCountFromServer(qSales),
-      getCountFromServer(qTrans),
-      getCountFromServer(qReturns)
-    ]);
-
-    return (snapSales.data().count || 0) + (snapTrans.data().count || 0) + (snapReturns.data().count || 0);
   };
 
   const handleApplyGuardedDateRange = (sDate: string, eDate: string) => {

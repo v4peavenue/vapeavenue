@@ -248,26 +248,31 @@ export const Attendance: React.FC = () => {
   const calculateAttendanceDocs = async (startStr: string, endStr: string): Promise<number> => {
     try {
       if (effectiveLocationId) {
-        const q = query(
-          collection(db, 'attendance'),
-          where('locationId', '==', effectiveLocationId),
-          where('date', '>=', startStr),
-          where('date', '<=', endStr)
-        );
-        const snap = await getCountFromServer(q);
-        return snap.data().count || 0;
+        try {
+          const q = query(
+            collection(db, 'attendance'),
+            where('locationId', '==', effectiveLocationId),
+            where('date', '>=', startStr),
+            where('date', '<=', endStr)
+          );
+          const snap = await getCountFromServer(q);
+          return snap.data().count || 0;
+        } catch (e: any) {
+          console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+        }
       }
-    } catch (e: any) {
-      console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
-    }
 
-    const q = query(
-      collection(db, 'attendance'),
-      where('date', '>=', startStr),
-      where('date', '<=', endStr)
-    );
-    const snap = await getCountFromServer(q);
-    return snap.data().count || 0;
+      const q = query(
+        collection(db, 'attendance'),
+        where('date', '>=', startStr),
+        where('date', '<=', endStr)
+      );
+      const snap = await getCountFromServer(q);
+      return snap.data().count || 0;
+    } catch (err: any) {
+      console.warn("calculateAttendanceDocs failed, returning 0:", err?.message);
+      return 0;
+    }
   };
   
   const [editingLog, setEditingLog] = useState<{

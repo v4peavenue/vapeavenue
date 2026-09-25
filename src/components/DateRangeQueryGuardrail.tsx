@@ -149,8 +149,10 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
       setExactReadCount(count);
       setShowModal(true);
     } catch (error) {
-      console.error('Error estimating document reads:', error);
-      toast.error('Failed to calculate document count. Please check your connection and date range.');
+      console.warn('Error estimating document reads, allowing direct query fallback:', error);
+      toast.info('Read count estimation bypassed. You can confirm to execute the date range query directly.');
+      setExactReadCount(null);
+      setShowModal(true);
     } finally {
       setIsCalculating(false);
     }
@@ -165,7 +167,8 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
     try {
       await onApplyQuery(startDate, endDate);
       setLastAppliedRange({ start: startDate, end: endDate });
-      toast.success(`Loaded ${exactReadCount !== null ? exactReadCount.toLocaleString() : ''} ${targetEntityLabel} for ${startDate} to ${endDate}`);
+      const countStr = exactReadCount !== null ? `${exactReadCount.toLocaleString()} ` : '';
+      toast.success(`Loaded ${countStr}${targetEntityLabel} for ${startDate} to ${endDate}`);
     } catch (error) {
       console.error('Error executing date range query:', error);
       toast.error('Failed to load data for selected date range');
@@ -317,7 +320,9 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
             <DialogDescription className="text-xs text-slate-600 pt-2 leading-relaxed">
               {isAlreadyDisplayed
                 ? 'The records for this date range are already loaded and visible on your screen. You can proceed if you want to force a refresh from the cloud.'
-                : 'Before running this query, the system calculated the exact document count for your selected date range.'}
+                : exactReadCount !== null
+                  ? 'Before running this query, the system calculated the exact document count for your selected date range.'
+                  : 'Document count pre-calculation was bypassed. You can confirm to execute the date range query directly.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -328,7 +333,7 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
               <div className="space-y-0.5 text-xs">
                 <p className="font-bold">Active View Notice</p>
                 <p className="text-[11px] text-blue-700 leading-normal">
-                  Your screen is already displaying the <strong>{startDate}</strong> &rarr; <strong>{endDate}</strong> interval. Re-fetching will consume <strong>{exactReadCount !== null ? exactReadCount.toLocaleString() : '0'} document reads</strong> to refresh existing data.
+                  Your screen is already displaying the <strong>{startDate}</strong> &rarr; <strong>{endDate}</strong> interval. Re-fetching will refresh existing data.
                 </p>
               </div>
             </div>
@@ -355,20 +360,22 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
             <div className="flex items-center justify-between text-xs border-b border-slate-200/60 pb-2">
               <span className="text-slate-500 font-medium">Matching {targetEntityLabel}:</span>
               <span className="font-bold text-slate-800">
-                {exactReadCount !== null ? exactReadCount.toLocaleString() : '--'} records
+                {exactReadCount !== null ? `${exactReadCount.toLocaleString()} records` : 'Direct Query'}
               </span>
             </div>
 
             <div className="flex items-center justify-between text-xs pt-0.5">
-              <span className="font-bold text-slate-700">Exact Firestore Read Cost:</span>
+              <span className="font-bold text-slate-700">Estimated Firestore Reads:</span>
               <Badge className="font-mono text-xs font-black bg-amber-100 text-amber-900 border-amber-300 px-2 py-0.5">
-                {exactReadCount !== null ? `${exactReadCount.toLocaleString()} Reads` : '0 Reads'}
+                {exactReadCount !== null ? `${exactReadCount.toLocaleString()} Reads` : 'On-Demand'}
               </Badge>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-500 leading-normal">
-            Proceeding will perform exactly {exactReadCount !== null ? exactReadCount.toLocaleString() : '0'} document reads {locationName && locationName !== 'all' && locationName !== 'All Locations' ? `for ${locationName}` : ''} from your Firestore database.
+            {exactReadCount !== null
+              ? `Proceeding will perform exactly ${exactReadCount.toLocaleString()} document reads ${locationName && locationName !== 'all' && locationName !== 'All Locations' ? `for ${locationName}` : ''} from your Firestore database.`
+              : `Proceeding will load matching ${targetEntityLabel} ${locationName && locationName !== 'all' && locationName !== 'All Locations' ? `for ${locationName}` : ''} for the selected date range.`}
           </p>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-3 border-t border-slate-100">
@@ -394,12 +401,12 @@ export const DateRangeQueryGuardrail: React.FC<DateRangeQueryGuardrailProps> = (
               {isAlreadyDisplayed ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5" />
-                  Refresh Anyway ({exactReadCount !== null ? exactReadCount.toLocaleString() : '0'} Reads)
+                  Refresh Anyway {exactReadCount !== null ? `(${exactReadCount.toLocaleString()} Reads)` : ''}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  Confirm & Read {exactReadCount !== null ? exactReadCount.toLocaleString() : '0'} Documents
+                  Confirm & Load Data {exactReadCount !== null ? `(${exactReadCount.toLocaleString()} Documents)` : ''}
                 </>
               )}
             </Button>

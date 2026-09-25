@@ -152,31 +152,36 @@ export const Dashboard: React.FC = () => {
   const [groupBy, setGroupBy] = useState<'day' | 'month' | 'year'>('day');
 
   const calculateDashboardDocs = async (startStr: string, endStr: string): Promise<number> => {
-    const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
-    const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
-
     try {
-      if (effectiveLocationId) {
-        const qSales = query(
-          collection(db, 'sales'),
-          where('locationId', '==', effectiveLocationId),
-          where('timestamp', '>=', startTs),
-          where('timestamp', '<=', endTs)
-        );
-        const snapSales = await getCountFromServer(qSales);
-        return snapSales.data().count || 0;
-      }
-    } catch (e: any) {
-      console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
-    }
+      const startTs = Timestamp.fromDate(new Date(`${startStr}T00:00:00`));
+      const endTs = Timestamp.fromDate(new Date(`${endStr}T23:59:59`));
 
-    const qSales = query(
-      collection(db, 'sales'),
-      where('timestamp', '>=', startTs),
-      where('timestamp', '<=', endTs)
-    );
-    const snapSales = await getCountFromServer(qSales);
-    return snapSales.data().count || 0;
+      if (effectiveLocationId) {
+        try {
+          const qSales = query(
+            collection(db, 'sales'),
+            where('locationId', '==', effectiveLocationId),
+            where('timestamp', '>=', startTs),
+            where('timestamp', '<=', endTs)
+          );
+          const snapSales = await getCountFromServer(qSales);
+          return snapSales.data().count || 0;
+        } catch (e: any) {
+          console.warn("Composite count query failed (missing index), falling back to date range count:", e?.message);
+        }
+      }
+
+      const qSales = query(
+        collection(db, 'sales'),
+        where('timestamp', '>=', startTs),
+        where('timestamp', '<=', endTs)
+      );
+      const snapSales = await getCountFromServer(qSales);
+      return snapSales.data().count || 0;
+    } catch (e: any) {
+      console.warn("calculateDashboardDocs failed, returning 0:", e?.message);
+      return 0;
+    }
   };
   
   // States for quantities sold analysis
