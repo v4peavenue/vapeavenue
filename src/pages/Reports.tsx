@@ -43,8 +43,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '@/lib/firestore-utils';
 import { DateRangeQueryGuardrail } from '@/components/DateRangeQueryGuardrail';
-import { SearchableProductSelect } from '@/components/SearchableProductSelect';
-import { SearchableSelect, SearchableOption } from '@/components/SearchableSelect';
+import { SearchableMultiSelect, SearchableMultiOption } from '@/components/SearchableMultiSelect';
 import { 
   Select, 
   SelectContent, 
@@ -284,6 +283,17 @@ interface ReportsCacheState {
   guardrailEndDate?: string;
   isGuardrailApplied?: boolean;
   searchTerm?: string;
+  selectedSellers?: string[];
+  selectedCustomers?: string[];
+  selectedPromos?: string[];
+  selectedCategories?: string[];
+  selectedBrands?: string[];
+  selectedProducts?: string[];
+  selectedAdjustmentCategories?: string[];
+  selectedExpenseSources?: string[];
+  selectedExpenseCategories?: string[];
+  selectedExpenseBranches?: string[];
+  // Backwards compatibility legacy fields
   selectedSeller?: string;
   selectedCustomer?: string;
   selectedPromo?: string;
@@ -298,6 +308,14 @@ interface ReportsCacheState {
   sortRulesByReport?: Record<string, SortRule[]>;
   multiSortMode?: boolean;
 }
+
+const normalizeFilterArray = (val: any, legacyVal?: any): string[] => {
+  if (Array.isArray(val)) return val.filter(v => Boolean(v) && v !== 'all');
+  if (Array.isArray(legacyVal)) return legacyVal.filter(v => Boolean(v) && v !== 'all');
+  if (typeof val === 'string' && val && val !== 'all') return [val];
+  if (typeof legacyVal === 'string' && legacyVal && legacyVal !== 'all') return [legacyVal];
+  return [];
+};
 
 const getStoredReportsCache = (): ReportsCacheState | null => {
   try {
@@ -338,18 +356,38 @@ export const Reports: React.FC = () => {
   const [isGuardrailApplied, setIsGuardrailApplied] = useState<boolean>(() => !!initialCache?.isGuardrailApplied);
   const [searchTerm, setSearchTerm] = useState(() => initialCache?.searchTerm || '');
 
-  // States for the seller, customer, promo, category, brand, and product filters
+  // Multi-selection filter states (array of selected IDs/strings; empty array means All)
   const [usersList, setUsersList] = useState<any[]>([]);
-  const [selectedSeller, setSelectedSeller] = useState<string>(() => initialCache?.selectedSeller || 'all');
-  const [selectedCustomer, setSelectedCustomer] = useState<string>(() => initialCache?.selectedCustomer || 'all');
-  const [selectedPromo, setSelectedPromo] = useState<string>(() => initialCache?.selectedPromo || 'all');
-  const [selectedCategory, setSelectedCategory] = useState<string>(() => initialCache?.selectedCategory || 'all');
-  const [selectedBrand, setSelectedBrand] = useState<string>(() => initialCache?.selectedBrand || 'all');
-  const [selectedProduct, setSelectedProduct] = useState<string>(() => initialCache?.selectedProduct || 'all');
-  const [selectedAdjustmentCategory, setSelectedAdjustmentCategory] = useState<string>(() => initialCache?.selectedAdjustmentCategory || 'defective');
-  const [selectedExpenseSource, setSelectedExpenseSource] = useState<string>(() => initialCache?.selectedExpenseSource || 'all');
-  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState<string>(() => initialCache?.selectedExpenseCategory || 'all');
-  const [selectedExpenseBranch, setSelectedExpenseBranch] = useState<string>(() => initialCache?.selectedExpenseBranch || 'all');
+  const [selectedSellers, setSelectedSellers] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedSellers, initialCache?.selectedSeller)
+  );
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedCustomers, initialCache?.selectedCustomer)
+  );
+  const [selectedPromos, setSelectedPromos] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedPromos, initialCache?.selectedPromo)
+  );
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedCategories, initialCache?.selectedCategory)
+  );
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedBrands, initialCache?.selectedBrand)
+  );
+  const [selectedProducts, setSelectedProducts] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedProducts, initialCache?.selectedProduct)
+  );
+  const [selectedAdjustmentCategories, setSelectedAdjustmentCategories] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedAdjustmentCategories, initialCache?.selectedAdjustmentCategory)
+  );
+  const [selectedExpenseSources, setSelectedExpenseSources] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedExpenseSources, initialCache?.selectedExpenseSource)
+  );
+  const [selectedExpenseCategories, setSelectedExpenseCategories] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedExpenseCategories, initialCache?.selectedExpenseCategory)
+  );
+  const [selectedExpenseBranches, setSelectedExpenseBranches] = useState<string[]>(() =>
+    normalizeFilterArray(initialCache?.selectedExpenseBranches, initialCache?.selectedExpenseBranch)
+  );
   const [expenseTransactions, setExpenseTransactions] = useState<Transaction[]>([]);
 
   // Pagination states
@@ -458,16 +496,16 @@ export const Reports: React.FC = () => {
         guardrailEndDate,
         isGuardrailApplied,
         searchTerm,
-        selectedSeller,
-        selectedCustomer,
-        selectedPromo,
-        selectedCategory,
-        selectedBrand,
-        selectedProduct,
-        selectedAdjustmentCategory,
-        selectedExpenseSource,
-        selectedExpenseCategory,
-        selectedExpenseBranch,
+        selectedSellers,
+        selectedCustomers,
+        selectedPromos,
+        selectedCategories,
+        selectedBrands,
+        selectedProducts,
+        selectedAdjustmentCategories,
+        selectedExpenseSources,
+        selectedExpenseCategories,
+        selectedExpenseBranches,
         pageSize,
         sortRulesByReport,
         multiSortMode
@@ -486,16 +524,16 @@ export const Reports: React.FC = () => {
     guardrailEndDate,
     isGuardrailApplied,
     searchTerm,
-    selectedSeller,
-    selectedCustomer,
-    selectedPromo,
-    selectedCategory,
-    selectedBrand,
-    selectedProduct,
-    selectedAdjustmentCategory,
-    selectedExpenseSource,
-    selectedExpenseCategory,
-    selectedExpenseBranch,
+    selectedSellers,
+    selectedCustomers,
+    selectedPromos,
+    selectedCategories,
+    selectedBrands,
+    selectedProducts,
+    selectedAdjustmentCategories,
+    selectedExpenseSources,
+    selectedExpenseCategories,
+    selectedExpenseBranches,
     pageSize,
     sortRulesByReport,
     multiSortMode
@@ -580,7 +618,7 @@ export const Reports: React.FC = () => {
   // Reset to page 1 whenever tab or filter criteria change
   useEffect(() => {
     setCurrentPage(1);
-  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSeller, selectedCustomer, selectedPromo, selectedCategory, selectedBrand, selectedProduct, selectedAdjustmentCategory, selectedExpenseSource, selectedExpenseCategory, selectedExpenseBranch, selectedLocationId]);
+  }, [reportType, movementSubView, dateRange, customStartDate, customEndDate, searchTerm, selectedSellers, selectedCustomers, selectedPromos, selectedCategories, selectedBrands, selectedProducts, selectedAdjustmentCategories, selectedExpenseSources, selectedExpenseCategories, selectedExpenseBranches, selectedLocationId]);
 
   const getPaymentMethodName = (methodId: string) => {
     if (!methodId) return 'N/A';
@@ -828,18 +866,29 @@ export const Reports: React.FC = () => {
   }, [products]);
 
   const uniqueBrands = useMemo(() => {
-    const list = selectedCategory !== 'all' ? products.filter(p => p.category === selectedCategory) : products;
+    const list = selectedCategories.length > 0 
+      ? products.filter(p => p.category && selectedCategories.includes(p.category)) 
+      : products;
     const brands = list.map(p => p.brand).filter(Boolean) as string[];
     return Array.from(new Set(brands)).sort();
-  }, [products, selectedCategory]);
+  }, [products, selectedCategories]);
 
   const selectableProducts = useMemo(() => {
     return products.filter(p => {
-      if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
-      if (selectedBrand !== 'all' && p.brand !== selectedBrand) return false;
+      if (selectedCategories.length > 0 && (!p.category || !selectedCategories.includes(p.category))) return false;
+      if (selectedBrands.length > 0 && (!p.brand || !selectedBrands.includes(p.brand))) return false;
       return true;
     }).sort((a, b) => a.name.localeCompare(b.name));
-  }, [products, selectedCategory, selectedBrand]);
+  }, [products, selectedCategories, selectedBrands]);
+
+  const productFilterOptions: SearchableMultiOption[] = useMemo(() => {
+    return selectableProducts.map(p => ({
+      id: p.id,
+      label: p.name,
+      subLabel: `SKU: ${p.sku}${p.brand ? ` • ${p.brand}` : ''}`,
+      badge: p.category
+    }));
+  }, [selectableProducts]);
 
   const getSaleCustomerName = (sale: Sale) => {
     if (sale.customerDetails?.name && sale.customerDetails.name.trim()) {
@@ -877,21 +926,21 @@ export const Reports: React.FC = () => {
     return '—';
   };
 
-  const categoryFilterOptions: SearchableOption[] = useMemo(() => {
+  const categoryFilterOptions: SearchableMultiOption[] = useMemo(() => {
     return uniqueCategories.map(cat => ({
       id: cat,
       label: cat,
     }));
   }, [uniqueCategories]);
 
-  const brandFilterOptions: SearchableOption[] = useMemo(() => {
+  const brandFilterOptions: SearchableMultiOption[] = useMemo(() => {
     return uniqueBrands.map(brand => ({
       id: brand,
       label: brand,
     }));
   }, [uniqueBrands]);
 
-  const sellerFilterOptions: SearchableOption[] = useMemo(() => {
+  const sellerFilterOptions: SearchableMultiOption[] = useMemo(() => {
     return usersList.map(u => ({
       id: u.id,
       label: u.name || u.email || 'Unknown',
@@ -901,14 +950,14 @@ export const Reports: React.FC = () => {
     }));
   }, [usersList]);
 
-  const adjustmentCategoryFilterOptions: SearchableOption[] = useMemo(() => {
+  const adjustmentCategoryFilterOptions: SearchableMultiOption[] = useMemo(() => {
     return ADJUSTMENT_CATEGORIES.map(cat => ({
       id: cat.value,
       label: cat.label,
     }));
   }, []);
 
-  const customerFilterOptions: SearchableOption[] = useMemo(() => {
+  const customerFilterOptions: SearchableMultiOption[] = useMemo(() => {
     const map = new Map<string, { label: string; subLabel?: string; badge?: string }>();
     customers.forEach(c => {
       if (c.name && c.name.trim()) {
@@ -941,7 +990,7 @@ export const Reports: React.FC = () => {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [customers, sales, loyaltyCards]);
 
-  const promoFilterOptions: SearchableOption[] = useMemo(() => {
+  const promoFilterOptions: SearchableMultiOption[] = useMemo(() => {
     const set = new Set<string>();
     promos.forEach(p => {
       if (p.code && p.code.trim()) set.add(p.code.trim().toUpperCase());
@@ -951,7 +1000,7 @@ export const Reports: React.FC = () => {
       if (code && code !== '—') set.add(code.toUpperCase());
     });
     
-    const list: SearchableOption[] = [
+    const list: SearchableMultiOption[] = [
       {
         id: 'none',
         label: 'No Promo Applied',
@@ -998,14 +1047,14 @@ export const Reports: React.FC = () => {
     return Array.from(set).sort();
   }, [expenseTransactions, DEFAULT_EXPENSE_CATEGORIES]);
 
-  const expenseCategoryFilterOptions: SearchableOption[] = useMemo(() => {
+  const expenseCategoryFilterOptions: SearchableMultiOption[] = useMemo(() => {
     return uniqueExpenseCategories.map(cat => ({
       id: cat,
       label: cat
     }));
   }, [uniqueExpenseCategories]);
 
-  const sourceOfFundsFilterOptions: SearchableOption[] = useMemo(() => {
+  const sourceOfFundsFilterOptions: SearchableMultiOption[] = useMemo(() => {
     return accounts.map(acc => ({
       id: acc.id,
       label: acc.name,
@@ -1015,8 +1064,8 @@ export const Reports: React.FC = () => {
     }));
   }, [accounts, settings.currency]);
 
-  const branchFilterOptions: SearchableOption[] = useMemo(() => {
-    const list: SearchableOption[] = [
+  const branchFilterOptions: SearchableMultiOption[] = useMemo(() => {
+    const list: SearchableMultiOption[] = [
       {
         id: 'central',
         label: 'Central / Head Office',
@@ -1043,13 +1092,13 @@ export const Reports: React.FC = () => {
       const matchingItems = s.items.filter(item => {
         const product = products.find(p => p.id === item.productId);
         
-        if (selectedCategory !== 'all' && (!product || product.category !== selectedCategory)) {
+        if (selectedCategories.length > 0 && (!product || !selectedCategories.includes(product.category))) {
           return false;
         }
-        if (selectedBrand !== 'all' && (!product || product.brand !== selectedBrand)) {
+        if (selectedBrands.length > 0 && (!product || !selectedBrands.includes(product.brand))) {
           return false;
         }
-        if (selectedProduct !== 'all' && item.productId !== selectedProduct) {
+        if (selectedProducts.length > 0 && !selectedProducts.includes(item.productId)) {
           return false;
         }
         return true;
@@ -1077,36 +1126,39 @@ export const Reports: React.FC = () => {
         hasMatchingItems: matchingItems.length > 0
       };
     });
-  }, [sales, products, selectedCategory, selectedBrand, selectedProduct]);
+  }, [sales, products, selectedCategories, selectedBrands, selectedProducts]);
 
   const filteredSales = useMemo(() => {
     return processedSales.filter(s => {
       // Must have matching items if any item filter is applied
-      const hasFilterActive = selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all';
+      const hasFilterActive = selectedCategories.length > 0 || selectedBrands.length > 0 || selectedProducts.length > 0;
       if (hasFilterActive && !s.hasMatchingItems) return false;
 
       // Seller filter
-      if (selectedSeller !== 'all' && s.staffId !== selectedSeller) return false;
+      if (selectedSellers.length > 0 && !selectedSellers.includes(s.staffId)) return false;
 
       // Customer Name filter
-      if (selectedCustomer !== 'all') {
+      if (selectedCustomers.length > 0) {
         const custName = getSaleCustomerName(s).toLowerCase();
-        const matchedCust = customers.find(c => c.id === selectedCustomer);
-        const targetName = (matchedCust?.name || selectedCustomer).toLowerCase();
-
-        const matchesId = s.customerId === selectedCustomer;
-        const matchesName = custName === targetName;
-        if (!matchesId && !matchesName) return false;
+        const matchesCustomer = selectedCustomers.some(target => {
+          if (s.customerId === target) return true;
+          const matchedCust = customers.find(c => c.id === target);
+          const targetName = (matchedCust?.name || target).toLowerCase();
+          return custName === targetName;
+        });
+        if (!matchesCustomer) return false;
       }
 
       // Promo Code filter
-      if (selectedPromo !== 'all') {
+      if (selectedPromos.length > 0) {
         const code = getSalePromoCode(s);
-        if (selectedPromo === 'none') {
-          if (code !== '—') return false;
-        } else {
-          if (code.toUpperCase() !== selectedPromo.toUpperCase()) return false;
-        }
+        const matchesPromo = selectedPromos.some(p => {
+          if (p === 'none') {
+            return code === '—';
+          }
+          return code.toUpperCase() === p.toUpperCase();
+        });
+        if (!matchesPromo) return false;
       }
 
       // Search term
@@ -1127,13 +1179,13 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [processedSales, selectedSeller, selectedCustomer, selectedPromo, searchTerm, selectedCategory, selectedBrand, selectedProduct, usersList, customers, loyaltyCards, promos]);
+  }, [processedSales, selectedSellers, selectedCustomers, selectedPromos, searchTerm, selectedCategories, selectedBrands, selectedProducts, usersList, customers, loyaltyCards, promos]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      if (selectedCategory !== 'all' && p.category !== selectedCategory) return false;
-      if (selectedBrand !== 'all' && p.brand !== selectedBrand) return false;
-      if (selectedProduct !== 'all' && p.id !== selectedProduct) return false;
+      if (selectedCategories.length > 0 && (!p.category || !selectedCategories.includes(p.category))) return false;
+      if (selectedBrands.length > 0 && (!p.brand || !selectedBrands.includes(p.brand))) return false;
+      if (selectedProducts.length > 0 && !selectedProducts.includes(p.id)) return false;
 
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
@@ -1146,7 +1198,7 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [products, selectedCategory, selectedBrand, selectedProduct, searchTerm]);
+  }, [products, selectedCategories, selectedBrands, selectedProducts, searchTerm]);
 
   const profitabilityData = useMemo(() => {
     const items = filteredProducts.map(product => {
@@ -1174,12 +1226,12 @@ export const Reports: React.FC = () => {
       };
     });
 
-    if (selectedSeller !== 'all') {
-      return items.filter(item => item.unitsSold > 0 || (selectedProduct !== 'all' && item.product.id === selectedProduct));
+    if (selectedSellers.length > 0) {
+      return items.filter(item => item.unitsSold > 0 || (selectedProducts.length > 0 && selectedProducts.includes(item.product.id)));
     }
 
     return items;
-  }, [filteredProducts, filteredSales, selectedSeller, selectedProduct]);
+  }, [filteredProducts, filteredSales, selectedSellers, selectedProducts]);
 
   const salesBySellerData = useMemo(() => {
     const groups: { [staffId: string]: {
@@ -1227,19 +1279,19 @@ export const Reports: React.FC = () => {
 
   const filteredAdjustments = useMemo(() => {
     return adjustments.filter(adj => {
-      if (selectedAdjustmentCategory !== 'all') {
-        if (!matchesAdjustmentCategory(adj, selectedAdjustmentCategory)) return false;
+      if (selectedAdjustmentCategories.length > 0) {
+        if (!selectedAdjustmentCategories.some(cat => matchesAdjustmentCategory(adj, cat))) return false;
       }
 
-      if (selectedProduct !== 'all' && adj.productId !== selectedProduct) return false;
+      if (selectedProducts.length > 0 && !selectedProducts.includes(adj.productId)) return false;
 
-      if (selectedCategory !== 'all' || selectedBrand !== 'all') {
+      if (selectedCategories.length > 0 || selectedBrands.length > 0) {
         const prod = products.find(p => p.id === adj.productId);
-        if (selectedCategory !== 'all' && (!prod || prod.category !== selectedCategory)) return false;
-        if (selectedBrand !== 'all' && (!prod || prod.brand !== selectedBrand)) return false;
+        if (selectedCategories.length > 0 && (!prod || !prod.category || !selectedCategories.includes(prod.category))) return false;
+        if (selectedBrands.length > 0 && (!prod || !prod.brand || !selectedBrands.includes(prod.brand))) return false;
       }
 
-      if (selectedSeller !== 'all' && adj.adjustedBy !== selectedSeller) return false;
+      if (selectedSellers.length > 0 && !selectedSellers.includes(adj.adjustedBy)) return false;
 
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
@@ -1252,7 +1304,7 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [adjustments, products, selectedAdjustmentCategory, selectedProduct, selectedCategory, selectedBrand, selectedSeller, searchTerm]);
+  }, [adjustments, products, selectedAdjustmentCategories, selectedProducts, selectedCategories, selectedBrands, selectedSellers, searchTerm]);
 
   const productMovementEvents = useMemo(() => {
     const events: ProductMovementEvent[] = [];
@@ -1432,10 +1484,10 @@ export const Reports: React.FC = () => {
 
   const filteredMovementEvents = useMemo(() => {
     return productMovementEvents.filter(ev => {
-      if (selectedCategory !== 'all' && ev.category !== selectedCategory) return false;
-      if (selectedBrand !== 'all' && ev.brand !== selectedBrand) return false;
-      if (selectedProduct !== 'all' && ev.productId !== selectedProduct) return false;
-      if (selectedSeller !== 'all' && ev.performedBy !== selectedSeller) return false;
+      if (selectedCategories.length > 0 && (!ev.category || !selectedCategories.includes(ev.category))) return false;
+      if (selectedBrands.length > 0 && (!ev.brand || !selectedBrands.includes(ev.brand))) return false;
+      if (selectedProducts.length > 0 && !selectedProducts.includes(ev.productId)) return false;
+      if (selectedSellers.length > 0 && !selectedSellers.includes(ev.performedBy)) return false;
 
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
@@ -1449,7 +1501,7 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [productMovementEvents, selectedCategory, selectedBrand, selectedProduct, selectedSeller, searchTerm]);
+  }, [productMovementEvents, selectedCategories, selectedBrands, selectedProducts, selectedSellers, searchTerm]);
 
   const productMovementSummary = useMemo(() => {
     const summaryMap: { [productId: string]: {
@@ -1500,29 +1552,30 @@ export const Reports: React.FC = () => {
   const filteredExpenses = useMemo(() => {
     return expenseTransactions.filter(e => {
       // 1. Branch filter
-      if (selectedExpenseBranch !== 'all') {
-        if (selectedExpenseBranch === 'central') {
-          if (e.locationId && e.locationId !== '') return false;
-        } else {
-          if (e.locationId !== selectedExpenseBranch) return false;
-        }
+      if (selectedExpenseBranches.length > 0) {
+        const matchesBranch = selectedExpenseBranches.some(b => {
+          if (b === 'central') return !e.locationId || e.locationId === '';
+          return e.locationId === b;
+        });
+        if (!matchesBranch) return false;
       } else if (effectiveLocationId) {
         if (e.locationId && e.locationId !== effectiveLocationId) return false;
       }
 
       // 2. Source of funds filter
-      if (selectedExpenseSource !== 'all') {
-        if (e.accountId !== selectedExpenseSource) return false;
+      if (selectedExpenseSources.length > 0) {
+        if (!selectedExpenseSources.includes(e.accountId)) return false;
       }
 
       // 3. Category filter
-      if (selectedExpenseCategory !== 'all') {
-        if ((e.category || '').toLowerCase() !== selectedExpenseCategory.toLowerCase()) return false;
+      if (selectedExpenseCategories.length > 0) {
+        const cat = (e.category || '').toLowerCase();
+        if (!selectedExpenseCategories.some(c => c.toLowerCase() === cat)) return false;
       }
 
       // 4. Staff / Recorded by filter
-      if (selectedSeller !== 'all') {
-        if (e.createdBy !== selectedSeller) return false;
+      if (selectedSellers.length > 0) {
+        if (!selectedSellers.includes(e.createdBy)) return false;
       }
 
       // 5. Search term
@@ -1539,7 +1592,7 @@ export const Reports: React.FC = () => {
 
       return true;
     });
-  }, [expenseTransactions, selectedExpenseBranch, effectiveLocationId, selectedExpenseSource, selectedExpenseCategory, selectedSeller, searchTerm]);
+  }, [expenseTransactions, selectedExpenseBranches, effectiveLocationId, selectedExpenseSources, selectedExpenseCategories, selectedSellers, searchTerm]);
 
   const expenseTotals = useMemo(() => {
     const totalAmount = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -1636,7 +1689,7 @@ export const Reports: React.FC = () => {
         case 'loyaltyCard': return getSaleLoyaltyCardNumber(sale);
         case 'promoCode': return getSalePromoCode(sale);
         case 'items': {
-          const items = (selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all') ? sale.matchingItems : sale.items;
+          const items = (selectedCategories.length > 0 || selectedBrands.length > 0 || selectedProducts.length > 0) ? sale.matchingItems : sale.items;
           return items.reduce((sum, item) => sum + Math.max(0, item.quantity - (item.returnedQuantity || 0)), 0);
         }
         case 'method': return getPaymentMethodName(sale.paymentMethod);
@@ -1644,7 +1697,7 @@ export const Reports: React.FC = () => {
         default: return '';
       }
     });
-  }, [filteredSales, sortRulesByReport, locations, selectedCategory, selectedBrand, selectedProduct]);
+  }, [filteredSales, sortRulesByReport, locations, selectedCategories, selectedBrands, selectedProducts]);
 
   const sortedSalesBySeller = useMemo(() => {
     const rules = sortRulesByReport['sales-by-seller'] || [];
@@ -1811,10 +1864,10 @@ export const Reports: React.FC = () => {
 
   const totalItemsSold = useMemo(() => {
     return filteredSales.reduce((sum, s) => {
-      const items = (selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all') ? s.matchingItems : s.items;
+      const items = (selectedCategories.length > 0 || selectedBrands.length > 0 || selectedProducts.length > 0) ? s.matchingItems : s.items;
       return sum + items.reduce((iSum, item) => iSum + Math.max(0, item.quantity - (item.returnedQuantity || 0)), 0);
     }, 0);
-  }, [filteredSales, selectedCategory, selectedBrand, selectedProduct]);
+  }, [filteredSales, selectedCategories, selectedBrands, selectedProducts]);
 
   const topSellerInfo = useMemo(() => {
     if (salesBySellerData.length === 0) return { name: 'None', revenue: 0, orders: 0 };
@@ -1901,51 +1954,48 @@ export const Reports: React.FC = () => {
   const activeFiltersSummary = useMemo(() => {
     const filters: string[] = [];
     if (reportType === 'expense-liquidity') {
-      if (selectedExpenseSource !== 'all') {
-        const acc = accounts.find(a => a.id === selectedExpenseSource);
-        filters.push(`Source of Funds: ${acc?.name || selectedExpenseSource}`);
+      if (selectedExpenseSources.length > 0) {
+        const names = selectedExpenseSources.map(id => accounts.find(a => a.id === id)?.name || id).join(', ');
+        filters.push(`Sources: ${names}`);
       }
-      if (selectedExpenseCategory !== 'all') {
-        filters.push(`Category: ${selectedExpenseCategory}`);
+      if (selectedExpenseCategories.length > 0) {
+        filters.push(`Expense Categories: ${selectedExpenseCategories.join(', ')}`);
       }
-      if (selectedExpenseBranch !== 'all') {
-        if (selectedExpenseBranch === 'central') {
-          filters.push(`Branch: Central / Head Office`);
-        } else {
-          const loc = locations.find(l => l.id === selectedExpenseBranch);
-          filters.push(`Branch: ${loc?.name || selectedExpenseBranch}`);
-        }
+      if (selectedExpenseBranches.length > 0) {
+        const names = selectedExpenseBranches.map(b => b === 'central' ? 'Central / Head Office' : (locations.find(l => l.id === b)?.name || b)).join(', ');
+        filters.push(`Branches: ${names}`);
       }
-      if (selectedSeller !== 'all') {
-        const sName = usersList.find(u => u.id === selectedSeller)?.name || selectedSeller;
-        filters.push(`Recorded By: ${sName}`);
+      if (selectedSellers.length > 0) {
+        const names = selectedSellers.map(id => usersList.find(u => u.id === id)?.name || id).join(', ');
+        filters.push(`Recorded By: ${names}`);
       }
     } else {
-      if (selectedCategory !== 'all') filters.push(`Category: ${selectedCategory}`);
-      if (selectedBrand !== 'all') filters.push(`Brand: ${selectedBrand}`);
-      if (selectedProduct !== 'all') {
-        const pName = products.find(p => p.id === selectedProduct)?.name || selectedProduct;
-        filters.push(`Product: ${pName}`);
+      if (selectedCategories.length > 0) filters.push(`Categories: ${selectedCategories.join(', ')}`);
+      if (selectedBrands.length > 0) filters.push(`Brands: ${selectedBrands.join(', ')}`);
+      if (selectedProducts.length > 0) {
+        const names = selectedProducts.map(id => products.find(p => p.id === id)?.name || id).join(', ');
+        filters.push(`Products: ${names}`);
       }
-      if (selectedSeller !== 'all') {
-        const sName = usersList.find(u => u.id === selectedSeller)?.name || selectedSeller;
-        filters.push(`Staff/Seller: ${sName}`);
+      if (selectedSellers.length > 0) {
+        const names = selectedSellers.map(id => usersList.find(u => u.id === id)?.name || id).join(', ');
+        filters.push(`Staff: ${names}`);
       }
-      if (selectedCustomer !== 'all') {
-        const cName = customers.find(c => c.id === selectedCustomer)?.name || selectedCustomer;
-        filters.push(`Customer: ${cName}`);
+      if (selectedCustomers.length > 0) {
+        const names = selectedCustomers.map(id => customers.find(c => c.id === id)?.name || id).join(', ');
+        filters.push(`Customers: ${names}`);
       }
-      if (selectedPromo !== 'all') {
-        filters.push(`Promo: ${selectedPromo === 'none' ? 'No Promo' : selectedPromo}`);
+      if (selectedPromos.length > 0) {
+        const names = selectedPromos.map(p => p === 'none' ? 'No Promo' : p).join(', ');
+        filters.push(`Promos: ${names}`);
       }
-      if (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') {
-        const catObj = ADJUSTMENT_CATEGORIES.find(c => c.value === selectedAdjustmentCategory);
-        filters.push(`Adjustment Category: ${catObj?.label || selectedAdjustmentCategory}`);
+      if (reportType === 'stock-adjustments' && selectedAdjustmentCategories.length > 0) {
+        const names = selectedAdjustmentCategories.map(cat => ADJUSTMENT_CATEGORIES.find(c => c.value === cat)?.label || cat).join(', ');
+        filters.push(`Adjustment Types: ${names}`);
       }
     }
     if (searchTerm) filters.push(`Search: "${searchTerm}"`);
     return filters.length > 0 ? filters.join(' • ') : 'All records in date range';
-  }, [selectedCategory, selectedBrand, selectedProduct, selectedSeller, selectedCustomer, selectedPromo, reportType, selectedAdjustmentCategory, selectedExpenseSource, selectedExpenseCategory, selectedExpenseBranch, searchTerm, products, usersList, customers, accounts, locations]);
+  }, [selectedCategories, selectedBrands, selectedProducts, selectedSellers, selectedCustomers, selectedPromos, reportType, selectedAdjustmentCategories, selectedExpenseSources, selectedExpenseCategories, selectedExpenseBranches, searchTerm, products, usersList, customers, accounts, locations]);
 
   const renderSaleRow = (sale: typeof processedSales[number]) => (
     <TableRow key={sale.id} className="hover:bg-slate-50/50 transition-colors">
@@ -1988,7 +2038,7 @@ export const Reports: React.FC = () => {
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap gap-1">
-          {(selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' ? sale.matchingItems : sale.items).map((item, idx) => {
+          {(selectedCategories.length > 0 || selectedBrands.length > 0 || selectedProducts.length > 0 ? sale.matchingItems : sale.items).map((item, idx) => {
             const netQty = item.quantity - (item.returnedQuantity || 0);
             return (
               <Badge key={idx} variant="outline" className="text-[10px] font-normal bg-white">
@@ -2242,7 +2292,7 @@ export const Reports: React.FC = () => {
   const handleExportCSV = () => {
     let data: any[] = [];
     let name = 'Report';
-    const hasItemFilter = selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all';
+    const hasItemFilter = selectedCategories.length > 0 || selectedBrands.length > 0 || selectedProducts.length > 0;
 
     if (reportType === 'sales') {
       name = 'Sales_Report';
@@ -3099,25 +3149,32 @@ export const Reports: React.FC = () => {
           
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Filter className="w-3.5 h-3.5 text-indigo-500" />
-                Filter Report Data
-              </span>
-              {(selectedSeller !== 'all' || selectedCustomer !== 'all' || selectedPromo !== 'all' || selectedCategory !== 'all' || selectedBrand !== 'all' || selectedProduct !== 'all' || (reportType === 'stock-adjustments' && selectedAdjustmentCategory !== 'all') || (reportType === 'expense-liquidity' && (selectedExpenseSource !== 'all' || selectedExpenseCategory !== 'all' || selectedExpenseBranch !== 'all')) || searchTerm !== '') && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-indigo-500" />
+                  Filter Report Data
+                </span>
+                {(selectedSellers.length + selectedCustomers.length + selectedPromos.length + selectedCategories.length + selectedBrands.length + selectedProducts.length + selectedAdjustmentCategories.length + selectedExpenseSources.length + selectedExpenseCategories.length + selectedExpenseBranches.length > 0) && (
+                  <Badge variant="secondary" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200 px-1.5 py-0 h-4 font-semibold">
+                    {selectedSellers.length + selectedCustomers.length + selectedPromos.length + selectedCategories.length + selectedBrands.length + selectedProducts.length + selectedAdjustmentCategories.length + selectedExpenseSources.length + selectedExpenseCategories.length + selectedExpenseBranches.length} active
+                  </Badge>
+                )}
+              </div>
+              {(selectedSellers.length > 0 || selectedCustomers.length > 0 || selectedPromos.length > 0 || selectedCategories.length > 0 || selectedBrands.length > 0 || selectedProducts.length > 0 || selectedAdjustmentCategories.length > 0 || selectedExpenseSources.length > 0 || selectedExpenseCategories.length > 0 || selectedExpenseBranches.length > 0 || searchTerm !== '') && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => {
-                    setSelectedSeller('all');
-                    setSelectedCustomer('all');
-                    setSelectedPromo('all');
-                    setSelectedCategory('all');
-                    setSelectedBrand('all');
-                    setSelectedProduct('all');
-                    setSelectedAdjustmentCategory('all');
-                    setSelectedExpenseSource('all');
-                    setSelectedExpenseCategory('all');
-                    setSelectedExpenseBranch('all');
+                    setSelectedSellers([]);
+                    setSelectedCustomers([]);
+                    setSelectedPromos([]);
+                    setSelectedCategories([]);
+                    setSelectedBrands([]);
+                    setSelectedProducts([]);
+                    setSelectedAdjustmentCategories([]);
+                    setSelectedExpenseSources([]);
+                    setSelectedExpenseCategories([]);
+                    setSelectedExpenseBranches([]);
                     setSearchTerm('');
                   }}
                   className="text-xs h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
@@ -3131,57 +3188,53 @@ export const Reports: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 animate-in fade-in duration-200">
                 {/* Source of Funds Filter */}
                 <div className="space-y-1">
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     options={sourceOfFundsFilterOptions}
-                    value={selectedExpenseSource}
-                    onChange={setSelectedExpenseSource}
+                    values={selectedExpenseSources}
+                    onChange={setSelectedExpenseSources}
                     label="Source of Funds (Account)"
-                    placeholder="All accounts or type name..."
-                    allowAll={true}
+                    placeholder="All accounts or search..."
                     allLabel="All Accounts / Sources"
-                    inputClassName="bg-white border-slate-200 h-9"
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
 
                 {/* Expense Category Filter */}
                 <div className="space-y-1">
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     options={expenseCategoryFilterOptions}
-                    value={selectedExpenseCategory}
-                    onChange={setSelectedExpenseCategory}
+                    values={selectedExpenseCategories}
+                    onChange={setSelectedExpenseCategories}
                     label="Expense Category"
-                    placeholder="All categories or type..."
-                    allowAll={true}
+                    placeholder="All categories or search..."
                     allLabel="All Expense Categories"
-                    inputClassName="bg-white border-slate-200 h-9"
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
 
                 {/* Branch / Location Filter */}
                 <div className="space-y-1">
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     options={branchFilterOptions}
-                    value={selectedExpenseBranch}
-                    onChange={setSelectedExpenseBranch}
+                    values={selectedExpenseBranches}
+                    onChange={setSelectedExpenseBranches}
                     label="Branch / Location"
-                    placeholder="All branches or type name..."
-                    allowAll={true}
+                    placeholder="All branches or search..."
                     allLabel="All Branches & Central"
-                    inputClassName="bg-white border-slate-200 h-9"
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
 
                 {/* Recorded By Staff Filter */}
                 <div className="space-y-1">
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     options={sellerFilterOptions}
-                    value={selectedSeller}
-                    onChange={setSelectedSeller}
+                    values={selectedSellers}
+                    onChange={setSelectedSellers}
                     label="Recorded By (Staff)"
-                    placeholder="All staff or type name..."
-                    allowAll={true}
+                    placeholder="All staff or search..."
                     allLabel="All Staff Members"
-                    inputClassName="bg-white border-slate-200 h-9"
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
               </div>
@@ -3194,89 +3247,81 @@ export const Reports: React.FC = () => {
                 {/* Adjustment Category Filter (Specific to Stock Adjustments tab) */}
                 {reportType === 'stock-adjustments' && (
                   <div className="space-y-1">
-                    <SearchableSelect
+                    <SearchableMultiSelect
                       options={adjustmentCategoryFilterOptions}
-                      value={selectedAdjustmentCategory}
-                      onChange={setSelectedAdjustmentCategory}
+                      values={selectedAdjustmentCategories}
+                      onChange={setSelectedAdjustmentCategories}
                       label="Adjustment Category"
-                      placeholder="Search adjustment type..."
-                      allowAll={false}
-                      inputClassName="bg-rose-50/40 border-rose-200 text-slate-900 font-medium"
+                      placeholder="All adjustment types..."
+                      allLabel="All Adjustment Types"
+                      inputClassName="bg-rose-50/40 border-rose-200 text-slate-900 font-medium min-h-9"
                     />
                   </div>
                 )}
 
                 {/* Category Filter */}
                 <div className="space-y-1">
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     options={categoryFilterOptions}
-                    value={selectedCategory}
-                    onChange={setSelectedCategory}
+                    values={selectedCategories}
+                    onChange={setSelectedCategories}
                     label="Product Category"
-                    placeholder="All categories or type..."
-                    allowAll={true}
+                    placeholder="All categories or search..."
                     allLabel="All Categories"
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
 
                 {/* Brand / Flavor Filter */}
                 <div className="space-y-1">
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     options={brandFilterOptions}
-                    value={selectedBrand}
-                    onChange={setSelectedBrand}
+                    values={selectedBrands}
+                    onChange={setSelectedBrands}
                     label="Flavor / Brand"
-                    placeholder="All flavors or type..."
-                    allowAll={true}
+                    placeholder="All flavors or search..."
                     allLabel="All Flavors"
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
 
                 {/* Product Filter */}
                 <div className="space-y-1">
-                  <SearchableProductSelect
-                    products={selectableProducts}
-                    value={selectedProduct}
-                    onChange={(prod) => {
-                      if (prod === 'all' || !prod) {
-                        setSelectedProduct('all');
-                      } else {
-                        setSelectedProduct(prod.id);
-                      }
-                    }}
+                  <SearchableMultiSelect
+                    options={productFilterOptions}
+                    values={selectedProducts}
+                    onChange={setSelectedProducts}
                     label="Product"
-                    placeholder="All products or type SKU / Name..."
-                    allowAll={true}
+                    placeholder="All products or search SKU / Name..."
                     allLabel="All Products"
-                    showStock={false}
-                    inputClassName="bg-white border-slate-200 h-9"
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
 
                 {/* Seller / Staff Filter */}
                 <div className="space-y-1">
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     options={sellerFilterOptions}
-                    value={selectedSeller}
-                    onChange={setSelectedSeller}
+                    values={selectedSellers}
+                    onChange={setSelectedSellers}
                     label={reportType === 'stock-adjustments' ? 'Adjusted By' : 'Seller Name'}
-                    placeholder={reportType === 'stock-adjustments' ? 'All staff or type name...' : 'All sellers or type name...'}
-                    allowAll={true}
+                    placeholder={reportType === 'stock-adjustments' ? 'All staff or search...' : 'All sellers or search...'}
                     allLabel={reportType === 'stock-adjustments' ? 'All Staff' : 'All Sellers'}
+                    inputClassName="bg-white border-slate-200 min-h-9"
                   />
                 </div>
 
                 {/* Customer Name Filter (Sales tab only) */}
                 {reportType === 'sales' && (
                   <div className="space-y-1">
-                    <SearchableSelect
+                    <SearchableMultiSelect
                       options={customerFilterOptions}
-                      value={selectedCustomer}
-                      onChange={setSelectedCustomer}
+                      values={selectedCustomers}
+                      onChange={setSelectedCustomers}
                       label="Customer Name"
-                      placeholder="All customers or type name..."
-                      allowAll={true}
+                      placeholder="All customers or search..."
                       allLabel="All Customers"
+                      inputClassName="bg-white border-slate-200 min-h-9"
                     />
                   </div>
                 )}
@@ -3284,14 +3329,14 @@ export const Reports: React.FC = () => {
                 {/* Promo Code Filter (Sales tab only) */}
                 {reportType === 'sales' && (
                   <div className="space-y-1">
-                    <SearchableSelect
+                    <SearchableMultiSelect
                       options={promoFilterOptions}
-                      value={selectedPromo}
-                      onChange={setSelectedPromo}
+                      values={selectedPromos}
+                      onChange={setSelectedPromos}
                       label="Promo Code Filter"
-                      placeholder="All promo codes or type..."
-                      allowAll={true}
+                      placeholder="All promo codes or search..."
                       allLabel="All Promo Codes"
+                      inputClassName="bg-white border-slate-200 min-h-9"
                     />
                   </div>
                 )}
