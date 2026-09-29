@@ -33,7 +33,11 @@ import {
   Copy,
   UserPlus,
   Info,
-  ExternalLink
+  ExternalLink,
+  Send,
+  Server,
+  Key,
+  AtSign
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { migrateCustomerLoyaltyCounts, MigrationResult } from '@/lib/loyalty-migrations';
@@ -50,7 +54,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSettings } from '@/contexts/SettingsContext';
+import { useSettings, SmtpSettings } from '@/contexts/SettingsContext';
 import { MapPin, Coins } from 'lucide-react';
 import { logAction } from '@/lib/audit';
 import { reconcileSystemData } from '@/lib/reconciliation';
@@ -69,7 +73,7 @@ import { cn } from '@/lib/utils';
 
 export const Settings: React.FC = () => {
   const { profile, isAdmin, isManager, updateProfile } = useAuth();
-  const { settings, updateCurrency, updateAccessControlSettings } = useSettings();
+  const { settings, updateCurrency, updateAccessControlSettings, updateSmtpSettings } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -84,6 +88,36 @@ export const Settings: React.FC = () => {
   } | null>(null);
   const [requestRoles, setRequestRoles] = useState<{ [id: string]: 'staff' | 'manager' | 'admin' }>({});
   const [requestLocations, setRequestLocations] = useState<{ [id: string]: string }>({});
+
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
+  const [showSmtpModal, setShowSmtpModal] = useState(false);
+  const [targetInviteForEmail, setTargetInviteForEmail] = useState<Invite | null>(null);
+  const [testingSmtp, setTestingSmtp] = useState(false);
+
+  const [smtpForm, setSmtpForm] = useState<SmtpSettings>({
+    host: settings.smtpSettings?.host || 'smtp.gmail.com',
+    port: settings.smtpSettings?.port || 465,
+    secure: settings.smtpSettings?.secure ?? true,
+    user: settings.smtpSettings?.user || profile?.email || 'v4peavenue@gmail.com',
+    pass: settings.smtpSettings?.pass || '',
+    fromEmail: settings.smtpSettings?.fromEmail || profile?.email || 'v4peavenue@gmail.com',
+    fromName: settings.smtpSettings?.fromName || 'Vape Avenue POS'
+  });
+
+  useEffect(() => {
+    if (settings.smtpSettings) {
+      setSmtpForm({
+        host: settings.smtpSettings.host || 'smtp.gmail.com',
+        port: settings.smtpSettings.port || 465,
+        secure: settings.smtpSettings.secure ?? true,
+        user: settings.smtpSettings.user || profile?.email || 'v4peavenue@gmail.com',
+        pass: settings.smtpSettings.pass || '',
+        fromEmail: settings.smtpSettings.fromEmail || profile?.email || 'v4peavenue@gmail.com',
+        fromName: settings.smtpSettings.fromName || 'Vape Avenue POS'
+      });
+    }
+  }, [settings.smtpSettings, profile?.email]);
 
   const [newInvite, setNewInvite] = useState({ 
     email: '', 
@@ -782,6 +816,108 @@ ${profile?.name || 'Vape Avenue Admin'}`;
     toast.success('Invitation instructions copied to clipboard! You can paste and send it via email, WhatsApp, or messaging apps.');
   };
 
+  const handleSendDirectInviteEmail = async (inv: Invite, customSmtp?: SmtpSettings) => {
+    const smtp = customSmtp || settings.smtpSettings;
+    const locName = locations.find(l => l.id === inv.locationId)?.name;
+
+    // If no SMTP password configured, open pre-filled draft immediately (no password required)
+    if (!smtp?.user || !smtp?.pass) {
+      handleOpenMailClient(inv.email, inv.role, locName);
+      handleCopyInviteMessage(inv.email, inv.role, locName);
+      toast.success(`Email draft created for ${inv.email} with direct login link! Just press Send.`);
+      return;
+    }
+
+    setSendingEmailId(inv.id);
+    try {
+      const locName = locations.find(l => l.id === inv.locationId)?.name;
+      const res = await fetch('/api/send-invite-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: inv.email,
+          role: inv.role,
+          locationName: locName,
+          appUrl: window.location.origin,
+          invitedByName: profile?.name || 'Administrator',
+          smtpConfig: smtp
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        if (data.error === 'SMTP_NOT_CONFIGURED') {
+          setTargetInviteForEmail(inv);
+          setShowSmtpModal(true);
+        }
+        throw new Error(data.message || data.error || 'Failed to deliver email');
+      }
+
+      toast.success(`Invitation email sent directly to ${inv.email}!`);
+      await logAction(profile, 'SEND_INVITE_EMAIL', `Sent direct invitation email to ${inv.email}`, inv.id, 'invite');
+    } catch (error: any) {
+      console.error("Error sending invite email:", error);
+      toast.error(`Email delivery failed: ${error.message || 'Check your SMTP settings'}`);
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
+
+  const handleTestSmtpConnection = async () => {
+    if (!smtpForm.user || !smtpForm.pass) {
+      toast.error("Please enter email username and password first");
+      return;
+    }
+    setTestingSmtp(true);
+    try {
+      const res = await fetch('/api/test-smtp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smtpConfig: smtpForm })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Verification failed');
+      }
+      toast.success("SMTP connection verified successfully! Email sending is ready.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to verify SMTP credentials");
+    } finally {
+      setTestingSmtp(false);
+    }
+  };
+
+  const handleSaveSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateSmtpSettings(smtpForm);
+      toast.success("Email sender configuration saved!");
+      setShowSmtpModal(false);
+      
+      if (targetInviteForEmail) {
+        const queuedInvite = targetInviteForEmail;
+        setTargetInviteForEmail(null);
+        await handleSendDirectInviteEmail(queuedInvite, smtpForm);
+      }
+    } catch (error) {
+      toast.error("Failed to save email settings");
+    }
+  };
+
+  const handleRevokeInvite = async (inv: Invite) => {
+    setRevokingInviteId(inv.id);
+    try {
+      await deleteDoc(doc(db, 'invites', inv.id));
+      await logAction(profile, 'REVOKE_INVITE', `Revoked invitation for ${inv.email}`, inv.id, 'invite');
+      toast.success(`Invitation for ${inv.email} revoked successfully.`);
+    } catch (error) {
+      console.error("Error revoking invite:", error);
+      handleFirestoreError(error, OperationType.DELETE, `invites/${inv.id}`);
+    } finally {
+      setRevokingInviteId(null);
+    }
+  };
+
   const handleApproveRequest = async (req: Invite) => {
     const assignedRole = requestRoles[req.id] || req.role || 'staff';
     const assignedLocation = requestLocations[req.id] || req.locationId || '';
@@ -1006,21 +1142,19 @@ ${profile?.name || 'Vape Avenue Admin'}`;
       details = `Deleted promo code: ${item?.code}`;
     }
 
-    if (window.confirm('Are you sure you want to delete this?')) {
-      try {
-        // If deleting a payment option, also delete its account or warn the user
-        // The user request implies they are connected, so we delete both
-        if (collectionName === 'paymentOptions') {
-          await deleteDoc(doc(db, 'accounts', id));
-          await logAction(profile, `DELETE_ACCOUNT`, `Deleted financial account sync'd with payment option: ${id}`, id, 'account');
-        }
-
-        await deleteDoc(doc(db, collectionName, id));
-        await logAction(profile, `DELETE_${collectionName.toUpperCase().replace(/S$/, '')}`, details, id, collectionName.slice(0, -1));
-        toast.success('Deleted successfully');
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, collectionName);
+    try {
+      // If deleting a payment option, also delete its account or warn the user
+      // The user request implies they are connected, so we delete both
+      if (collectionName === 'paymentOptions') {
+        await deleteDoc(doc(db, 'accounts', id));
+        await logAction(profile, `DELETE_ACCOUNT`, `Deleted financial account sync'd with payment option: ${id}`, id, 'account');
       }
+
+      await deleteDoc(doc(db, collectionName, id));
+      await logAction(profile, `DELETE_${collectionName.toUpperCase().replace(/S$/, '')}`, details, id, collectionName.slice(0, -1));
+      toast.success('Deleted successfully');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, collectionName);
     }
   };
 
@@ -1848,13 +1982,13 @@ ${profile?.name || 'Vape Avenue Admin'}`;
                         <Check className="w-3.5 h-3.5 text-emerald-600" /> Pre-Approved Access
                       </p>
                       <p className="text-emerald-700 leading-relaxed">
-                        Inviting creates an instant approval. You will also be prompted to send an email invite or copy login instructions for your colleague.
+                        Inviting creates an instant approval. You can copy the login link to share via WhatsApp, Messenger, or chat. No mail app required.
                       </p>
                     </div>
 
                     <Button type="submit" className="w-full gap-2 bg-[#1A2B4B] hover:bg-[#1A2B4B]/90 text-white font-medium text-xs h-10 shadow-sm cursor-pointer">
-                      <Mail className="w-4 h-4" />
-                      Create & Send Invitation
+                      <UserPlus className="w-4 h-4" />
+                      Create Pre-Approved Invite
                     </Button>
                   </form>
                 </CardContent>
@@ -2092,18 +2226,30 @@ ${profile?.name || 'Vape Avenue Admin'}`;
                     <div className="flex items-center gap-2">
                       <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Awaiting First Sign-In (Pre-Approved)</h4>
                     </div>
-                    {invites.filter(i => i.status === 'pending').length > 0 && (
-                      <Badge variant="secondary" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
-                        {invites.filter(i => i.status === 'pending').length} Pre-Approved
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-[11px] text-slate-500 hover:text-slate-900 font-medium gap-1"
+                        onClick={() => setShowSmtpModal(true)}
+                        title="Configure SMTP or Gmail App Password"
+                      >
+                        <Server className="w-3.5 h-3.5 text-slate-400" />
+                        {settings.smtpSettings?.user ? 'Sender Configured' : 'Configure Email Sender'}
+                      </Button>
+                      {invites.filter(i => i.status === 'pending').length > 0 && (
+                        <Badge variant="secondary" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+                          {invites.filter(i => i.status === 'pending').length} Pre-Approved
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   <div className="p-3 mb-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-800 flex items-start gap-2.5">
                     <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                     <div className="text-[11px] leading-relaxed">
                       <span className="font-bold">How this works: </span>
-                      These users are already pre-approved. They just need to open the app and click <strong>"Continue with Google"</strong> using their invited email. Their account will activate automatically. You can use the <strong>Email</strong> or <strong>Copy Link</strong> actions below to send them their invitation.
+                      These users are pre-approved. Click the green <strong>"Email Link"</strong> button to send an invitation email with login link directly to their inbox, or copy the direct login message to share via chat.
                     </div>
                   </div>
 
@@ -2126,6 +2272,7 @@ ${profile?.name || 'Vape Avenue Admin'}`;
                         <TableBody>
                           {invites.filter(i => i.status === 'pending').map(inv => {
                             const branchName = locations.find(l => l.id === inv.locationId)?.name;
+                            const isSending = sendingEmailId === inv.id;
                             return (
                               <TableRow key={inv.id} className="hover:bg-slate-50/60 transition-colors border-slate-100">
                                 <TableCell className="py-2.5 font-medium text-slate-900 text-xs">
@@ -2145,13 +2292,23 @@ ${profile?.name || 'Vape Avenue Admin'}`;
                                 <TableCell className="py-2.5 text-right">
                                   <div className="flex items-center justify-end gap-1.5">
                                     <Button 
-                                      variant="outline" 
+                                      variant="default" 
                                       size="sm" 
-                                      className="h-7 text-xs text-blue-700 hover:text-blue-800 hover:bg-blue-50 border-blue-200 font-medium gap-1 px-2"
-                                      onClick={() => handleOpenMailClient(inv.email, inv.role, branchName)}
-                                      title="Open email in default mail client with instructions"
+                                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1 px-2.5 shadow-2xs cursor-pointer"
+                                      disabled={isSending}
+                                      onClick={() => handleSendDirectInviteEmail(inv)}
+                                      title="Send invitation email with login link directly to their inbox"
                                     >
-                                      <Mail className="w-3.5 h-3.5" /> Email
+                                      {isSending ? (
+                                        <>
+                                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                          Sending...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Send className="w-3.5 h-3.5" /> Email Link
+                                        </>
+                                      )}
                                     </Button>
 
                                     <Button 
@@ -2167,14 +2324,20 @@ ${profile?.name || 'Vape Avenue Admin'}`;
                                     <Button 
                                       variant="ghost" 
                                       size="sm" 
-                                      className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium gap-1 px-2"
+                                      className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium gap-1 px-2 cursor-pointer"
+                                      disabled={revokingInviteId === inv.id}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDelete('invites', inv.id);
+                                        handleRevokeInvite(inv);
                                       }}
                                       title="Revoke invitation"
                                     >
-                                      <X className="w-3.5 h-3.5" /> Revoke
+                                      {revokingInviteId === inv.id ? (
+                                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <X className="w-3.5 h-3.5" />
+                                      )}
+                                      Revoke
                                     </Button>
                                   </div>
                                 </TableCell>
@@ -2190,7 +2353,7 @@ ${profile?.name || 'Vape Avenue Admin'}`;
             </Card>
           </div>
 
-          {/* Invitation Dispatch Modal */}
+          {/* Invitation Created Modal */}
           {createdInviteModal && (
             <Dialog open={!!createdInviteModal} onOpenChange={() => setCreatedInviteModal(null)}>
               <DialogContent className="max-w-md bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-100">
@@ -2207,22 +2370,33 @@ ${profile?.name || 'Vape Avenue Admin'}`;
                 </DialogHeader>
 
                 <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-xs text-slate-600">
-                  <p className="font-semibold text-slate-800">Next Step: Send instructions to your colleague</p>
-                  <p>Send the invitation directly via your email client or copy the invite link and instructions to share via WhatsApp, Messenger, or chat.</p>
+                  <p className="font-semibold text-slate-800">Send login link to your colleague</p>
+                  <p>Send an invitation email directly to their inbox with their login link, or copy the invite message to send via chat.</p>
                 </div>
 
                 <div className="space-y-2.5 pt-2">
                   <Button 
-                    className="w-full h-11 gap-2 bg-[#1A2B4B] hover:bg-[#1A2B4B]/90 text-white font-medium text-xs shadow-md cursor-pointer"
-                    onClick={() => handleOpenMailClient(createdInviteModal.email, createdInviteModal.role, createdInviteModal.locationName)}
+                    className="w-full h-11 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-md cursor-pointer"
+                    disabled={sendingEmailId === createdInviteModal.email}
+                    onClick={async () => {
+                      const matchingInv = invites.find(i => i.email.toLowerCase() === createdInviteModal.email.toLowerCase()) || {
+                        id: 'new',
+                        email: createdInviteModal.email,
+                        role: createdInviteModal.role as any,
+                        status: 'pending',
+                        locationId: locations.find(l => l.name === createdInviteModal.locationName)?.id,
+                        createdAt: '' as any
+                      };
+                      await handleSendDirectInviteEmail(matchingInv);
+                    }}
                   >
-                    <Mail className="w-4 h-4" />
-                    Open Email in Mail App (Pre-filled)
+                    <Send className="w-4 h-4" />
+                    Send Email Directly with Login Link
                   </Button>
-                  
+
                   <Button 
                     variant="outline"
-                    className="w-full h-11 gap-2 text-xs font-semibold border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    className="w-full h-10 gap-2 bg-white text-xs font-semibold border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
                     onClick={() => handleCopyInviteMessage(createdInviteModal.email, createdInviteModal.role, createdInviteModal.locationName)}
                   >
                     <Copy className="w-4 h-4" />
@@ -2240,6 +2414,194 @@ ${profile?.name || 'Vape Avenue Admin'}`;
                     Done
                   </Button>
                 </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* SMTP / Email Sender Configuration Modal */}
+          {showSmtpModal && (
+            <Dialog open={showSmtpModal} onOpenChange={setShowSmtpModal}>
+              <DialogContent className="max-w-md bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-100">
+                <DialogHeader className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                      <Server className="w-5 h-5 text-emerald-700" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg font-bold text-slate-900">Email Sender Setup</DialogTitle>
+                      <DialogDescription className="text-xs text-slate-500">
+                        Configure your sender email to deliver invite emails directly.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <form onSubmit={handleSaveSmtp} className="space-y-4 pt-2">
+                  {/* Preset helper buttons */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Quick Presets</Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7 border-slate-200"
+                        onClick={() => {
+                          setSmtpForm(prev => ({
+                            ...prev,
+                            host: 'smtp.gmail.com',
+                            port: 465,
+                            secure: true,
+                            user: prev.user || profile?.email || 'v4peavenue@gmail.com',
+                            fromEmail: prev.fromEmail || profile?.email || 'v4peavenue@gmail.com'
+                          }));
+                        }}
+                      >
+                        Gmail (smtp.gmail.com)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7 border-slate-200"
+                        onClick={() => {
+                          setSmtpForm(prev => ({
+                            ...prev,
+                            host: 'smtp-relay.brevo.com',
+                            port: 587,
+                            secure: false
+                          }));
+                        }}
+                      >
+                        Brevo / Custom
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">Sender Email (Username)</Label>
+                      <div className="relative">
+                        <AtSign className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                          type="email"
+                          placeholder="v4peavenue@gmail.com"
+                          value={smtpForm.user}
+                          onChange={e => setSmtpForm({ ...smtpForm, user: e.target.value, fromEmail: e.target.value })}
+                          className="pl-8 text-xs bg-white border-slate-200"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">
+                        App Password / SMTP Password
+                      </Label>
+                      <div className="relative">
+                        <Key className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                          type="password"
+                          placeholder="••••••••••••••••"
+                          value={smtpForm.pass}
+                          onChange={e => setSmtpForm({ ...smtpForm, pass: e.target.value })}
+                          className="pl-8 text-xs bg-white border-slate-200"
+                          required
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-tight">
+                        For Gmail accounts with 2-Step Verification, generate a 16-character password at{' '}
+                        <a 
+                          href="https://myaccount.google.com/apppasswords" 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-emerald-700 font-semibold underline"
+                        >
+                          myaccount.google.com/apppasswords
+                        </a>
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">SMTP Host</Label>
+                      <Input
+                        value={smtpForm.host}
+                        onChange={e => setSmtpForm({ ...smtpForm, host: e.target.value })}
+                        placeholder="smtp.gmail.com"
+                        className="text-xs bg-white border-slate-200"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">Port</Label>
+                      <Input
+                        type="number"
+                        value={smtpForm.port}
+                        onChange={e => setSmtpForm({ ...smtpForm, port: Number(e.target.value) })}
+                        placeholder="465"
+                        className="text-xs bg-white border-slate-200"
+                        required
+                      />
+                    </div>
+
+                    <div className="col-span-2 space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">Sender Display Name</Label>
+                      <Input
+                        value={smtpForm.fromName || 'Vape Avenue POS'}
+                        onChange={e => setSmtpForm({ ...smtpForm, fromName: e.target.value })}
+                        placeholder="Vape Avenue POS"
+                        className="text-xs bg-white border-slate-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-9 border-slate-200 text-slate-700 gap-1.5"
+                      disabled={testingSmtp || !smtpForm.user || !smtpForm.pass}
+                      onClick={handleTestSmtpConnection}
+                    >
+                      {testingSmtp ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          Test Connection
+                        </>
+                      )}
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-9 text-slate-500"
+                        onClick={() => {
+                          setShowSmtpModal(false);
+                          setTargetInviteForEmail(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Save & {targetInviteForEmail ? 'Send Email' : 'Done'}
+                      </Button>
+                    </div>
+                  </div>
+                </form>
               </DialogContent>
             </Dialog>
           )}

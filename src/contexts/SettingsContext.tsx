@@ -4,12 +4,24 @@ import { db } from '@/lib/firebase';
 import { useAuth } from './AuthContext';
 import { OperationType, handleFirestoreError } from '@/lib/firestore-utils';
 
+export interface SmtpSettings {
+  enabled?: boolean;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  pass: string;
+  fromEmail?: string;
+  fromName?: string;
+}
+
 export interface SystemSettings {
   currency: string;
   loyaltyEnabled?: boolean;
   loyaltyTier1Discount?: number; // Discount amount in Pesos for 5th item milestone
   loyaltyTier2Discount?: number; // Discount amount in Pesos for 10th item milestone
   requireInviteToSignUp?: boolean; // If true (default), requires pre-invitation. If false, open Google sign-in for staff.
+  smtpSettings?: SmtpSettings;
 }
 
 interface SettingsContextType {
@@ -17,6 +29,7 @@ interface SettingsContextType {
   updateCurrency: (currency: string) => Promise<void>;
   updateLoyaltySettings: (loyaltyEnabled: boolean, tier1Discount: number, tier2Discount: number) => Promise<void>;
   updateAccessControlSettings: (requireInvite: boolean) => Promise<void>;
+  updateSmtpSettings: (smtp: SmtpSettings) => Promise<void>;
   loading: boolean;
 }
 
@@ -47,7 +60,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           loyaltyEnabled: data.loyaltyEnabled ?? true,
           loyaltyTier1Discount: data.loyaltyTier1Discount ?? 50,
           loyaltyTier2Discount: data.loyaltyTier2Discount ?? 100,
-          requireInviteToSignUp: data.requireInviteToSignUp ?? true
+          requireInviteToSignUp: data.requireInviteToSignUp ?? true,
+          smtpSettings: data.smtpSettings
         });
       } else {
         // Initialize with default if it doesn't exist
@@ -99,8 +113,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, { merge: true });
   };
 
+  const updateSmtpSettings = async (smtpSettings: SmtpSettings) => {
+    if (!isAdmin) return;
+    await setDoc(doc(db, 'settings', 'global'), { 
+      smtpSettings,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  };
+
   return (
-    <SettingsContext.Provider value={{ settings, updateCurrency, updateLoyaltySettings, updateAccessControlSettings, loading }}>
+    <SettingsContext.Provider value={{ 
+      settings, 
+      updateCurrency, 
+      updateLoyaltySettings, 
+      updateAccessControlSettings, 
+      updateSmtpSettings,
+      loading 
+    }}>
       {children}
     </SettingsContext.Provider>
   );

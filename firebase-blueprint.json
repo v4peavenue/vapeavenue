@@ -343,6 +343,10 @@
         "loyaltyEnabled": { "type": "boolean", "description": "Whether customer loyalty program is enabled" },
         "loyaltyTier1Discount": { "type": "number", "description": "Discount for 5th item" },
         "loyaltyTier2Discount": { "type": "number", "description": "Discount for 10th item" },
+        "smtpSettings": {
+          "type": "object",
+          "description": "SMTP email configuration for sending direct emails"
+        },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["currency"]
