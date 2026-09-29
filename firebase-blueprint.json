@@ -187,13 +187,16 @@
     },
     "Invite": {
       "title": "Invite",
-      "description": "User invitation to the system",
+      "description": "User invitation or access request to the system",
       "type": "object",
       "properties": {
         "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "manager", "staff"] },
-        "status": { "type": "string", "enum": ["pending", "accepted", "expired"] },
+        "locationId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "expired", "requested"] },
         "invitedBy": { "type": "string" },
+        "requestedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "role", "status", "createdAt"]
@@ -336,6 +339,10 @@
       "type": "object",
       "properties": {
         "currency": { "type": "string", "description": "Currency symbol or code (e.g., ₱, $)" },
+        "requireInviteToSignUp": { "type": "boolean", "description": "Whether new sign-ins require invitation" },
+        "loyaltyEnabled": { "type": "boolean", "description": "Whether customer loyalty program is enabled" },
+        "loyaltyTier1Discount": { "type": "number", "description": "Discount for 5th item" },
+        "loyaltyTier2Discount": { "type": "number", "description": "Discount for 10th item" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["currency"]

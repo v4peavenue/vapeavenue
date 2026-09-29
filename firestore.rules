@@ -172,10 +172,11 @@ service cloud.firestore {
       allow create, update, delete: if isSignedIn();
     }
 
-    // System Invites
+    // System Invites & Access Requests
     match /invites/{inviteId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin() || isManager();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin() || isManager();
     }
 
     // Price Tiers

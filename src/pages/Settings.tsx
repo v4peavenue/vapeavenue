@@ -29,8 +29,13 @@ import {
   RotateCcw,
   Filter,
   Gift,
-  RefreshCw
+  RefreshCw,
+  Copy,
+  UserPlus,
+  Info,
+  ExternalLink
 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { migrateCustomerLoyaltyCounts, MigrationResult } from '@/lib/loyalty-migrations';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, query, orderBy, limit, getDocs, writeBatch, Timestamp, setDoc, deleteField, getDoc, increment, where, getCountFromServer } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -64,7 +69,7 @@ import { cn } from '@/lib/utils';
 
 export const Settings: React.FC = () => {
   const { profile, isAdmin, isManager, updateProfile } = useAuth();
-  const { settings, updateCurrency } = useSettings();
+  const { settings, updateCurrency, updateAccessControlSettings } = useSettings();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -72,6 +77,14 @@ export const Settings: React.FC = () => {
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [paymentOptions, setPaymentOptions] = useState<PaymentOption[]>([]);
   
+  const [createdInviteModal, setCreatedInviteModal] = useState<{
+    email: string;
+    role: string;
+    locationName?: string;
+  } | null>(null);
+  const [requestRoles, setRequestRoles] = useState<{ [id: string]: 'staff' | 'manager' | 'admin' }>({});
+  const [requestLocations, setRequestLocations] = useState<{ [id: string]: string }>({});
+
   const [newInvite, setNewInvite] = useState({ 
     email: '', 
     role: 'staff' as 'admin' | 'manager' | 'staff',
@@ -733,21 +746,88 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const getInviteEmailContent = (email: string, role: string, locationName?: string) => {
+    const appUrl = window.location.origin;
+    const storeTitle = 'Vape Avenue POS & Inventory System';
+    const roleName = role ? (role.charAt(0).toUpperCase() + role.slice(1)) : 'Staff';
+    const locationText = locationName && locationName !== 'none' ? ` for ${locationName}` : '';
+    
+    const subject = `Invitation to join ${storeTitle}`;
+    const body = `Hello,
+
+You have been invited to access the ${storeTitle} as ${roleName}${locationText}.
+
+To log in:
+1. Open the portal: ${appUrl}
+2. Click "Continue with Google" using this email: ${email}
+
+Your account has been pre-approved and will automatically activate upon your first sign in.
+
+Best regards,
+${profile?.name || 'Vape Avenue Admin'}`;
+
+    return { subject, body, appUrl };
+  };
+
+  const handleOpenMailClient = (email: string, role: string, locationName?: string) => {
+    const { subject, body } = getInviteEmailContent(email, role, locationName);
+    const mailtoUrl = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+  };
+
+  const handleCopyInviteMessage = (email: string, role: string, locationName?: string) => {
+    const { subject, body } = getInviteEmailContent(email, role, locationName);
+    const fullText = `Subject: ${subject}\n\n${body}`;
+    navigator.clipboard.writeText(fullText);
+    toast.success('Invitation instructions copied to clipboard! You can paste and send it via email, WhatsApp, or messaging apps.');
+  };
+
+  const handleApproveRequest = async (req: Invite) => {
+    const assignedRole = requestRoles[req.id] || req.role || 'staff';
+    const assignedLocation = requestLocations[req.id] || req.locationId || '';
+    try {
+      const updateData: any = {
+        status: 'pending',
+        role: assignedRole,
+        approvedAt: new Date().toISOString(),
+        approvedBy: profile?.id
+      };
+      if (assignedLocation && assignedLocation !== 'none') {
+        updateData.locationId = assignedLocation;
+      }
+      await updateDoc(doc(db, 'invites', req.id), updateData);
+      await logAction(profile, 'APPROVE_USER_REQUEST', `Approved access for ${req.email} as ${assignedRole}`, req.id, 'invite');
+      toast.success(`Access approved for ${req.email}! They can now sign in with Google.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `invites/${req.id}`);
+    }
+  };
+
   const handleSendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newInvite.email.trim()) return;
     try {
       const inviteRole = !isAdmin ? 'staff' : newInvite.role;
+      const trimmedEmail = newInvite.email.trim().toLowerCase();
+      const locName = locations.find(l => l.id === newInvite.locationId)?.name;
+      
       const docRef = await addDoc(collection(db, 'invites'), {
-        ...newInvite,
+        email: trimmedEmail,
         role: inviteRole,
+        ...(newInvite.locationId && newInvite.locationId !== 'none' ? { locationId: newInvite.locationId } : {}),
         status: 'pending',
         invitedBy: profile?.id,
         createdAt: new Date()
       });
-      await logAction(profile, 'SEND_INVITE', `Sent ${inviteRole} invite to ${newInvite.email}`, docRef.id, 'invite');
+      await logAction(profile, 'SEND_INVITE', `Sent ${inviteRole} invite to ${trimmedEmail}`, docRef.id, 'invite');
+      
+      setCreatedInviteModal({
+        email: trimmedEmail,
+        role: inviteRole,
+        locationName: locName
+      });
       setNewInvite({ email: '', role: 'staff', locationId: '' });
-      toast.success('Invite sent to ' + newInvite.email);
+      toast.success('Invitation registered for ' + trimmedEmail);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'invites');
     }
@@ -1663,67 +1743,123 @@ export const Settings: React.FC = () => {
 
         <TabsContent value="users">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <Card className="lg:col-span-4 border-none shadow-sm bg-white/50 backdrop-blur-sm h-fit">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl font-bold text-slate-900">Invite User</CardTitle>
-                <CardDescription>Send an invitation to join the application.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSendInvite} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-slate-700">Email Address</Label>
-                    <Input 
-                      type="email"
-                      value={newInvite.email}
-                      onChange={(e) => setNewInvite({ ...newInvite, email: e.target.value })}
-                      placeholder="e.g. colleague@example.com"
-                      className="bg-white border-slate-200"
-                      required
+            <div className="lg:col-span-4 space-y-4">
+              {/* Access Control Setting Card */}
+              <Card className="border border-slate-200/80 shadow-xs bg-white rounded-2xl">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-emerald-600" />
+                    <CardTitle className="text-sm font-bold text-slate-900">Sign-In Access Control</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs text-slate-500">
+                    Choose whether users need an invitation before they can sign in.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-0">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/70">
+                    <div className="space-y-0.5 pr-2">
+                      <p className="text-xs font-bold text-slate-800">
+                        {settings.requireInviteToSignUp !== false ? 'Require Pre-Invitation' : 'Open Sign-In (Staff)'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 leading-tight">
+                        {settings.requireInviteToSignUp !== false 
+                          ? 'Strict: Only invited emails or admins can sign in.'
+                          : 'Open: Any Google account is auto-admitted as Staff.'}
+                      </p>
+                    </div>
+                    <Switch 
+                      checked={settings.requireInviteToSignUp !== false}
+                      onCheckedChange={(checked) => {
+                        updateAccessControlSettings(checked);
+                        toast.success(checked 
+                          ? "Access restricted: Pre-invitation is now required for new sign-ins." 
+                          : "Access opened: Any user signing in with Google will be admitted as Staff."
+                        );
+                      }}
+                      disabled={!isAdmin}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-slate-700">Role</Label>
-                    <Select 
-                      value={newInvite.role} 
-                      onValueChange={(v: 'admin' | 'manager' | 'staff') => setNewInvite({ ...newInvite, role: v })}
-                      disabled={!isAdmin}
-                    >
-                      <SelectTrigger className="bg-white border-slate-200">
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {isAdmin && <SelectItem value="admin">Administrator</SelectItem>}
-                        {isAdmin && <SelectItem value="manager">Manager</SelectItem>}
-                        <SelectItem value="staff">Staff</SelectItem>
-                      </SelectContent>
-                    </Select>
+                </CardContent>
+              </Card>
+
+              {/* Invite User Form Card */}
+              <Card className="border-none shadow-sm bg-white/70 backdrop-blur-sm">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="w-5 h-5 text-primary" />
+                    <CardTitle className="text-lg font-bold text-slate-900">Invite User</CardTitle>
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-semibold text-slate-700">Assigned Location</Label>
-                    <Select 
-                      value={newInvite.locationId} 
-                      onValueChange={(v) => setNewInvite({ ...newInvite, locationId: v })}
-                    >
-                      <SelectTrigger className="bg-white border-slate-200">
-                        <SelectValue placeholder="Select a location">
-                          {newInvite.locationId === 'none' ? 'No specific location' : (locations.find(l => l.id === newInvite.locationId)?.name || 'Select a location')}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No specific location</SelectItem>
-                        {locations.map(loc => (
-                          <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="submit" className="w-full gap-2 bg-[#1A2B4B] hover:bg-[#1A2B4B]/90 text-white font-medium">
-                    <Mail className="w-4 h-4" />
-                    Send Invitation
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                  <CardDescription className="text-xs">
+                    Pre-authorize an email address to join the store.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSendInvite} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">Email Address</Label>
+                      <Input 
+                        type="email"
+                        value={newInvite.email}
+                        onChange={(e) => setNewInvite({ ...newInvite, email: e.target.value })}
+                        placeholder="e.g. colleague@example.com"
+                        className="bg-white border-slate-200 text-xs"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">Role</Label>
+                      <Select 
+                        value={newInvite.role} 
+                        onValueChange={(v: 'admin' | 'manager' | 'staff') => setNewInvite({ ...newInvite, role: v })}
+                        disabled={!isAdmin}
+                      >
+                        <SelectTrigger className="bg-white border-slate-200 text-xs">
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {isAdmin && <SelectItem value="admin">Administrator</SelectItem>}
+                          {isAdmin && <SelectItem value="manager">Manager</SelectItem>}
+                          <SelectItem value="staff">Staff</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-slate-700">Assigned Branch / Location</Label>
+                      <Select 
+                        value={newInvite.locationId} 
+                        onValueChange={(v) => setNewInvite({ ...newInvite, locationId: v })}
+                      >
+                        <SelectTrigger className="bg-white border-slate-200 text-xs">
+                          <SelectValue placeholder="Select a location">
+                            {newInvite.locationId === 'none' ? 'No specific location' : (locations.find(l => l.id === newInvite.locationId)?.name || 'Select a location')}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No specific location</SelectItem>
+                          {locations.map(loc => (
+                            <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-[11px] text-emerald-800 space-y-1">
+                      <p className="font-bold flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" /> Pre-Approved Access
+                      </p>
+                      <p className="text-emerald-700 leading-relaxed">
+                        Inviting creates an instant approval. You will also be prompted to send an email invite or copy login instructions for your colleague.
+                      </p>
+                    </div>
+
+                    <Button type="submit" className="w-full gap-2 bg-[#1A2B4B] hover:bg-[#1A2B4B]/90 text-white font-medium text-xs h-10 shadow-sm cursor-pointer">
+                      <Mail className="w-4 h-4" />
+                      Create & Send Invitation
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
 
             <Card className="lg:col-span-8 border-none shadow-sm bg-white">
               <CardHeader className="pb-4">
@@ -1738,6 +1874,7 @@ export const Settings: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Active Users Table */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">System Users</h4>
@@ -1860,19 +1997,119 @@ export const Settings: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Access Requests (Users awaiting approval) */}
+                {invites.filter(i => i.status === 'requested').length > 0 && (
+                  <div className="p-4 bg-amber-50/80 border border-amber-200/90 rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <UserPlus className="w-4 h-4 text-amber-600" />
+                        <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
+                          Access Requests ({invites.filter(i => i.status === 'requested').length})
+                        </h4>
+                      </div>
+                      <Badge className="bg-amber-200 text-amber-900 border-amber-300 text-[10px] font-bold">
+                        Requires Approval
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-amber-800">
+                      These users attempted to sign in with Google. Review their details, assign their role and branch, and click <strong>"Approve Access"</strong>.
+                    </p>
+
+                    <div className="divide-y divide-amber-200/60 bg-white rounded-xl border border-amber-200/80 overflow-hidden shadow-xs">
+                      {invites.filter(i => i.status === 'requested').map(req => (
+                        <div key={req.id} className="p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-50/50 transition-colors">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-slate-900 truncate">{req.name || 'Sign-In Request'}</span>
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] font-semibold">
+                                Pending Approval
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-slate-600 truncate">{req.email}</p>
+                            {req.requestedAt && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                Requested: {new Date(req.requestedAt as any).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <Select
+                              value={requestRoles[req.id] || req.role || 'staff'}
+                              onValueChange={(val: any) => setRequestRoles(prev => ({ ...prev, [req.id]: val }))}
+                            >
+                              <SelectTrigger className="w-[100px] h-8 text-xs bg-white border-slate-200">
+                                <SelectValue placeholder="Role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="staff">Staff</SelectItem>
+                                <SelectItem value="manager">Manager</SelectItem>
+                                <SelectItem value="admin">Admin</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Select
+                              value={requestLocations[req.id] || req.locationId || 'none'}
+                              onValueChange={(val: any) => setRequestLocations(prev => ({ ...prev, [req.id]: val }))}
+                            >
+                              <SelectTrigger className="w-[130px] h-8 text-xs bg-white border-slate-200">
+                                <SelectValue placeholder="Branch" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No Branch</SelectItem>
+                                {locations.map(loc => (
+                                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
+                            <Button
+                              size="sm"
+                              className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-xs cursor-pointer"
+                              onClick={() => handleApproveRequest(req)}
+                            >
+                              <Check className="w-3.5 h-3.5" /> Approve
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 font-medium"
+                              onClick={() => handleDelete('invites', req.id)}
+                            >
+                              <X className="w-3.5 h-3.5" /> Decline
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pre-Approved Invitations / Awaiting First Sign-In */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Invitations</h4>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Awaiting First Sign-In (Pre-Approved)</h4>
+                    </div>
                     {invites.filter(i => i.status === 'pending').length > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {invites.filter(i => i.status === 'pending').length} Pending
+                      <Badge variant="secondary" className="text-xs bg-amber-50 text-amber-800 border-amber-200">
+                        {invites.filter(i => i.status === 'pending').length} Pre-Approved
                       </Badge>
                     )}
                   </div>
 
+                  <div className="p-3 mb-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-blue-800 flex items-start gap-2.5">
+                    <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div className="text-[11px] leading-relaxed">
+                      <span className="font-bold">How this works: </span>
+                      These users are already pre-approved. They just need to open the app and click <strong>"Continue with Google"</strong> using their invited email. Their account will activate automatically. You can use the <strong>Email</strong> or <strong>Copy Link</strong> actions below to send them their invitation.
+                    </div>
+                  </div>
+
                   {invites.filter(i => i.status === 'pending').length === 0 ? (
                     <div className="p-5 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
-                      <p className="text-xs text-slate-500 italic">No pending invitations.</p>
+                      <p className="text-xs text-slate-500 italic">No pending invitations. All invited users are either active or no invitations have been sent.</p>
                     </div>
                   ) : (
                     <div className="border border-slate-200/80 rounded-xl overflow-hidden shadow-xs bg-white">
@@ -1881,39 +2118,69 @@ export const Settings: React.FC = () => {
                           <TableRow className="hover:bg-transparent border-slate-200/80">
                             <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5">Email Address</TableHead>
                             <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5">Role</TableHead>
+                            <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5">Branch</TableHead>
                             <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5">Status</TableHead>
                             <TableHead className="font-bold text-slate-700 text-xs uppercase tracking-wider py-2.5 text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {invites.filter(i => i.status === 'pending').map(inv => (
-                            <TableRow key={inv.id} className="hover:bg-slate-50/60 transition-colors border-slate-100">
-                              <TableCell className="py-2.5 font-medium text-slate-900 text-xs">
-                                {inv.email}
-                              </TableCell>
-                              <TableCell className="py-2.5 text-xs text-slate-600 capitalize">
-                                {inv.role}
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] font-semibold">
-                                  Pending
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="py-2.5 text-right">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium gap-1"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete('invites', inv.id);
-                                  }}
-                                >
-                                  <X className="w-3.5 h-3.5" /> Revoke
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {invites.filter(i => i.status === 'pending').map(inv => {
+                            const branchName = locations.find(l => l.id === inv.locationId)?.name;
+                            return (
+                              <TableRow key={inv.id} className="hover:bg-slate-50/60 transition-colors border-slate-100">
+                                <TableCell className="py-2.5 font-medium text-slate-900 text-xs">
+                                  {inv.email}
+                                </TableCell>
+                                <TableCell className="py-2.5 text-xs text-slate-600 capitalize">
+                                  {inv.role}
+                                </TableCell>
+                                <TableCell className="py-2.5 text-xs text-slate-600">
+                                  {branchName || 'All Branches'}
+                                </TableCell>
+                                <TableCell className="py-2.5">
+                                  <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] font-semibold">
+                                    Awaiting Login
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="py-2.5 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-7 text-xs text-blue-700 hover:text-blue-800 hover:bg-blue-50 border-blue-200 font-medium gap-1 px-2"
+                                      onClick={() => handleOpenMailClient(inv.email, inv.role, branchName)}
+                                      title="Open email in default mail client with instructions"
+                                    >
+                                      <Mail className="w-3.5 h-3.5" /> Email
+                                    </Button>
+
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-7 text-xs text-slate-700 hover:text-slate-900 hover:bg-slate-100 border-slate-200 font-medium gap-1 px-2"
+                                      onClick={() => handleCopyInviteMessage(inv.email, inv.role, branchName)}
+                                      title="Copy login link & instructions to clipboard"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" /> Copy Link
+                                    </Button>
+
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm" 
+                                      className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 font-medium gap-1 px-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete('invites', inv.id);
+                                      }}
+                                      title="Revoke invitation"
+                                    >
+                                      <X className="w-3.5 h-3.5" /> Revoke
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </div>
@@ -1922,6 +2189,60 @@ export const Settings: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Invitation Dispatch Modal */}
+          {createdInviteModal && (
+            <Dialog open={!!createdInviteModal} onOpenChange={() => setCreatedInviteModal(null)}>
+              <DialogContent className="max-w-md bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border border-slate-100">
+                <DialogHeader className="text-center space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
+                    <Check className="w-6 h-6" />
+                  </div>
+                  <DialogTitle className="text-xl font-bold text-slate-900">
+                    Invitation Pre-Approved!
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-500">
+                    <strong>{createdInviteModal.email}</strong> is now pre-authorized to join as <span className="capitalize font-semibold text-slate-700">{createdInviteModal.role}</span>{createdInviteModal.locationName ? ` for ${createdInviteModal.locationName}` : ''}.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2 text-xs text-slate-600">
+                  <p className="font-semibold text-slate-800">Next Step: Send instructions to your colleague</p>
+                  <p>Send the invitation directly via your email client or copy the invite link and instructions to share via WhatsApp, Messenger, or chat.</p>
+                </div>
+
+                <div className="space-y-2.5 pt-2">
+                  <Button 
+                    className="w-full h-11 gap-2 bg-[#1A2B4B] hover:bg-[#1A2B4B]/90 text-white font-medium text-xs shadow-md cursor-pointer"
+                    onClick={() => handleOpenMailClient(createdInviteModal.email, createdInviteModal.role, createdInviteModal.locationName)}
+                  >
+                    <Mail className="w-4 h-4" />
+                    Open Email in Mail App (Pre-filled)
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    className="w-full h-11 gap-2 text-xs font-semibold border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    onClick={() => handleCopyInviteMessage(createdInviteModal.email, createdInviteModal.role, createdInviteModal.locationName)}
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy Invite Link & Message
+                  </Button>
+                </div>
+
+                <DialogFooter className="pt-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full text-xs text-slate-400 hover:text-slate-600"
+                    onClick={() => setCreatedInviteModal(null)}
+                  >
+                    Done
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </TabsContent>
 
         <TabsContent value="system">

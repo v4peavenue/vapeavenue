@@ -31,39 +31,99 @@ export const Login: React.FC = () => {
       console.log("Login: User profile exists:", userDoc.exists());
 
       if (!userDoc.exists()) {
-        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'];
-        const isPrimaryAdmin = user.email && primaryAdminEmails.includes(user.email.toLowerCase());
+        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
+        const userEmailLower = user.email ? user.email.toLowerCase().trim() : '';
+        const isPrimaryAdmin = userEmailLower ? primaryAdminEmails.includes(userEmailLower) : false;
         let role = isPrimaryAdmin ? 'admin' : null;
+        let locationId: string | undefined = undefined;
 
         if (!isPrimaryAdmin) {
-          // Check for pending invites
+          // Check for pending or pre-approved invites (case-insensitive check)
           const invitesRef = collection(db, 'invites');
-          const q = query(invitesRef, where('email', '==', user.email), where('status', '==', 'pending'));
-          const inviteSnap = await getDocs(q);
+          const allInvitesSnap = await getDocs(invitesRef);
+          const matchingInviteDoc = allInvitesSnap.docs.find(d => {
+            const data = d.data();
+            const inviteEmail = (data.email || '').toLowerCase().trim();
+            return inviteEmail === userEmailLower && (data.status === 'pending' || data.status === 'accepted');
+          });
 
-          if (!inviteSnap.empty) {
-            const inviteDoc = inviteSnap.docs[0];
-            const inviteData = inviteDoc.data();
-            role = inviteData.role;
+          if (matchingInviteDoc) {
+            const inviteData = matchingInviteDoc.data();
+            role = inviteData.role || 'staff';
+            locationId = inviteData.locationId;
             // Mark invite as accepted
-            await updateDoc(doc(db, 'invites', inviteDoc.id), { status: 'accepted' });
+            try {
+              await updateDoc(doc(db, 'invites', matchingInviteDoc.id), { 
+                status: 'accepted',
+                acceptedAt: new Date().toISOString(),
+                userId: user.uid
+              });
+            } catch (err) {
+              console.warn("Login: Could not update invite status:", err);
+            }
           }
         }
 
+        // If not invited and not primary admin, check global access control setting
         if (!role) {
-          toast.error("Access Denied: You haven't been invited to this system.");
-          await auth.signOut();
-          setLoading(false);
-          return;
+          let requireInvite = true;
+          try {
+            const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
+            if (settingsDoc.exists()) {
+              const sData = settingsDoc.data();
+              if (sData.requireInviteToSignUp === false) {
+                requireInvite = false;
+              }
+            }
+          } catch (e) {
+            console.warn("Login: Error checking access settings:", e);
+          }
+
+          if (!requireInvite) {
+            // Open registration mode! Auto-create as staff
+            role = 'staff';
+            toast.success("Welcome to Vape Avenue! Your account has been registered with Staff access.");
+          } else {
+            // Record an Access Request so the Admin can approve them with 1-click in Settings!
+            try {
+              const invitesRef = collection(db, 'invites');
+              const allInvitesSnap = await getDocs(invitesRef);
+              const alreadyRequested = allInvitesSnap.docs.some(d => {
+                const data = d.data();
+                return (data.email || '').toLowerCase().trim() === userEmailLower;
+              });
+
+              if (!alreadyRequested) {
+                await setDoc(doc(collection(db, 'invites')), {
+                  email: user.email,
+                  name: user.displayName || '',
+                  role: 'staff',
+                  status: 'requested',
+                  requestedAt: new Date().toISOString(),
+                  createdAt: new Date().toISOString()
+                });
+              }
+            } catch (reqErr) {
+              console.warn("Login: Could not record access request:", reqErr);
+            }
+
+            toast.error("Access Pending: You need to be approved by an administrator before logging in. Your access request has been sent to the store admin.");
+            await auth.signOut();
+            setLoading(false);
+            return;
+          }
         }
 
         // Create profile
-        const profileData = {
+        const profileData: any = {
           email: user.email,
-          name: user.displayName,
+          name: user.displayName || '',
           role: role,
           createdAt: new Date().toISOString()
         };
+        if (locationId) {
+          profileData.locationId = locationId;
+        }
         await setDoc(userDocRef, profileData);
         
         await logAction(
@@ -73,17 +133,28 @@ export const Login: React.FC = () => {
         );
       } else {
         // Profile exists, but let's make sure any pending invites are marked as accepted
+        const userEmailLower = user.email ? user.email.toLowerCase().trim() : '';
         const invitesRef = collection(db, 'invites');
-        const q = query(invitesRef, where('email', '==', user.email), where('status', '==', 'pending'));
-        const inviteSnap = await getDocs(q);
+        const inviteSnap = await getDocs(invitesRef);
         
         for (const inviteDoc of inviteSnap.docs) {
-          await updateDoc(doc(db, 'invites', inviteDoc.id), { status: 'accepted' });
+          const invData = inviteDoc.data();
+          if ((invData.email || '').toLowerCase().trim() === userEmailLower && invData.status === 'pending') {
+            try {
+              await updateDoc(doc(db, 'invites', inviteDoc.id), { 
+                status: 'accepted',
+                acceptedAt: new Date().toISOString(),
+                userId: user.uid
+              });
+            } catch (err) {
+              console.warn("Login: Could not update invite status:", err);
+            }
+          }
         }
 
         const profileData = userDoc.data();
         
-        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com'];
+        const primaryAdminEmails = ['vanhuxley24@gmail.com', 'v4peavenue@gmail.com', 'dutchlordsilvertongue24@gmail.com'];
         if (user.email && primaryAdminEmails.includes(user.email.toLowerCase()) && profileData.role !== 'admin') {
           await updateDoc(userDocRef, { role: 'admin' });
           profileData.role = 'admin';

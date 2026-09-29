@@ -176,11 +176,13 @@ export interface Location {
 export interface Invite {
   id: string;
   email: string;
+  name?: string;
   role: UserRole;
   locationId?: string;
-  status: 'pending' | 'accepted' | 'expired';
-  invitedBy: string;
-  createdAt: Timestamp;
+  status: 'pending' | 'accepted' | 'expired' | 'requested';
+  invitedBy?: string;
+  requestedAt?: Timestamp | string;
+  createdAt: Timestamp | string;
 }
 
 export interface AuditLog {
