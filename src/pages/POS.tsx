@@ -28,6 +28,7 @@ import {
   User
 } from 'lucide-react';
 import { calculateLoyaltyDiscount, processCustomerLoyaltyCheckout } from '@/lib/loyalty';
+import { executeSaleWithAuthoritativeInventory } from '@/lib/inventory';
 
 import { collection, onSnapshot, query, orderBy, addDoc, Timestamp, doc, updateDoc, increment, setDoc, writeBatch, limit, where, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -889,13 +890,24 @@ export const POS: React.FC = () => {
 
   const handleCheckout = async (isPending: boolean = false) => {
     if (isCheckingOutRef.current || processing) return;
-    if (cart.length === 0) return;
+    isCheckingOutRef.current = true;
+    setProcessing(true);
+
+    if (cart.length === 0) {
+      isCheckingOutRef.current = false;
+      setProcessing(false);
+      return;
+    }
     if (!customerDetails.name.trim()) {
       toast.error('Customer name is required');
+      isCheckingOutRef.current = false;
+      setProcessing(false);
       return;
     }
     if (!checkoutLocationId || checkoutLocationId === 'all') {
       toast.error('Please select a specific location for this sale');
+      isCheckingOutRef.current = false;
+      setProcessing(false);
       return;
     }
 
@@ -905,12 +917,12 @@ export const POS: React.FC = () => {
       const locationStock = product?.stocks?.[checkoutLocationId] || 0;
       if (locationStock < item.quantity) {
         toast.error(`Insufficient stock for ${item.name} at the selected location (${locationStock} available)`);
+        isCheckingOutRef.current = false;
+        setProcessing(false);
         return;
       }
     }
 
-    isCheckingOutRef.current = true;
-    setProcessing(true);
     try {
       let finalCustomerId = selectedCustomerId;
 
@@ -1091,65 +1103,27 @@ export const POS: React.FC = () => {
         }
       }
 
-      // Perform ATOMIC write batch for sale creation, stock deduction, accounts, and financial transactions
-      const batch = writeBatch(db);
-      const saleRef = doc(collection(db, 'sales'));
-      setLastSaleId(saleRef.id);
-      batch.set(saleRef, saleData);
-
-      // Update financial accounts & transactions (ONLY IF NOT PENDING)
       const isPromoPending = !!appliedPromo && !approvedByInfo;
       const isTotalPending = isTotalEdited && !isAdmin;
-      if (!isPending && !isPromoPending && !isTotalPending) {
-        for (const split of resolvedSplits) {
-          const account = accounts.find(a => a.id === split.methodId) || { name: split.methodName, balance: 0 };
-          const currentBalance = account.balance || 0;
-          const newBalance = currentBalance + split.amount;
 
-          const accountRef = doc(db, 'accounts', split.methodId);
-          batch.update(accountRef, {
-            balance: increment(split.amount),
-            lastUpdated: Timestamp.now()
-          });
+      const saleRef = doc(collection(db, 'sales'));
+      setLastSaleId(saleRef.id);
 
-          // Create financial transaction record for Finance history
-          const finRef = doc(collection(db, 'financialTransactions'));
-          batch.set(finRef, {
-            amount: split.amount,
-            type: 'income',
-            accountId: split.methodId,
-            accountName: split.methodName,
-            locationId: checkoutLocationId || null,
-            locationName: locations.find(l => l.id === checkoutLocationId)?.name || null,
-            category: 'Sales',
-            description: isTotalEdited 
-              ? `Sale Payment (Edited Total) #${saleRef.id.substring(0, 8)}: ${customerDetails.name || 'Walk-In'}`
-              : `Sale Payment #${saleRef.id.substring(0, 8)}: ${customerDetails.name || 'Walk-In'}`,
-            reference: split.reference || saleRef.id,
-            saleId: saleRef.id,
-            timestamp: Timestamp.now(),
-            createdBy: profile?.id || 'anonymous',
-            createdByName: profile?.name || 'Staff',
-            accountBalance: newBalance
-          });
-        }
-      }
-
-      // Update inventory stock atomically
-      for (const item of cart) {
-        const product = products.find(p => p.id === item.productId);
-        if (!product) continue;
-
-        const productRef = doc(db, 'products', item.productId);
-        batch.update(productRef, {
-          stock: increment(-item.quantity),
-          [`stocks.${checkoutLocationId}`]: increment(-item.quantity),
-          updatedAt: Timestamp.now()
-        });
-      }
-
-      // Commit entire batch atomically
-      await batch.commit();
+      // Perform ATOMIC authoritative transaction for sale creation, exact stock deduction, accounts, and financial transactions
+      await executeSaleWithAuthoritativeInventory({
+        saleRef,
+        saleData,
+        cart,
+        checkoutLocationId,
+        resolvedSplits,
+        isPending,
+        isPromoPending,
+        isTotalPending,
+        customerDetails,
+        locations,
+        profile,
+        accounts
+      });
 
       // 3. Update customer loyalty purchase count and check for card expiration/consumption
       if (finalCustomerId && finalCustomerId !== 'walk-in' && finalCustomerId !== 'new') {
@@ -2495,16 +2469,18 @@ export const POS: React.FC = () => {
           </div>
 
           <DialogFooter className="gap-2 mt-auto border-t pt-4">
-            <Button variant="outline" className="rounded-xl" onClick={() => setIsCheckoutOpen(false)}>Cancel</Button>
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setIsCheckoutOpen(false)} disabled={processing || isCheckingOutRef.current}>Cancel</Button>
             <Button 
+              type="button"
               variant="outline"
               className="border-[#D4AF37] text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white rounded-xl"
               onClick={() => handleCheckout(true)}
               disabled={processing || isCheckingOutRef.current}
             >
-              Mark as Pending
+              {processing ? 'Processing...' : 'Mark as Pending'}
             </Button>
             <Button 
+              type="button"
               className="bg-[#1A2B4B] hover:bg-[#2C3E50] text-white rounded-xl px-8" 
               onClick={() => handleCheckout(false)}
               disabled={processing || isCheckingOutRef.current}

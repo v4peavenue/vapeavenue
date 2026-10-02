@@ -58,6 +58,7 @@ import { useSettings, SmtpSettings } from '@/contexts/SettingsContext';
 import { MapPin, Coins } from 'lucide-react';
 import { logAction } from '@/lib/audit';
 import { reconcileSystemData } from '@/lib/reconciliation';
+import { authoritativeVoidSale } from '@/lib/inventory';
 import { motion } from 'motion/react';
 import { 
   Dialog, 
@@ -1461,66 +1462,16 @@ ${profile?.name || 'Vape Avenue Admin'}`;
           return;
         }
 
-        if (saleToVoid.items && saleToVoid.stockDeducted !== false) {
-          for (const item of saleToVoid.items) {
-            const prodId = item.productId || (item as any).id;
-            if (!prodId) continue;
-            const returnedQty = item.returnedQuantity || 0;
-            const netQtyToReturn = Math.max(0, item.quantity - returnedQty);
-            if (netQtyToReturn <= 0) continue;
-
-            const productRef = doc(db, 'products', prodId);
-            const stockUpdates: Record<string, any> = {
-              stock: increment(netQtyToReturn),
-              updatedAt: Timestamp.now()
-            };
-            if (saleToVoid.locationId) {
-              stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(netQtyToReturn);
-            }
-            batch.update(productRef, stockUpdates);
-          }
-        }
-
-        const saleRef = doc(db, 'sales', saleToVoid.id);
-        batch.update(saleRef, {
-          status: 'voided',
-          stockDeducted: false,
-          updatedAt: Timestamp.now()
+        const res = await authoritativeVoidSale({
+          saleToVoid,
+          voidAccountId: revertAccountId || '',
+          profile,
+          locations,
+          accounts
         });
 
-        if (revertAccountId && saleToVoid.total > 0) {
-          const account = accounts.find(a => a.id === revertAccountId);
-          if (account) {
-            const accountRef = doc(db, 'accounts', revertAccountId);
-            batch.update(accountRef, {
-              balance: increment(-saleToVoid.total),
-              lastUpdated: Timestamp.now()
-            });
-
-            const newTransRef = doc(collection(db, 'financialTransactions'));
-            batch.set(newTransRef, {
-              amount: saleToVoid.total,
-              type: 'expense',
-              accountId: revertAccountId,
-              accountName: account.name,
-              locationId: saleToVoid.locationId || null,
-              locationName: locations.find(l => l.id === saleToVoid.locationId)?.name || null,
-              category: 'Voided Sale',
-              description: `Voided Sale via Audit: Sale #${saleToVoid.id.substring(0, 8)}`,
-              timestamp: Timestamp.now(),
-              createdBy: profile?.id || 'anonymous',
-              createdByName: profile?.name || 'Staff',
-              accountBalance: (account.balance || 0) - saleToVoid.total,
-              reference: saleToVoid.id,
-              saleId: saleToVoid.id,
-              isVoidTransaction: true
-            });
-          }
-        }
-
-        await batch.commit();
         await logAction(profile, 'VOID_SALE', `Voided sale: ${saleToVoid.id} via Audit Log reversion`, saleToVoid.id, 'sale');
-        toast.success('Sale successfully voided. Stock returned, account deducted.');
+        toast.success(res.message || 'Sale successfully voided. Stock returned, account deducted.');
       }
       else if (revertLog.action === 'STOCK_ADJUSTMENT') {
         const adjSnap = await getDocs(

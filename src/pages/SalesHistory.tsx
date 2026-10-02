@@ -50,6 +50,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLocations } from '@/contexts/LocationContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { Sale, PriceTier, PaymentOption } from '@/types';
+import { authoritativeVoidSale } from '@/lib/inventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { logAction } from '@/lib/audit';
@@ -870,79 +871,23 @@ export const SalesHistory: React.FC = () => {
     isVoidingRef.current = true;
     setIsVoiding(true);
     try {
-      const batch = writeBatch(db);
-
-      // Reverse stock reduction ONLY if stock was actually deducted when sale was made
-      const wasStockDeducted = saleToVoid.stockDeducted !== false;
-      if (wasStockDeducted) {
-        for (const item of saleToVoid.items || []) {
-          const prodId = item.productId || (item as any).id;
-          if (!prodId) continue;
-          
-          const returnedQty = item.returnedQuantity || 0;
-          const netQtyToReturn = Math.max(0, item.quantity - returnedQty);
-          if (netQtyToReturn <= 0) continue;
-
-          const productRef = doc(db, 'products', prodId);
-          const stockUpdates: Record<string, any> = {
-            stock: increment(netQtyToReturn),
-            updatedAt: Timestamp.now()
-          };
-          if (saleToVoid.locationId) {
-            stockUpdates[`stocks.${saleToVoid.locationId}`] = increment(netQtyToReturn);
-          }
-          batch.update(productRef, stockUpdates);
-        }
-      }
-
-      // Update sale status
-      const saleRef = doc(db, 'sales', saleToVoid.id);
-      batch.update(saleRef, {
-        status: 'voided',
-        stockDeducted: false,
-        updatedAt: Timestamp.now()
+      const res = await authoritativeVoidSale({
+        saleToVoid,
+        voidAccountId,
+        profile,
+        locations,
+        accounts
       });
 
-      // Update chosen financial account
-      const currentBalance = account.balance || 0;
-      const newBalance = currentBalance - saleToVoid.total;
-
-      const accountRef = doc(db, 'accounts', voidAccountId);
-      batch.update(accountRef, {
-        balance: increment(-saleToVoid.total),
-        lastUpdated: Timestamp.now()
-      });
-
-      // Create financial transaction record (reversed income / expense)
-      const newTransRef = doc(collection(db, 'financialTransactions'));
-      batch.set(newTransRef, {
-        amount: saleToVoid.total,
-        type: 'expense',
-        accountId: voidAccountId,
-        accountName: account.name,
-        locationId: saleToVoid.locationId || null,
-        locationName: locations.find(l => l.id === saleToVoid.locationId)?.name || null,
-        category: 'Voided Sale',
-        description: `Voided Sale: #${saleToVoid.id.substring(0, 8)}`,
-        timestamp: Timestamp.now(),
-        createdBy: profile?.id || 'anonymous',
-        createdByName: profile?.name || 'Staff',
-        accountBalance: newBalance,
-        reference: saleToVoid.id,
-        saleId: saleToVoid.id,
-        isVoidTransaction: true
-      });
-
-      await batch.commit();
       await logAction(profile, 'VOID_SALE', `Voided sale: ${saleToVoid.id} (Deducted from ${account.name})`, saleToVoid.id, 'sale');
       
-      toast.success('Sale voided successfully. Stock has been returned and payments reversed.');
+      toast.success(res.message || 'Sale voided successfully. Stock has been returned and payments reversed.');
       setIsVoidDialogOpen(false);
       setSaleToVoid(null);
       setSelectedSale(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error voiding sale:", error);
-      toast.error('Failed to void sale. Please inspect your database connection.');
+      toast.error(error?.message || 'Failed to void sale. Please inspect your database connection.');
       handleFirestoreError(error, OperationType.UPDATE, 'sales');
     } finally {
       setIsVoiding(false);
