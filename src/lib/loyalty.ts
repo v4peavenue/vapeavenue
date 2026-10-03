@@ -121,9 +121,9 @@ export async function processCustomerLoyaltyCheckout(
     const newLoyaltyCount = newTotalItems % 10;
 
     // Check if loyalty card should be consumed/expired
-    // A card is consumed when a discount was redeemed or a full 10-item cycle was completed (tier2EarnedCount > 0 or cycle wrap)
+    // A card is consumed ONLY when the full 10-item cycle is completed (10th item / tier2EarnedCount > 0 or cycle wrap)
     const cycleCompleted = Math.floor(newTotalItems / 10) > Math.floor(currentTotal / 10) || tier2EarnedCount > 0;
-    const shouldExpireCard = (wasDiscountRedeemed || cycleCompleted) && !!customerData.loyaltyCardNumber;
+    const shouldExpireCard = cycleCompleted && !!customerData.loyaltyCardNumber;
 
     let expiredCardNumber = '';
     let cardExpired = false;
