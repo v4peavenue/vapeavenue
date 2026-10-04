@@ -386,13 +386,14 @@ export async function authoritativeVoidSale(params: {
   }
 
   return await runTransaction(db, async (transaction) => {
-    const saleRef = doc(db, 'sales', saleToVoid.id);
+    const targetSaleId = saleToVoid.id || '';
+    const saleRef = doc(db, 'sales', targetSaleId);
     const freshSaleDoc = await transaction.get(saleRef);
     if (!freshSaleDoc.exists()) {
-      throw new Error(`Sale #${saleToVoid.id} does not exist.`);
+      throw new Error(`Sale #${targetSaleId} does not exist.`);
     }
 
-    const freshSaleData = freshSaleDoc.data() as Sale;
+    const freshSaleData = { id: targetSaleId, ...freshSaleDoc.data() } as Sale;
     if (freshSaleData.status === 'voided') {
       throw new Error('This sale has already been voided.');
     }
@@ -464,9 +465,9 @@ export async function authoritativeVoidSale(params: {
         locationId: freshSaleData.locationId || null,
         locationName: locations.find(l => l.id === freshSaleData.locationId)?.name || null,
         category: 'Sales Refund / Void',
-        description: `Voided Sale #${freshSaleData.id.substring(0, 8)} (${freshSaleData.customerDetails?.name || 'Walk-In'})`,
-        reference: freshSaleData.id,
-        saleId: freshSaleData.id,
+        description: `Voided Sale #${(freshSaleData.id || targetSaleId || '').substring(0, 8)} (${freshSaleData.customerDetails?.name || 'Walk-In'})`,
+        reference: freshSaleData.id || targetSaleId,
+        saleId: freshSaleData.id || targetSaleId,
         timestamp: Timestamp.now(),
         createdBy: profile?.id || 'anonymous',
         createdByName: profile?.name || 'Staff',
@@ -476,7 +477,7 @@ export async function authoritativeVoidSale(params: {
 
     return {
       success: true,
-      message: `Sale #${freshSaleData.id.substring(0, 8)} voided. Stock restored exactly once.`
+      message: `Sale #${(freshSaleData.id || targetSaleId || '').substring(0, 8)} voided. Stock restored exactly once.`
     };
   });
 }
