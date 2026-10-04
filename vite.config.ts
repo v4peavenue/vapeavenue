@@ -16,6 +16,9 @@ export default defineConfig(({mode}) => {
         workbox: {
           maximumFileSizeToCacheInBytes: 6000000,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest,json}'],
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
         },
         manifest: {
           name: 'Agos: Inventory Management',

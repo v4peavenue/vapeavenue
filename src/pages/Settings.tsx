@@ -1336,12 +1336,12 @@ ${profile?.name || 'Vape Avenue Admin'}`;
         await logAction(
           profile, 
           'VOID_RETURN', 
-          `Voided Return #${returnToReverse.id.substring(0, 8)} for Sale #${returnToReverse.originalSaleId.substring(0, 8)} via Audit Log reversion`, 
+          `Voided Return #${(returnToReverse.id || '').substring(0, 8)} for Sale #${(returnToReverse.originalSaleId || '').substring(0, 8)} via Audit Log reversion`, 
           returnToReverse.id, 
           'return'
         );
 
-        toast.success(`Return transaction ${returnToReverse.id.substring(0, 6)} reversed and sales restored successfully.`);
+        toast.success(`Return transaction ${(returnToReverse.id || '').substring(0, 6)} reversed and sales restored successfully.`);
       } 
       else if (revertLog.action === 'VOID_RETURN') {
         const returnToRestore = revertEntityData;
@@ -1386,7 +1386,7 @@ ${profile?.name || 'Vape Avenue Admin'}`;
               accountName: account.name,
               locationId: returnToRestore.locationId || null,
               category: 'Returns',
-              description: `Audit Reversal: Re-applied Refund for Return #${returnToRestore.id.substring(0, 8)}`,
+              description: `Audit Reversal: Re-applied Refund for Return #${(returnToRestore.id || '').substring(0, 8)}`,
               timestamp: Timestamp.now(),
               createdBy: profile?.id || 'anonymous',
               accountBalance: (account.balance || 0) - returnToRestore.totalRefund
@@ -1395,7 +1395,7 @@ ${profile?.name || 'Vape Avenue Admin'}`;
         }
 
         await batch.commit();
-        await logAction(profile, 'RETURN_TRANSACTION', `Reversed void return: Restored Return #${returnToRestore.id.substring(0, 8)}`, returnToRestore.id, 'return');
+        await logAction(profile, 'RETURN_TRANSACTION', `Reversed void return: Restored Return #${(returnToRestore.id || '').substring(0, 8)}`, returnToRestore.id, 'return');
         toast.success('Return transaction status restored to completed.');
       }
       else if (revertLog.action === 'VOID_SALE') {
@@ -1440,7 +1440,7 @@ ${profile?.name || 'Vape Avenue Admin'}`;
               locationId: saleToRestore.locationId || null,
               locationName: locations.find(l => l.id === saleToRestore.locationId)?.name || null,
               category: 'Sales',
-              description: `Restored Sale from Audit: Sale #${saleToRestore.id.substring(0, 8)}`,
+              description: `Restored Sale from Audit: Sale #${(saleToRestore.id || '').substring(0, 8)}`,
               timestamp: Timestamp.now(),
               createdBy: profile?.id || 'anonymous',
               createdByName: profile?.name || 'Staff',

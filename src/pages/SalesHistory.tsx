@@ -557,12 +557,12 @@ export const SalesHistory: React.FC = () => {
 
             saleRecordEntries.push({
               id: `salerecord_${sale.id}_${idx}`,
-              displayId: sale.id,
+              displayId: sale.id || 'N/A',
               saleId: sale.id,
               amount: split.amount || 0,
               type: 'income',
               category: 'Sales',
-              description: `Sale Record #${sale.id.substring(0, 8)}: ${customerName} (${split.methodName || 'Split'})`,
+              description: `Sale Record #${(sale.id || '').substring(0, 8)}: ${customerName} (${split.methodName || 'Split'})`,
               reference: split.reference || sale.id,
               accountId: rawId,
               accountName: accName,
@@ -583,12 +583,12 @@ export const SalesHistory: React.FC = () => {
 
           saleRecordEntries.push({
             id: `salerecord_${sale.id}`,
-            displayId: sale.id,
+            displayId: sale.id || 'N/A',
             saleId: sale.id,
             amount: sale.total || 0,
             type: 'income',
             category: 'Sales',
-            description: `Sale Record #${sale.id.substring(0, 8)}: ${customerName}`,
+            description: `Sale Record #${(sale.id || '').substring(0, 8)}: ${customerName}`,
             reference: sale.id,
             accountId: sale.paymentMethod || 'cash',
             accountName: accName,
@@ -659,12 +659,12 @@ export const SalesHistory: React.FC = () => {
 
         fallbackVoidEntries.push({
           id: `void_${sale.id}`,
-          displayId: `VOID-${sale.id.substring(0, 8)}`,
+          displayId: `VOID-${(sale.id || '').substring(0, 8)}`,
           saleId: sale.id,
           amount: sale.total || 0,
           type: 'expense',
           category: 'Voided Sale',
-          description: `Voided Sale: #${sale.id.substring(0, 8)}`,
+          description: `Voided Sale: #${(sale.id || '').substring(0, 8)}`,
           reference: sale.id,
           accountId: sale.paymentMethod || 'cash',
           accountName: accName,
@@ -795,8 +795,8 @@ export const SalesHistory: React.FC = () => {
             locationName: locations.find(l => l.id === sale.locationId)?.name || null,
             category: 'Sales',
             description: sale.isTotalEdited 
-              ? `Approved Sale (Edited Total) #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`
-              : `Approved Sale Promo #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`,
+              ? `Approved Sale (Edited Total) #${(sale.id || '').substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`
+              : `Approved Sale Promo #${(sale.id || '').substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`,
             reference: split.reference || sale.id,
             saleId: sale.id,
             timestamp: Timestamp.now(),
@@ -839,8 +839,8 @@ export const SalesHistory: React.FC = () => {
       );
 
       toast.success(isPromo 
-        ? `Promo code approved successfully for sale #${sale.id.substring(0, 8)}`
-        : `Edited total approved successfully for sale #${sale.id.substring(0, 8)}`
+        ? `Promo code approved successfully for sale #${(sale.id || '').substring(0, 8)}`
+        : `Edited total approved successfully for sale #${(sale.id || '').substring(0, 8)}`
       );
     } catch (error) {
       console.error("Error approving promo sale:", error);
@@ -933,7 +933,7 @@ export const SalesHistory: React.FC = () => {
           locationId: returnToReverse.locationId || null,
           locationName: locations.find(l => l.id === returnToReverse.locationId)?.name || null,
           category: 'Sales',
-          description: `Reverse Return: Cancelled refund from Return #${returnToReverse.id.substring(0, 8)}`,
+          description: `Reverse Return: Cancelled refund from Return #${(returnToReverse.id || '').substring(0, 8)}`,
           timestamp: Timestamp.now(),
           createdBy: profile?.id || 'anonymous',
           createdByName: profile?.name || 'Staff',
@@ -1001,7 +1001,7 @@ export const SalesHistory: React.FC = () => {
       await logAction(
         profile, 
         'VOID_RETURN', 
-        `Voided Return #${returnToReverse.id.substring(0, 8)} for Sale #${returnToReverse.originalSaleId.substring(0, 8)}: Stock decremented & refunded amount of ${settings.currency}${returnToReverse.totalRefund.toFixed(2)} adjusted`, 
+        `Voided Return #${(returnToReverse.id || '').substring(0, 8)} for Sale #${(returnToReverse.originalSaleId || '').substring(0, 8)}: Stock decremented & refunded amount of ${settings.currency}${returnToReverse.totalRefund.toFixed(2)} adjusted`, 
         returnToReverse.id, 
         'return'
       );
@@ -1048,7 +1048,7 @@ export const SalesHistory: React.FC = () => {
         await logAction(
           profile,
           'DELETE_LEDGER_ENTRY',
-          `Removed void line #${entryToDelete.displayId || entryToDelete.id} from Unified Ledger for Sale #${entryToDelete.saleId.substring(0, 8)}`,
+          `Removed void line #${entryToDelete.displayId || entryToDelete.id} from Unified Ledger for Sale #${(entryToDelete.saleId || '').substring(0, 8)}`,
           entryToDelete.saleId,
           'sale'
         );
@@ -1068,7 +1068,7 @@ export const SalesHistory: React.FC = () => {
         await logAction(
           profile,
           'DELETE_LEDGER_ENTRY',
-          `Removed sale record line #${entryToDelete.displayId || entryToDelete.id} from Unified Ledger for Sale #${entryToDelete.saleId.substring(0, 8)}`,
+          `Removed sale record line #${entryToDelete.displayId || entryToDelete.id} from Unified Ledger for Sale #${(entryToDelete.saleId || '').substring(0, 8)}`,
           entryToDelete.saleId,
           'sale'
         );
@@ -1273,8 +1273,8 @@ export const SalesHistory: React.FC = () => {
             locationName: locations.find(l => l.id === selectedSale.locationId)?.name || null,
             category: 'Sales',
             description: selectedSale.isTotalEdited 
-              ? `Sale Payment (Edited Total) #${selectedSale.id.substring(0, 8)}: ${selectedSale.customerDetails?.name || 'Walk-In'}`
-              : `Sale Payment #${selectedSale.id.substring(0, 8)}: ${selectedSale.customerDetails?.name || 'Walk-In'}`,
+              ? `Sale Payment (Edited Total) #${(selectedSale.id || '').substring(0, 8)}: ${selectedSale.customerDetails?.name || 'Walk-In'}`
+              : `Sale Payment #${(selectedSale.id || '').substring(0, 8)}: ${selectedSale.customerDetails?.name || 'Walk-In'}`,
             reference: split.reference || selectedSale.id,
             saleId: selectedSale.id,
             timestamp: Timestamp.now(),
@@ -2092,7 +2092,7 @@ export const SalesHistory: React.FC = () => {
                       {format(sale.timestamp.toDate(), 'HH:mm:ss')}
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-slate-500">{sale.id.substring(0, 8)}...</TableCell>
+                  <TableCell className="font-mono text-xs text-slate-500">{(sale.id || '').substring(0, 8)}...</TableCell>
                   <TableCell>
                     <div className="font-medium text-slate-900">{sale.customerDetails?.name || 'Walk-In'}</div>
                     <div className="text-[10px] text-slate-500 truncate max-w-[120px]">{sale.customerDetails?.city}</div>
@@ -2199,7 +2199,7 @@ export const SalesHistory: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-[#1A2B4B]">
-                        #{sale.id.substring(0, 8)}
+                        #{(sale.id || '').substring(0, 8)}
                       </TableCell>
                       <TableCell className="text-xs">
                         <Badge variant="secondary" className="bg-indigo-50 text-[#1A2B4B] hover:bg-slate-100 border-none">
@@ -2376,7 +2376,7 @@ export const SalesHistory: React.FC = () => {
                           {format(sale.timestamp.toDate(), 'HH:mm:ss')}
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-500">{sale.id.substring(0, 8)}...</TableCell>
+                      <TableCell className="font-mono text-xs text-slate-500">{(sale.id || '').substring(0, 8)}...</TableCell>
                       <TableCell>
                         <div className="font-medium text-slate-900">{sale.customerDetails?.name || 'Walk-In'}</div>
                         <div className="text-[10px] text-slate-500 truncate max-w-[120px]">{sale.customerDetails?.city}</div>

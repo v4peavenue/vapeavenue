@@ -362,7 +362,7 @@ export const Attendance: React.FC = () => {
     const parts = trimmed.split(':');
     if (parts.length < 2) return timeStr;
     let hours = parseInt(parts[0], 10);
-    const minutes = parts[1].substring(0, 2);
+    const minutes = (parts[1] || '').substring(0, 2);
     if (isNaN(hours)) return timeStr;
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
@@ -3937,7 +3937,7 @@ export const Attendance: React.FC = () => {
                         setBulkConfig({ ...bulkConfig, daysOff: newDaysOff });
                       }}
                     >
-                      {day.substring(0, 3)}
+                      {(day || '').substring(0, 3)}
                     </Button>
                   ))}
                 </div>

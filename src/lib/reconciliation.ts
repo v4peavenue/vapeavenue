@@ -111,7 +111,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       const existingFin = financials.find(f => 
         (f.saleId && f.saleId === sale.id) || 
         (f.reference && f.reference === sale.id) || 
-        (f.description && (f.description.includes(sale.id) || f.description.includes(sale.id.substring(0, 8))))
+        (f.description && (f.description.includes(sale.id) || f.description.includes((sale.id || '').substring(0, 8))))
       );
 
       if (!existingFin) {
@@ -140,8 +140,8 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
           ) || defaultAccount;
 
           const desc = sale.isTotalEdited
-            ? `Sale Payment (Edited Total) #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`
-            : `Sale Payment #${sale.id.substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`;
+            ? `Sale Payment (Edited Total) #${(sale.id || '').substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`
+            : `Sale Payment #${(sale.id || '').substring(0, 8)}: ${sale.customerDetails?.name || 'Walk-In'}`;
 
           const newDocRef = await addDoc(collection(db, 'financialTransactions'), {
             amount: split.amount || sale.total || 0,
@@ -177,7 +177,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
       // Check if audit log exists for this sale
       const existingAudit = audits.find(a => 
         a.entityId === sale.id || 
-        (a.details && (a.details.includes(sale.id) || a.details.includes(sale.id.substring(0, 8))))
+        (a.details && (a.details.includes(sale.id) || a.details.includes((sale.id || '').substring(0, 8))))
       );
 
       if (!existingAudit) {
@@ -187,7 +187,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
           userName: sale.staffName || 'Staff',
           userEmail: 'pos@system.local',
           action: 'CREATE_SALE',
-          details: `Processed sale #${sale.id.substring(0, 8)}: Total ${(sale.total || 0).toFixed(2)} [${itemSummary}]`,
+          details: `Processed sale #${(sale.id || '').substring(0, 8)}: Total ${(sale.total || 0).toFixed(2)} [${itemSummary}]`,
           entityId: sale.id,
           entityType: 'sale',
           timestamp: sale.timestamp || Timestamp.now()
@@ -217,7 +217,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
             locationId: po.locationId || null,
             locationName: poLocation?.name || null,
             category: 'Inventory Purchase',
-            description: `Inventory Stock Receipt PO #${po.poNumber || po.id.substring(0, 8)}`,
+            description: `Inventory Stock Receipt PO #${po.poNumber || (po.id || '').substring(0, 8)}`,
             reference: po.id,
             timestamp: po.receivedAt || po.createdAt || Timestamp.now(),
             createdBy: po.createdBy || 'system',
@@ -237,7 +237,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
             userName: po.createdByName || 'Staff',
             userEmail: 'inventory@system.local',
             action: 'RECEIVE_STOCK',
-            details: `Received inventory PO #${po.poNumber || po.id.substring(0, 8)}: Total ${(po.totalAmount || 0).toFixed(2)}`,
+            details: `Received inventory PO #${po.poNumber || (po.id || '').substring(0, 8)}: Total ${(po.totalAmount || 0).toFixed(2)}`,
             entityId: po.id,
             entityType: 'purchaseOrder',
             timestamp: po.receivedAt || po.createdAt || Timestamp.now()
@@ -260,7 +260,7 @@ export const reconcileSystemData = async (): Promise<ReconciliationResult> => {
           userName: ret.createdByName || 'Staff',
           userEmail: 'returns@system.local',
           action: 'PROCESS_RETURN',
-          details: `Processed return #${ret.id.substring(0, 8)} for Sale #${(ret.originalSaleId || '').substring(0, 8)}: Total Refund ${(ret.totalRefund || 0).toFixed(2)}`,
+          details: `Processed return #${(ret.id || '').substring(0, 8)} for Sale #${(ret.originalSaleId || '').substring(0, 8)}: Total Refund ${(ret.totalRefund || 0).toFixed(2)}`,
           entityId: ret.id,
           entityType: 'return',
           timestamp: ret.timestamp || Timestamp.now()
