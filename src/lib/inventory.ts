@@ -256,6 +256,7 @@ export async function authoritativeEditSale(params: {
   const { saleId, itemQuantityChanges, profile } = params;
 
   return await runTransaction(db, async (transaction) => {
+    // PHASE 1: READS ONLY
     const saleRef = doc(db, 'sales', saleId);
     const saleDoc = await transaction.get(saleRef);
 
@@ -273,8 +274,18 @@ export async function authoritativeEditSale(params: {
       throw new Error('Sale has no associated location ID.');
     }
 
-    // Process each changed item
     const updatedSaleItems = [...(saleData.items || [])];
+    const productUpdates: {
+      ref: any;
+      name: string;
+      currentLocStock: number;
+      oldQuantity: number;
+      newQuantity: number;
+      diff: number;
+      newLocStock: number;
+      newGlobalStock: number;
+      updatedStocksMap: Record<string, number>;
+    }[] = [];
 
     for (const change of itemQuantityChanges) {
       const { productId, oldQuantity, newQuantity } = change;
@@ -314,16 +325,17 @@ export async function authoritativeEditSale(params: {
       const updatedStocksMap = { ...(prodData?.stocks || {}) };
       updatedStocksMap[locationId] = newLocStock;
 
-      transaction.update(prodRef, {
-        stock: newGlobalStock,
-        stocks: updatedStocksMap,
-        [`stocks.${locationId}`]: newLocStock,
-        updatedAt: Timestamp.now()
+      productUpdates.push({
+        ref: prodRef,
+        name: prodData.name || 'Product',
+        currentLocStock,
+        oldQuantity,
+        newQuantity,
+        diff,
+        newLocStock,
+        newGlobalStock,
+        updatedStocksMap
       });
-
-      console.log(
-        `[INVENTORY] SALE EDITED\nProduct: ${prodData.name}\nPrevious Stock: ${currentLocStock}\nQuantity Sold Change: ${oldQuantity} -> ${newQuantity} (Delta: ${diff})\nNew Stock: ${newLocStock}`
-      );
 
       // Update the sale item array
       const itemIndex = updatedSaleItems.findIndex(i => (i.productId || (i as any).id) === productId);
@@ -336,6 +348,20 @@ export async function authoritativeEditSale(params: {
           subtotal: newQuantity * unitPrice
         };
       }
+    }
+
+    // PHASE 2: WRITES ONLY
+    for (const update of productUpdates) {
+      transaction.update(update.ref, {
+        stock: update.newGlobalStock,
+        stocks: update.updatedStocksMap,
+        [`stocks.${locationId}`]: update.newLocStock,
+        updatedAt: Timestamp.now()
+      });
+
+      console.log(
+        `[INVENTORY] SALE EDITED\nProduct: ${update.name}\nPrevious Stock: ${update.currentLocStock}\nQuantity Sold Change: ${update.oldQuantity} -> ${update.newQuantity} (Delta: ${update.diff})\nNew Stock: ${update.newLocStock}`
+      );
     }
 
     // Recalculate subtotal and total
@@ -355,7 +381,7 @@ export async function authoritativeEditSale(params: {
 
     return {
       success: true,
-      message: `Sale #${saleId.substring(0, 8)} updated successfully. Inventory difference applied.`
+      message: `Sale #${(saleId || '').substring(0, 8)} updated successfully. Inventory difference applied.`
     };
   });
 }
@@ -386,6 +412,9 @@ export async function authoritativeVoidSale(params: {
   }
 
   return await runTransaction(db, async (transaction) => {
+    // ----------------------------------------------------
+    // PHASE 1: READS ONLY (All transaction.get calls)
+    // ----------------------------------------------------
     const targetSaleId = saleToVoid.id || '';
     const saleRef = doc(db, 'sales', targetSaleId);
     const freshSaleDoc = await transaction.get(saleRef);
@@ -398,9 +427,18 @@ export async function authoritativeVoidSale(params: {
       throw new Error('This sale has already been voided.');
     }
 
+    // Read the financial account document if provided
+    const accountRef = voidAccountId ? doc(db, 'accounts', voidAccountId) : null;
+    let freshAccountDoc = null;
+    if (accountRef) {
+      freshAccountDoc = await transaction.get(accountRef);
+    }
+
     const wasStockDeducted = freshSaleData.stockDeducted !== false;
     const locationId = freshSaleData.locationId;
 
+    // Consolidate net quantities to return per product ID
+    const productQuantitiesToReturn = new Map<string, number>();
     if (wasStockDeducted && locationId) {
       for (const item of freshSaleData.items || []) {
         const prodId = item.productId || (item as any).id;
@@ -410,6 +448,24 @@ export async function authoritativeVoidSale(params: {
         const netQtyToReturn = Math.max(0, item.quantity - returnedQty);
         if (netQtyToReturn <= 0) continue;
 
+        const existingQty = productQuantitiesToReturn.get(prodId) || 0;
+        productQuantitiesToReturn.set(prodId, existingQty + netQtyToReturn);
+      }
+    }
+
+    // Read all product documents inside the transaction (READS ONLY)
+    const productRestores: {
+      ref: any;
+      name: string;
+      currentLocStock: number;
+      netQtyToReturn: number;
+      newLocStock: number;
+      newGlobalStock: number;
+      updatedStocksMap: Record<string, number>;
+    }[] = [];
+
+    if (wasStockDeducted && locationId) {
+      for (const [prodId, netQtyToReturn] of productQuantitiesToReturn.entries()) {
         const productRef = doc(db, 'products', prodId);
         const prodDoc = await transaction.get(productRef);
         if (!prodDoc.exists()) continue;
@@ -424,32 +480,48 @@ export async function authoritativeVoidSale(params: {
         const updatedStocksMap = { ...(prodData?.stocks || {}) };
         updatedStocksMap[locationId] = newLocStock;
 
-        transaction.update(productRef, {
-          stock: newGlobalStock,
-          stocks: updatedStocksMap,
-          [`stocks.${locationId}`]: newLocStock,
-          updatedAt: Timestamp.now()
+        productRestores.push({
+          ref: productRef,
+          name: prodData.name || 'Product',
+          currentLocStock,
+          netQtyToReturn,
+          newLocStock,
+          newGlobalStock,
+          updatedStocksMap
         });
-
-        console.log(
-          `[INVENTORY] SALE CANCELLED / RETURNED\nProduct: ${prodData.name}\nPrevious Stock: ${currentLocStock}\nQuantity Restored: ${netQtyToReturn}\nNew Stock: ${newLocStock}`
-        );
       }
     }
 
-    // Mark sale as voided and stockDeducted: false so stock cannot be restored again
+    // ----------------------------------------------------
+    // PHASE 2: WRITES ONLY (No more transaction.get calls)
+    // ----------------------------------------------------
+    // 1. Restore product inventory stocks
+    for (const restore of productRestores) {
+      transaction.update(restore.ref, {
+        stock: restore.newGlobalStock,
+        stocks: restore.updatedStocksMap,
+        [`stocks.${locationId}`]: restore.newLocStock,
+        updatedAt: Timestamp.now()
+      });
+
+      console.log(
+        `[INVENTORY] SALE CANCELLED / RETURNED\nProduct: ${restore.name}\nPrevious Stock: ${restore.currentLocStock}\nQuantity Restored: ${restore.netQtyToReturn}\nNew Stock: ${restore.newLocStock}`
+      );
+    }
+
+    // 2. Mark sale as voided and stockDeducted: false so stock cannot be restored again
     transaction.update(saleRef, {
       status: 'voided',
       stockDeducted: false,
       updatedAt: Timestamp.now()
     });
 
-    // Reverse financial account balance
+    // 3. Reverse financial account balance and record expense transaction
     const account = accounts.find(a => a.id === voidAccountId);
-    if (account && voidAccountId) {
-      const accountRef = doc(db, 'accounts', voidAccountId);
-      const currentBalance = account.balance || 0;
-      const newBalance = currentBalance - freshSaleData.total;
+    if (accountRef && freshAccountDoc?.exists()) {
+      const accData = freshAccountDoc.data();
+      const currentBalance = Number(accData?.balance ?? account?.balance ?? 0);
+      const newBalance = currentBalance - (freshSaleData.total || 0);
 
       transaction.update(accountRef, {
         balance: newBalance,
@@ -457,15 +529,16 @@ export async function authoritativeVoidSale(params: {
       });
 
       const newTransRef = doc(collection(db, 'financialTransactions'));
+      const displayId = (freshSaleData.id || targetSaleId || '').substring(0, 8);
       transaction.set(newTransRef, {
-        amount: freshSaleData.total,
+        amount: freshSaleData.total || 0,
         type: 'expense',
         accountId: voidAccountId,
-        accountName: account.name,
+        accountName: accData?.name || account?.name || 'Account',
         locationId: freshSaleData.locationId || null,
         locationName: locations.find(l => l.id === freshSaleData.locationId)?.name || null,
         category: 'Sales Refund / Void',
-        description: `Voided Sale #${(freshSaleData.id || targetSaleId || '').substring(0, 8)} (${freshSaleData.customerDetails?.name || 'Walk-In'})`,
+        description: `Voided Sale #${displayId} (${freshSaleData.customerDetails?.name || 'Walk-In'})`,
         reference: freshSaleData.id || targetSaleId,
         saleId: freshSaleData.id || targetSaleId,
         timestamp: Timestamp.now(),
@@ -475,9 +548,10 @@ export async function authoritativeVoidSale(params: {
       });
     }
 
+    const displayId = (freshSaleData.id || targetSaleId || '').substring(0, 8);
     return {
       success: true,
-      message: `Sale #${(freshSaleData.id || targetSaleId || '').substring(0, 8)} voided. Stock restored exactly once.`
+      message: `Sale #${displayId} voided. Stock restored exactly once.`
     };
   });
 }

@@ -6,6 +6,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   memoryLocalCache,
+  enableNetwork,
   Firestore
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -46,19 +47,27 @@ try {
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager()
     }),
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
   }, databaseId);
 } catch (err) {
   console.warn("Firestore: Persistent cache initialization failed, falling back to memory cache:", err);
   try {
     firestoreDb = initializeFirestore(app, {
       localCache: memoryLocalCache(),
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
     }, databaseId);
   } catch {
     // If already initialized or fails, retrieve default instance
     firestoreDb = getFirestore(app, databaseId);
   }
+}
+
+// Automatically reconnect Firestore network when device reconnects
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.log('Firebase: Browser is online, reconnecting Firestore network.');
+    enableNetwork(firestoreDb).catch(() => {});
+  });
 }
 
 export const db = firestoreDb;
