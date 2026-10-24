@@ -258,19 +258,19 @@ export const Inventory: React.FC = () => {
         )}
       </div>
 
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
-        <div className="relative flex-1 w-full">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 md:gap-3">
+        <div className="relative flex-1 w-full min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
-            className="pl-10 bg-white/50 border-slate-200 focus:border-[#D4AF37] focus:ring-[#D4AF37]" 
+            className="pl-10 bg-white/50 border-slate-200 focus:border-[#D4AF37] focus:ring-[#D4AF37] h-9 md:h-9.5 text-xs sm:text-sm" 
             placeholder="Search products by name, SKU, or Barcode..." 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full md:w-auto shrink-0">
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-full sm:w-[150px] bg-white/50 border-slate-200">
+            <SelectTrigger className="w-full sm:w-[130px] md:w-[135px] lg:w-[150px] bg-white/50 border-slate-200 h-9 md:h-9.5 text-xs">
               <SelectValue placeholder="Category">
                 {categoryFilter === 'all' ? 'All Categories' : categoryFilter}
               </SelectValue>
@@ -283,7 +283,7 @@ export const Inventory: React.FC = () => {
             </SelectContent>
           </Select>
           <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="w-full sm:w-[150px] bg-white/50 border-slate-200">
+            <SelectTrigger className="w-full sm:w-[130px] md:w-[135px] lg:w-[150px] bg-white/50 border-slate-200 h-9 md:h-9.5 text-xs">
               <SelectValue placeholder="Flavor / Brand">
                 {brandFilter === 'all' ? 'All Flavors' : brandFilter}
               </SelectValue>
@@ -295,7 +295,7 @@ export const Inventory: React.FC = () => {
               ))}
             </SelectContent>
           </Select>
-          <div className="flex items-center gap-2.5 px-3 py-2 bg-white/70 border border-slate-200 rounded-md shadow-2xs shrink-0 w-full sm:w-auto justify-between sm:justify-start">
+          <div className="flex items-center gap-2.5 px-2.5 py-1.5 md:px-3 md:py-2 bg-white/70 border border-slate-200 rounded-md shadow-2xs shrink-0 w-full sm:w-auto justify-between sm:justify-start h-9 md:h-9.5">
             <div className="flex items-center gap-2">
               <Switch 
                 id="exclude-zero-stock"
@@ -315,18 +315,18 @@ export const Inventory: React.FC = () => {
         </div>
       </div>
 
-      <div className="hidden md:block bg-white/50 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <Table>
+      <div className="hidden md:block bg-white/50 backdrop-blur-sm rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+        <Table className="min-w-[700px]">
           <TableHeader className="bg-slate-50/50">
             <TableRow>
-              <TableHead className="w-[300px] text-[#1A2B4B] font-semibold">Product</TableHead>
-              <TableHead className="text-[#1A2B4B] font-semibold">SKU</TableHead>
-              <TableHead className="text-[#1A2B4B] font-semibold">Category</TableHead>
-              <TableHead className="text-[#1A2B4B] font-semibold">Flavor</TableHead>
-              <TableHead className="text-[#1A2B4B] font-semibold">Price</TableHead>
-              <TableHead className="text-[#1A2B4B] font-semibold">Stock</TableHead>
-              <TableHead className="text-[#1A2B4B] font-semibold">Status</TableHead>
-              <TableHead className="text-right text-[#1A2B4B] font-semibold">Actions</TableHead>
+              <TableHead className="w-[200px] md:w-[220px] lg:w-[280px] text-[#1A2B4B] font-semibold text-xs md:text-sm">Product</TableHead>
+              <TableHead className="text-[#1A2B4B] font-semibold text-xs md:text-sm">SKU</TableHead>
+              <TableHead className="text-[#1A2B4B] font-semibold text-xs md:text-sm">Category</TableHead>
+              <TableHead className="text-[#1A2B4B] font-semibold text-xs md:text-sm">Flavor</TableHead>
+              <TableHead className="text-[#1A2B4B] font-semibold text-xs md:text-sm">Price</TableHead>
+              <TableHead className="text-[#1A2B4B] font-semibold text-xs md:text-sm">Stock</TableHead>
+              <TableHead className="text-[#1A2B4B] font-semibold text-xs md:text-sm">Status</TableHead>
+              <TableHead className="text-right text-[#1A2B4B] font-semibold text-xs md:text-sm">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

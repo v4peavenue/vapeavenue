@@ -1192,15 +1192,15 @@ export const POS: React.FC = () => {
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4 }}
-      className="h-full min-h-0 lg:h-[calc(100vh-120px)] flex flex-col lg:flex-row gap-6 lg:gap-8"
+      className="h-full min-h-0 md:h-[calc(100vh-98px)] lg:h-[calc(100vh-112px)] flex flex-col md:flex-row gap-3.5 md:gap-4 lg:gap-6"
     >
-      {/* Mobile Tab Switcher */}
-      <div className="flex lg:hidden bg-slate-100 p-1.5 rounded-2xl gap-2 shadow-sm shrink-0 border border-slate-200">
+      {/* Mobile Tab Switcher (Visible only on small phones below md tablet) */}
+      <div className="flex md:hidden bg-slate-100 p-1.5 rounded-2xl gap-2 shadow-sm shrink-0 border border-slate-200">
         <Button
           variant="ghost"
           onClick={() => setActiveTab('products')}
           className={cn(
-            "flex-1 h-11 text-xs font-bold rounded-xl transition-all gap-2",
+            "flex-1 h-10 text-xs font-bold rounded-xl transition-all gap-2",
             activeTab === 'products'
               ? "bg-[#1A2B4B] text-white shadow-md shadow-[#1A2B4B]/10 hover:bg-[#1A2B4B]"
               : "text-slate-600 hover:bg-slate-200"
@@ -1213,7 +1213,7 @@ export const POS: React.FC = () => {
           variant="ghost"
           onClick={() => setActiveTab('cart')}
           className={cn(
-            "flex-1 h-11 text-xs font-bold rounded-xl transition-all gap-2 relative",
+            "flex-1 h-10 text-xs font-bold rounded-xl transition-all gap-2 relative",
             activeTab === 'cart'
               ? "bg-[#1A2B4B] text-white shadow-[#1A2B4B]/10 hover:bg-[#1A2B4B] hover:text-white font-black"
               : "text-slate-600 hover:bg-slate-200"
@@ -1230,100 +1230,98 @@ export const POS: React.FC = () => {
       </div>
 
       {/* Product Selection Area */}
-      <div className={cn("flex-1 flex flex-col gap-6 min-h-0 min-w-0", activeTab !== 'products' && "hidden lg:flex")}>
-        <div className="w-full flex flex-col md:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
-            <div className="relative flex-1 flex gap-2 w-full min-w-[200px]">
-              <div className="relative flex-1">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
-                <Input 
-                  className="pl-10 sm:pl-12 h-10 sm:h-12 text-sm sm:text-base bg-white/50 border-slate-200 shadow-sm rounded-xl focus-visible:ring-[#D4AF37] backdrop-blur-sm w-full" 
-                  placeholder="Search by name, SKU, or Barcode..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={handleSearchKeyDown}
-                />
-              </div>
-              <Button
+      <div className={cn("flex-1 flex flex-col gap-3.5 md:gap-4 lg:gap-5 min-h-0 min-w-0", activeTab !== 'products' && "hidden md:flex")}>
+        <div className="w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+          <div className="relative flex-1 w-full flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input 
+                className="pl-9 sm:pl-10 h-9 sm:h-10 md:h-10 lg:h-11 text-xs sm:text-sm bg-white/50 border-slate-200 shadow-sm rounded-xl focus-visible:ring-[#D4AF37] backdrop-blur-sm w-full" 
+                placeholder="Search by name, SKU, or Barcode..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 sm:h-10 md:h-10 lg:h-11 w-9 sm:w-10 md:w-10 lg:w-11 border-slate-200 bg-white/50 rounded-xl hover:bg-[#D4AF37]/10 flex items-center justify-center group active:scale-95 shadow-sm shrink-0 p-0"
+              onClick={() => setIsScannerOpen(true)}
+              title="Scan Barcode with Camera"
+            >
+              <Scan className="w-4 h-4 text-[#1A2B4B] group-hover:text-[#D4AF37] transition-colors" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 justify-between sm:justify-start">
+            {/* Add Qty Selector */}
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-0.5 sm:p-1 shadow-sm h-9 sm:h-10 md:h-10 lg:h-11 select-none">
+              <span className="text-[9px] sm:text-[10px] font-black uppercase text-[#1A2B4B] tracking-wider pl-1.5 sm:pl-2 pr-0.5">Qty:</span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95 p-0"
                 type="button"
-                variant="outline"
-                className="h-10 sm:h-12 w-10 sm:w-12 border-slate-200 bg-white/50 rounded-xl hover:bg-[#D4AF37]/10 flex items-center justify-center group active:scale-95 shadow-sm shrink-0"
-                onClick={() => setIsScannerOpen(true)}
-                title="Scan Barcode with Camera"
+                onClick={() => setAddQtyMulti(prev => Math.max(1, prev - 1))}
               >
-                <Scan className="w-4 h-4 sm:w-5 sm:h-5 text-[#1A2B4B] group-hover:text-[#D4AF37] transition-colors" />
+                <Minus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              </Button>
+              <Input 
+                type="number"
+                className="w-8 sm:w-9 text-center font-black text-xs sm:text-sm border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
+                value={addQtyMulti}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (!isNaN(val) && val >= 1) {
+                    setAddQtyMulti(val);
+                  }
+                }}
+                min={1}
+              />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95 p-0"
+                type="button"
+                onClick={() => setAddQtyMulti(prev => prev + 1)}
+              >
+                <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               </Button>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0 w-full sm:w-auto justify-between sm:justify-start">
-              {/* Add Qty Selector */}
-              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-10 sm:h-12 select-none">
-                <span className="text-[10px] font-black uppercase text-[#1A2B4B] tracking-wider pl-2 pr-1">Add Qty:</span>
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
-                  type="button"
-                  onClick={() => setAddQtyMulti(prev => Math.max(1, prev - 1))}
-                >
-                  <Minus className="w-3.5 h-3.5" />
-                </Button>
-                <Input 
-                  type="number"
-                  className="w-10 h-7 sm:h-8 text-center font-black text-xs sm:text-sm border-none bg-transparent focus-visible:ring-0 p-0 text-[#1A2B4B]"
-                  value={addQtyMulti}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    if (!isNaN(val) && val >= 1) {
-                      setAddQtyMulti(val);
-                    }
-                  }}
-                  min={1}
-                />
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-slate-100 rounded-lg shrink-0 text-slate-600 active:scale-95"
-                  type="button"
-                  onClick={() => setAddQtyMulti(prev => prev + 1)}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-1 shadow-sm h-10 sm:h-12 select-none">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  type="button"
-                  className={cn(
-                    "h-8 sm:h-10 px-2.5 sm:px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
-                    viewMode === 'list' 
-                      ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                  )}
-                  onClick={() => setViewMode('list')}
-                >
-                  <LayoutList className="w-3.5 h-3.5" />
-                  <span>List</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  type="button"
-                  className={cn(
-                    "h-8 sm:h-10 px-2.5 sm:px-3 rounded-lg flex items-center gap-1.5 text-xs font-bold transition-all",
-                    viewMode === 'grid' 
-                      ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
-                      : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                  )}
-                  onClick={() => setViewMode('grid')}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  <span>Grid</span>
-                </Button>
-              </div>
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-white/95 border border-slate-200/80 rounded-xl p-0.5 sm:p-1 shadow-sm h-9 sm:h-10 md:h-10 lg:h-11 select-none">
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                className={cn(
+                  "h-7 sm:h-8 md:h-8 lg:h-9 px-2 sm:px-2.5 rounded-lg flex items-center gap-1 text-[11px] sm:text-xs font-bold transition-all",
+                  viewMode === 'list' 
+                    ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
+                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                )}
+                onClick={() => setViewMode('list')}
+              >
+                <LayoutList className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span className="hidden sm:inline">List</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                className={cn(
+                  "h-7 sm:h-8 md:h-8 lg:h-9 px-2 sm:px-2.5 rounded-lg flex items-center gap-1 text-[11px] sm:text-xs font-bold transition-all",
+                  viewMode === 'grid' 
+                    ? "bg-[#1A2B4B] text-white hover:bg-[#1A2B4B]/90 shadow-sm" 
+                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                )}
+                onClick={() => setViewMode('grid')}
+              >
+                <LayoutGrid className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <span className="hidden sm:inline">Grid</span>
+              </Button>
             </div>
           </div>
         </div>
@@ -1408,7 +1406,7 @@ export const POS: React.FC = () => {
               <p className="text-xs mt-1 text-slate-500">Try adjusting your filters or search term.</p>
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-5 pb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 sm:gap-3 lg:gap-4 pb-4">
               {filteredProducts.map((product, index) => {
                 const currentStock = getProductStock(product);
                 return (
@@ -1420,8 +1418,8 @@ export const POS: React.FC = () => {
                   >
                     <Card 
                       className={cn(
-                        "cursor-pointer transition-all duration-300 hover:shadow-xl active:scale-95 group relative overflow-hidden border-slate-200/60 rounded-2xl bg-white/50 backdrop-blur-sm",
-                        currentStock <= 0 ? "opacity-60 grayscale cursor-not-allowed" : "hover:border-[#D4AF37]/50 hover:-translate-y-1"
+                        "cursor-pointer transition-all duration-300 hover:shadow-xl active:scale-95 group relative overflow-hidden border-slate-200/60 rounded-xl md:rounded-2xl bg-white/50 backdrop-blur-sm",
+                        currentStock <= 0 ? "opacity-60 grayscale cursor-not-allowed" : "hover:border-[#D4AF37]/50 hover:-translate-y-0.5 md:hover:-translate-y-1"
                       )}
                       onClick={() => currentStock > 0 && addToCart(product)}
                     >
@@ -1431,28 +1429,28 @@ export const POS: React.FC = () => {
                             <img 
                               src={product.imageUrl} 
                               alt={product.name} 
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <Package className="w-12 h-12" />
+                            <Package className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12" />
                           )}
-                          <div className="absolute top-2 right-2">
+                          <div className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2">
                             <Badge className={cn(
-                              "shadow-sm border-none",
+                              "shadow-xs border-none text-[9px] sm:text-[10px] px-1.5 py-0 h-4 sm:h-5",
                               currentStock <= 5 ? "bg-rose-500" : "bg-[#1A2B4B]"
                             )}>
                               {currentStock}
                             </Badge>
                           </div>
                         </div>
-                        <div className="p-4">
-                          <p className="text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider mb-1">{product.category}</p>
-                          <h3 className="font-bold text-[#1A2B4B] truncate text-sm mb-2">{product.name}</h3>
+                        <div className="p-2.5 sm:p-3 md:p-3 lg:p-3.5">
+                          <p className="text-[9px] sm:text-[10px] font-bold text-[#D4AF37] uppercase tracking-wider mb-0.5 truncate">{product.category}</p>
+                          <h3 className="font-bold text-[#1A2B4B] truncate text-xs sm:text-sm mb-1.5" title={product.name}>{product.name}</h3>
                           <div className="flex items-center justify-between">
-                            <span className="text-lg font-black text-[#1A2B4B]">{settings.currency}{(product.price ?? 0).toFixed(2)}</span>
-                            <div className="w-8 h-8 rounded-full bg-white border border-slate-100 flex items-center justify-center group-hover:bg-[#1A2B4B] group-hover:text-white transition-colors shadow-sm">
-                              <Plus className="w-4 h-4" />
+                            <span className="text-sm sm:text-base md:text-base lg:text-lg font-black text-[#1A2B4B]">{settings.currency}{(product.price ?? 0).toFixed(2)}</span>
+                            <div className="w-6 h-6 sm:w-7 sm:h-7 md:w-7.5 md:h-7.5 rounded-full bg-white border border-slate-100 flex items-center justify-center group-hover:bg-[#1A2B4B] group-hover:text-white transition-colors shadow-xs">
+                              <Plus className="w-3.5 h-3.5" />
                             </div>
                           </div>
                         </div>
@@ -1574,10 +1572,10 @@ export const POS: React.FC = () => {
 
       {/* Cart Area */}
       <Card className={cn(
-        "w-full lg:w-[420px] flex flex-col shadow-2xl border-2 border-[#D4AF37]/50 ring-4 ring-[#D4AF37]/10 bg-white rounded-3xl overflow-hidden",
-        activeTab !== 'cart' && "hidden lg:flex"
+        "w-full md:w-[320px] lg:w-[370px] xl:w-[420px] shrink-0 flex flex-col shadow-2xl border-2 border-[#D4AF37]/50 ring-4 ring-[#D4AF37]/10 bg-white rounded-2xl md:rounded-3xl overflow-hidden",
+        activeTab !== 'cart' && "hidden md:flex"
       )}>
-        <CardHeader className="border-b border-[#D4AF37]/30 bg-gradient-to-r from-[#1A2B4B] via-[#2C3E50] to-[#1A2B4B] text-white p-4 sm:p-5 shadow-sm">
+        <CardHeader className="border-b border-[#D4AF37]/30 bg-gradient-to-r from-[#1A2B4B] via-[#2C3E50] to-[#1A2B4B] text-white p-3 sm:p-4 md:p-3.5 lg:p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-[#D4AF37] rounded-xl flex items-center justify-center shadow-md">
@@ -1762,9 +1760,9 @@ export const POS: React.FC = () => {
 
       {/* Checkout Dialog */}
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent className="sm:max-w-[600px] md:min-h-[650px] max-h-[95vh] flex flex-col overflow-y-auto bg-white/95 backdrop-blur-md border-[#D4AF37]/20">
+        <DialogContent className="w-[95vw] sm:max-w-[560px] md:max-w-[620px] max-h-[90vh] flex flex-col overflow-y-auto bg-white/95 backdrop-blur-md border-[#D4AF37]/20 p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="text-[#1A2B4B] font-heading text-2xl">Complete Sale</DialogTitle>
+            <DialogTitle className="text-[#1A2B4B] font-heading text-xl sm:text-2xl">Complete Sale</DialogTitle>
             <DialogDescription>Enter customer details and select payment method.</DialogDescription>
           </DialogHeader>
           

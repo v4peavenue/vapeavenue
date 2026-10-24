@@ -1659,9 +1659,9 @@ export const Attendance: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 print:block print:w-full">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-5 lg:gap-6 xl:gap-8 print:block print:w-full">
         {/* Main Action Section */}
-        <div className="lg:col-span-4 xl:col-span-3 2xl:col-span-3 space-y-6 no-print">
+        <div className="md:col-span-5 lg:col-span-4 xl:col-span-3 2xl:col-span-3 space-y-4 md:space-y-5 lg:space-y-6 no-print">
           <Card className={cn(
             "relative overflow-hidden border-none shadow-2xl transition-all duration-500",
             currentUserAttendance && !currentUserAttendance.timeOut 
@@ -1880,7 +1880,7 @@ export const Attendance: React.FC = () => {
         </div>
 
         {/* View Selection Section */}
-        <div className="lg:col-span-8 xl:col-span-9 2xl:col-span-9 print:w-full print:max-w-full print:p-0 print:m-0">
+        <div className="md:col-span-7 lg:col-span-8 xl:col-span-9 2xl:col-span-9 print:w-full print:max-w-full print:p-0 print:m-0">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="mb-6 no-print">
               {/* Mobile Tab Selector (Select Dropdown) */}
@@ -1931,8 +1931,8 @@ export const Attendance: React.FC = () => {
               </div>
 
               {/* Desktop Segmented Control Tab List */}
-              <div className="hidden md:block">
-                <TabsList className="bg-slate-100/50 p-1.5 rounded-2xl min-h-12 border border-slate-200/60 max-w-full flex w-fit">
+              <div className="hidden md:block overflow-x-auto pb-1 custom-scrollbar">
+                <TabsList className="bg-slate-100/50 p-1 md:p-1.5 rounded-xl md:rounded-2xl min-h-10 md:min-h-12 border border-slate-200/60 max-w-full flex w-fit">
                   {availableTabs.map((tab) => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -1941,13 +1941,13 @@ export const Attendance: React.FC = () => {
                         key={tab.id}
                         value={tab.id} 
                         className={cn(
-                          "rounded-xl px-5 h-10 font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all duration-200",
+                          "rounded-lg md:rounded-xl px-2.5 md:px-3.5 lg:px-5 h-8.5 md:h-10 font-semibold text-xs sm:text-sm flex items-center gap-1.5 md:gap-2 transition-all duration-200 whitespace-nowrap",
                           isActive 
                             ? "bg-[#1A2B4B] text-white shadow-md border-b-2 border-[#D4AF37]/40 font-bold" 
                             : "text-[#1A2B4B]/70 hover:bg-[#1A2B4B]/5 hover:text-[#1A2B4B]"
                         )}
                       >
-                        <Icon className={cn("w-4 h-4", isActive ? "text-[#D4AF37]" : "text-[#1A2B4B]/50")} />
+                        <Icon className={cn("w-3.5 h-3.5 md:w-4 md:h-4", isActive ? "text-[#D4AF37]" : "text-[#1A2B4B]/50")} />
                         {tab.label}
                       </TabsTrigger>
                     );

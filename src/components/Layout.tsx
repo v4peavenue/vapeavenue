@@ -302,8 +302,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </Link>
               </div>
 
-              {/* Center: Inset Navigation Tray matching screenshot */}
-              <div className="hidden lg:flex items-center neu-inset rounded-full p-1.5 gap-1 xl:gap-1.5 overflow-x-auto custom-scrollbar">
+              {/* Center: Inset Navigation Tray on Tablet & Desktop */}
+              <div className="hidden md:flex items-center neu-inset rounded-full p-1 md:p-1.5 gap-0.5 md:gap-1 xl:gap-1.5 overflow-x-auto custom-scrollbar max-w-[58vw] lg:max-w-none">
                 {navItems
                   .filter(item => {
                     const currentRole = isAdmin ? 'admin' : (profile?.role || 'staff');
@@ -324,7 +324,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         key={item.path}
                         to={item.path}
                         className={cn(
-                          "flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap relative shrink-0",
+                          "flex items-center gap-1 md:gap-1.5 px-2.5 md:px-3 lg:px-3.5 py-1 md:py-1.5 rounded-full text-[11px] md:text-xs font-bold transition-all whitespace-nowrap relative shrink-0",
                           isActive 
                             ? "bg-white text-emerald-700 shadow-sm border border-emerald-300 font-black" 
                             : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
@@ -352,15 +352,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </div>
 
               {/* Right: Location Selector, Status & User Profile matching screenshot */}
-              <div className="hidden sm:flex items-center gap-2.5 shrink-0">
+              <div className="hidden sm:flex items-center gap-1.5 md:gap-2.5 shrink-0">
                 {/* Location Select */}
-                <div className="w-28 sm:w-32 lg:w-36">
+                <div className="w-24 sm:w-28 md:w-32 lg:w-36">
                   <Select 
                     value={selectedLocationId} 
                     onValueChange={setSelectedLocationId}
                     disabled={!isAdmin && !isManager}
                   >
-                    <SelectTrigger className="w-full neu-btn h-9 rounded-xl text-xs font-bold text-slate-700 hover:text-slate-900 px-3 border-0">
+                    <SelectTrigger className="w-full neu-btn h-8 md:h-9 rounded-xl text-[11px] md:text-xs font-bold text-slate-700 hover:text-slate-900 px-2.5 md:px-3 border-0">
                       <SelectValue>
                         {selectedLocationId === 'all' ? 'All Stores' : (locations.find(l => l.id === selectedLocationId)?.name || 'Select Location')}
                       </SelectValue>
@@ -376,37 +376,37 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
                 {/* Offline / Synced Badge */}
                 {isOnline ? (
-                  <Badge variant="outline" className="h-9 neu-btn text-emerald-600 text-[11px] font-black px-3 rounded-xl flex items-center gap-1.5 border-0 shadow-xs">
-                    <Wifi className="w-3.5 h-3.5 text-emerald-600" />
+                  <Badge variant="outline" className="h-8 md:h-9 neu-btn text-emerald-600 text-[10px] md:text-[11px] font-black px-2 md:px-3 rounded-xl flex items-center gap-1 md:gap-1.5 border-0 shadow-xs">
+                    <Wifi className="w-3 md:w-3.5 h-3 md:h-3.5 text-emerald-600" />
                     <span>SYNCED</span>
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="h-9 neu-btn text-amber-600 text-[11px] font-black px-3 rounded-xl flex items-center gap-1.5 border-0 shadow-xs">
-                    <WifiOff className="w-3.5 h-3.5 text-amber-600" />
+                  <Badge variant="outline" className="h-8 md:h-9 neu-btn text-amber-600 text-[10px] md:text-[11px] font-black px-2 md:px-3 rounded-xl flex items-center gap-1 md:gap-1.5 border-0 shadow-xs">
+                    <WifiOff className="w-3 md:w-3.5 h-3 md:h-3.5 text-amber-600" />
                     <span>OFFLINE</span>
                   </Badge>
                 )}
 
                 {/* User Dropdown / Logout */}
-                <div className="flex items-center gap-2.5 pl-2.5 border-l border-[#D1D9E6]/70">
+                <div className="flex items-center gap-2 md:gap-2.5 pl-2 md:pl-2.5 border-l border-[#D1D9E6]/70">
                   <div className="text-right hidden md:block">
-                    <p className="text-xs font-black text-slate-900 truncate leading-tight max-w-[120px]">{profile?.name || user?.email?.split('@')[0]}</p>
+                    <p className="text-xs font-black text-slate-900 truncate leading-tight max-w-[100px] lg:max-w-[120px]">{profile?.name || user?.email?.split('@')[0]}</p>
                     <p className="text-[9px] text-emerald-700 font-black uppercase tracking-wider">{isAdmin ? 'ADMIN' : (profile?.role || 'STAFF')}</p>
                   </div>
                   <Button 
                     variant="ghost" 
                     size="icon"
-                    className="h-9 w-9 neu-btn text-slate-700 hover:text-rose-600 rounded-xl transition-colors cursor-pointer"
+                    className="h-8 md:h-9 w-8 md:w-9 neu-btn text-slate-700 hover:text-rose-600 rounded-xl transition-colors cursor-pointer"
                     onClick={handleLogout}
                     title="Logout"
                   >
-                    <LogOut className="w-4 h-4" />
+                    <LogOut className="w-3.5 md:w-4 h-3.5 md:h-4" />
                   </Button>
                 </div>
               </div>
 
               {/* Mobile Menu Trigger */}
-              <div className="flex items-center gap-2 lg:hidden">
+              <div className="flex items-center gap-2 md:hidden">
                 <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
                   <SheetTrigger render={<Button variant="ghost" className="neu-btn text-slate-700 h-9 w-9 p-0 flex items-center justify-center rounded-lg" />}>
                     <Menu className="w-5 h-5" />
@@ -512,7 +512,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             className={cn(
               "w-full",
-              isHomePage ? "flex-1 h-full max-h-screen flex flex-col overflow-hidden" : "p-3 sm:p-5 lg:p-6 2xl:px-8 max-w-[1720px] mx-auto"
+              isHomePage ? "flex-1 h-full max-h-screen flex flex-col overflow-hidden" : "p-2.5 sm:p-3.5 md:p-4 lg:p-6 2xl:px-8 max-w-[1720px] mx-auto"
             )}
           >
             {children}

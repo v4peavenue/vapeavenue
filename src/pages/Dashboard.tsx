@@ -833,8 +833,8 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Tab Switcher */}
-      <div className="border-b border-slate-200/60 pb-1.5 flex items-center">
-        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+      <div className="border-b border-slate-200/60 pb-1.5 flex items-center overflow-x-auto custom-scrollbar">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
           <button
             onClick={() => setActiveDashboardTab('overview')}
             className={cn(
@@ -1048,7 +1048,7 @@ export const Dashboard: React.FC = () => {
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="lg:col-span-2 shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
+        <Card className="md:col-span-2 lg:col-span-2 shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-lg font-heading text-[#1A2B4B]">Revenue Overview</CardTitle>
@@ -1113,7 +1113,7 @@ export const Dashboard: React.FC = () => {
         </Card>
 
         {/* Top Selling Products - moved here */}
-        <Card className="shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
+        <Card className="md:col-span-2 lg:col-span-1 shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-lg font-heading text-[#1A2B4B]">Top Selling Products</CardTitle>
             <CardDescription>By revenue generated this period</CardDescription>
@@ -1142,7 +1142,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="lg:col-span-2 shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
+        <Card className="md:col-span-2 lg:col-span-2 shadow-sm border-slate-200/60 bg-white/50 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-lg font-heading text-[#1A2B4B]">Revenue by Location</CardTitle>

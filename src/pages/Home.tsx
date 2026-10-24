@@ -120,7 +120,7 @@ export const Home: React.FC = () => {
   });
 
   return (
-    <div className="h-screen max-h-screen w-full flex flex-col justify-between bg-[#E6ECF5] p-3.5 sm:p-5 lg:p-6 overflow-hidden font-sans box-border text-slate-700 select-none relative">
+    <div className="h-screen max-h-screen w-full flex flex-col justify-between bg-[#E6ECF5] p-2.5 sm:p-3.5 md:p-4 lg:p-6 overflow-hidden font-sans box-border text-slate-700 select-none relative">
       
       {/* Background Ambient Green Smoke Layer */}
       <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden select-none">
@@ -134,10 +134,10 @@ export const Home: React.FC = () => {
       </div>
 
       {/* Centered Main Stage Container */}
-      <div className="w-full max-w-[1640px] mx-auto flex-1 min-h-0 flex flex-col justify-between gap-3.5 sm:gap-5 relative z-10">
+      <div className="w-full max-w-[1640px] mx-auto flex-1 min-h-0 flex flex-col justify-between gap-2.5 sm:gap-3.5 md:gap-4 lg:gap-5 relative z-10">
         
         {/* Upper Floating Master Card */}
-        <div className="flex-1 min-h-0 flex flex-col justify-between neu-flat-lg rounded-2xl p-5 sm:p-6 lg:p-8 relative overflow-hidden bg-[#E6ECF5]/95 backdrop-blur-sm border border-emerald-500/10">
+        <div className="flex-1 min-h-0 flex flex-col justify-between neu-flat-lg rounded-2xl p-3 sm:p-4 md:p-5 lg:p-8 relative overflow-hidden bg-[#E6ECF5]/95 backdrop-blur-sm border border-emerald-500/10">
           
           {/* Internal Subtle Smoke Accent In Top-Right Corner */}
           <div className="absolute -top-24 -right-24 w-96 h-96 pointer-events-none rounded-full overflow-hidden opacity-20 mix-blend-multiply blur-2xl">
@@ -150,57 +150,57 @@ export const Home: React.FC = () => {
           </div>
 
           {/* Top Navbar */}
-          <header className="relative z-10 flex items-center justify-between gap-4 pb-3 sm:pb-4 border-b border-[#D1D9E6]/70 shrink-0">
+          <header className="relative z-10 flex items-center justify-between gap-3 pb-2.5 sm:pb-3 md:pb-3 lg:pb-4 border-b border-[#D1D9E6]/70 shrink-0">
             
             {/* Left: Brand Identity with Waves Icon & Pill */}
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 neu-btn rounded-xl flex items-center justify-center cursor-pointer text-emerald-600">
-                <Waves className="w-6 h-6" />
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 neu-btn rounded-xl flex items-center justify-center cursor-pointer text-emerald-600">
+                <Waves className="w-5 h-5 sm:w-5.5 sm:h-5.5 md:w-6 md:h-6" />
               </div>
-              <div className="flex items-center gap-2.5">
-                <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 font-heading">AGOS</span>
-                <span className="text-[10px] sm:text-[11px] font-black text-emerald-700 px-2.5 py-0.5 neu-inset rounded-md tracking-wider uppercase">
+              <div className="flex items-center gap-2">
+                <span className="text-lg sm:text-xl md:text-2xl font-black tracking-tight text-slate-900 font-heading">AGOS</span>
+                <span className="text-[9px] sm:text-[10px] md:text-[11px] font-black text-emerald-700 px-2 py-0.5 neu-inset rounded-md tracking-wider uppercase">
                   RETAIL ERP
                 </span>
               </div>
             </div>
 
             {/* Center: Navigation Links */}
-            <nav className="hidden md:flex items-center gap-7 lg:gap-10">
+            <nav className="hidden md:flex items-center gap-4 md:gap-6 lg:gap-10">
               <button 
                 onClick={() => navigate('/pos')}
-                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+                className="text-xs md:text-sm lg:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
               >
                 POS Register
               </button>
               <button 
                 onClick={() => navigate('/inventory')}
-                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+                className="text-xs md:text-sm lg:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
               >
                 Inventory
               </button>
               <button 
                 onClick={() => navigate('/sales')}
-                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+                className="text-xs md:text-sm lg:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
               >
                 Sales History
               </button>
               <button 
                 onClick={() => navigate('/directory')}
-                className="text-sm sm:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
+                className="text-xs md:text-sm lg:text-base font-bold text-slate-600 hover:text-slate-950 transition-colors cursor-pointer"
               >
                 Directory
               </button>
             </nav>
 
             {/* Right: Location Pill & Launch POS Button */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {/* Location Selector Pill */}
               <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-2 px-3.5 sm:px-4 py-2 neu-btn rounded-lg text-xs sm:text-sm font-bold text-slate-700 hover:text-slate-900 cursor-pointer outline-none">
-                  <Building2 className="w-4 h-4 text-amber-500" />
-                  <span>{activeLocationName}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
+                <DropdownMenuTrigger className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 md:px-4 py-1.5 sm:py-2 neu-btn rounded-lg text-xs md:text-sm font-bold text-slate-700 hover:text-slate-900 cursor-pointer outline-none">
+                  <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+                  <span className="max-w-[110px] sm:max-w-none truncate">{activeLocationName}</span>
+                  <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 ml-0.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="bg-[#E6ECF5] text-slate-800 rounded-lg border-0 neu-flat-lg p-1.5">
                   {(isAdmin || isManager) && (
@@ -226,7 +226,7 @@ export const Home: React.FC = () => {
               {/* Launch POS Button */}
               <button 
                 onClick={() => navigate('/pos')}
-                className="neu-btn rounded-lg px-4 sm:px-5 py-2 text-xs sm:text-sm font-black text-slate-800 hover:text-emerald-700 cursor-pointer transition-all active:scale-95 shadow-xs"
+                className="neu-btn rounded-lg px-3 sm:px-4 md:px-5 py-1.5 sm:py-2 text-xs md:text-sm font-black text-slate-800 hover:text-emerald-700 cursor-pointer transition-all active:scale-95 shadow-xs"
               >
                 Launch POS
               </button>
@@ -234,65 +234,65 @@ export const Home: React.FC = () => {
           </header>
 
           {/* Hero Main Content Split */}
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 xl:gap-12 items-center flex-1 min-h-0 my-auto py-3">
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6 lg:gap-10 xl:gap-12 items-center flex-1 min-h-0 my-auto py-2">
             
             {/* Left Column: Heading & Primary Triggers */}
-            <div className="lg:col-span-7 space-y-4 sm:space-y-5">
+            <div className="md:col-span-7 space-y-2.5 sm:space-y-3.5 md:space-y-3 lg:space-y-5">
               
               {/* Eyebrow Pill */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 neu-inset rounded-md text-emerald-700 text-xs sm:text-sm font-bold">
-                <Sparkles className="w-4 h-4 text-emerald-600" />
+              <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-0.5 sm:py-1 neu-inset rounded-md text-emerald-700 text-xs sm:text-sm font-bold">
+                <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
                 <span>Store Operations Workstation</span>
               </div>
 
               {/* Giant Heading */}
-              <h1 className="text-3xl sm:text-5xl lg:text-[48px] xl:text-[54px] font-black text-slate-900 leading-[1.12] font-heading tracking-tight">
+              <h1 className="text-2xl sm:text-3xl md:text-3xl lg:text-[44px] xl:text-[54px] font-black text-slate-900 leading-[1.12] font-heading tracking-tight">
                 Smart Retail & <br />
                 Inventory Manage<span className="text-emerald-700">ment</span>
               </h1>
 
               {/* Description Subtitle */}
-              <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl font-medium">
+              <p className="text-xs sm:text-sm md:text-sm lg:text-base text-slate-600 leading-relaxed max-w-2xl font-medium">
                 Welcome back, <strong className="text-slate-900 font-bold">{userName}</strong>. Process checkouts, manage product stock, track sales history, and oversee cash registers from your Agos portal.
               </p>
 
-              {/* Primary Pill Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3.5 pt-1">
+              {/* Primary Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 pt-0.5 sm:pt-1">
                 {/* Start POS Checkout (Dark Forest Green Button) */}
                 <button 
                   onClick={() => navigate('/pos')}
-                  className="bg-[#0D2818] hover:bg-[#143D25] text-white px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2.5 shadow-lg shadow-emerald-950/20 cursor-pointer transition-all active:scale-95 border border-emerald-900/40"
+                  className="bg-[#0D2818] hover:bg-[#143D25] text-white px-4 sm:px-5 md:px-5 lg:px-6 py-2 sm:py-2.5 md:py-2.5 lg:py-3.5 rounded-xl text-xs sm:text-sm md:text-sm lg:text-base font-bold flex items-center gap-2 shadow-lg shadow-emerald-950/20 cursor-pointer transition-all active:scale-95 border border-emerald-900/40"
                 >
-                  <ShoppingCart className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-emerald-400" />
+                  <ShoppingCart className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-emerald-400" />
                   <span>Start POS Checkout</span>
                 </button>
 
                 {/* Manage Stock (Light Neumorphic Button) */}
                 <button 
                   onClick={() => navigate('/inventory')}
-                  className="neu-btn px-5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl text-sm sm:text-base font-bold text-slate-800 hover:text-emerald-700 flex items-center gap-2.5 cursor-pointer transition-all active:scale-95"
+                  className="neu-btn px-4 sm:px-5 md:px-5 lg:px-6 py-2 sm:py-2.5 md:py-2.5 lg:py-3.5 rounded-xl text-xs sm:text-sm md:text-sm lg:text-base font-bold text-slate-800 hover:text-emerald-700 flex items-center gap-2 cursor-pointer transition-all active:scale-95"
                 >
-                  <Package className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-slate-600" />
+                  <Package className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-slate-600" />
                   <span>Manage Stock</span>
                 </button>
               </div>
 
               {/* Cloud Sync & Role Indicators */}
-              <div className="pt-2 flex items-center gap-5 sm:gap-7 text-xs sm:text-sm font-semibold text-slate-600">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4.5 h-4.5 text-emerald-600" />
+              <div className="pt-1 sm:pt-2 flex items-center gap-4 sm:gap-5 md:gap-5 lg:gap-7 text-xs sm:text-sm font-semibold text-slate-600">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <CheckCircle2 className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-emerald-600" />
                   <span>Real-time cloud sync</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4.5 h-4.5 text-emerald-600" />
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <ShieldCheck className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-emerald-600" />
                   <span>Role: <strong className="uppercase font-black text-slate-900">{userRole}</strong></span>
                 </div>
               </div>
             </div>
 
             {/* Right Column: Console Hub Stage */}
-            <div className="lg:col-span-5 flex items-center justify-center min-h-0">
-              <div className="w-full max-w-[480px] neu-flat-lg rounded-2xl p-4 sm:p-5 lg:p-6 bg-[#E6ECF5] space-y-4">
+            <div className="md:col-span-5 flex items-center justify-center min-h-0">
+              <div className="w-full max-w-[360px] md:max-w-[380px] lg:max-w-[480px] neu-flat-lg rounded-2xl p-3 sm:p-4 md:p-4 lg:p-6 bg-[#E6ECF5] space-y-2.5 sm:space-y-3 md:space-y-3.5 lg:space-y-4">
                 
                 {/* Top Status Indicators */}
                 <div className="flex items-center justify-between">
@@ -382,19 +382,19 @@ export const Home: React.FC = () => {
         </div>
 
         {/* Lower Section: Store Modules & Services Strip */}
-        <div className="shrink-0 space-y-2">
+        <div className="shrink-0 space-y-1 sm:space-y-1.5 md:space-y-2">
           {/* Header */}
-          <div className="px-1">
-            <h2 className="text-sm sm:text-base font-black text-slate-900 font-heading tracking-tight">
+          <div className="px-1 flex items-baseline justify-between">
+            <h2 className="text-xs sm:text-sm md:text-sm lg:text-base font-black text-slate-900 font-heading tracking-tight">
               Store Modules & Services
             </h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">
-              Authorized tools for <span className="font-black text-slate-800 uppercase">{userRole}</span> account
+            <p className="text-[10px] sm:text-xs md:text-xs text-slate-500 font-medium">
+              Authorized for <span className="font-black text-slate-800 uppercase">{userRole}</span>
             </p>
           </div>
 
           {/* Neumorphic Inset Module Tray */}
-          <div className="neu-inset p-3 sm:p-4 lg:p-4.5 rounded-2xl flex items-center justify-between gap-2 sm:gap-3.5 overflow-x-auto custom-scrollbar">
+          <div className="neu-inset p-2 sm:p-2.5 md:p-3 lg:p-4 rounded-2xl flex items-center justify-between gap-1.5 sm:gap-2 md:gap-2.5 lg:gap-3.5 overflow-x-auto custom-scrollbar">
             {availableModules.map((mod) => {
               const Icon = mod.icon;
               return (
@@ -402,18 +402,18 @@ export const Home: React.FC = () => {
                   key={mod.path}
                   onClick={() => navigate(mod.path)}
                   title={`${mod.fullName}`}
-                  className="group flex-1 min-w-[76px] sm:min-w-[90px] max-w-[155px] flex flex-col items-center gap-1.5 p-1 cursor-pointer focus:outline-none transition-all"
+                  className="group flex-1 min-w-[68px] sm:min-w-[76px] md:min-w-[82px] max-w-[155px] flex flex-col items-center gap-1 sm:gap-1.5 p-0.5 sm:p-1 cursor-pointer focus:outline-none transition-all"
                 >
                   <div className={cn(
-                    "w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-white shadow-md shadow-black/10 group-hover:scale-105 transition-transform relative",
+                    "w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 rounded-xl flex items-center justify-center text-white shadow-md shadow-black/10 group-hover:scale-105 transition-transform relative",
                     mod.bg
                   )}>
-                    <Icon className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5" />
+                    <Icon className="w-4.5 h-4.5 sm:w-5 sm:h-5 md:w-5.5 md:h-5.5 lg:w-6.5 lg:h-6.5" />
                     {mod.badge && (
-                      <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-white shadow-xs" />
+                      <span className="absolute top-1 right-1 w-2 h-2 sm:w-2.5 sm:h-2.5 bg-emerald-400 rounded-full border-2 border-white shadow-xs" />
                     )}
                   </div>
-                  <span className="text-xs sm:text-sm font-bold text-slate-700 group-hover:text-emerald-700 transition-colors w-full text-center truncate">
+                  <span className="text-[11px] sm:text-xs md:text-xs lg:text-sm font-bold text-slate-700 group-hover:text-emerald-700 transition-colors w-full text-center truncate">
                     {mod.title}
                   </span>
                 </button>

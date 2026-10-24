@@ -1743,39 +1743,41 @@ ${profile?.name || 'Vape Avenue Admin'}`;
 
       <Tabs defaultValue={(isManager && !isAdmin) ? "users" : "profile"} className="space-y-6">
         {(isAdmin || isManager) && (
-          <TabsList className="bg-secondary p-1 rounded-xl">
-            {(isManager && !isAdmin) ? (
-              <>
-                <TabsTrigger value="users" className="gap-2 rounded-lg px-6">
-                  <Users className="w-4 h-4" />
-                  Staff
-                </TabsTrigger>
-                <TabsTrigger value="profile" className="gap-2 rounded-lg px-6">
-                  <User className="w-4 h-4" />
-                  Profile
-                </TabsTrigger>
-              </>
-            ) : (
-              <>
-                <TabsTrigger value="profile" className="gap-2 rounded-lg px-6">
-                  <User className="w-4 h-4" />
-                  Profile
-                </TabsTrigger>
-                <TabsTrigger value="users" className="gap-2 rounded-lg px-6">
-                  <Users className="w-4 h-4" />
-                  Users & Staff
-                </TabsTrigger>
-                <TabsTrigger value="system" className="gap-2 rounded-lg px-6">
-                  <Shield className="w-4 h-4" />
-                  Settings
-                </TabsTrigger>
-                <TabsTrigger value="audit" className="gap-2 rounded-lg px-6">
-                  <History className="w-4 h-4" />
-                  Audit
-                </TabsTrigger>
-              </>
-            )}
-          </TabsList>
+          <div className="overflow-x-auto pb-1 custom-scrollbar">
+            <TabsList className="bg-secondary p-1 rounded-xl flex w-fit max-w-full">
+              {(isManager && !isAdmin) ? (
+                <>
+                  <TabsTrigger value="users" className="gap-2 rounded-lg px-3.5 sm:px-4 md:px-5 lg:px-6 h-9 md:h-10 text-xs sm:text-sm">
+                    <Users className="w-4 h-4" />
+                    Staff
+                  </TabsTrigger>
+                  <TabsTrigger value="profile" className="gap-2 rounded-lg px-3.5 sm:px-4 md:px-5 lg:px-6 h-9 md:h-10 text-xs sm:text-sm">
+                    <User className="w-4 h-4" />
+                    Profile
+                  </TabsTrigger>
+                </>
+              ) : (
+                <>
+                  <TabsTrigger value="profile" className="gap-2 rounded-lg px-3.5 sm:px-4 md:px-5 lg:px-6 h-9 md:h-10 text-xs sm:text-sm">
+                    <User className="w-4 h-4" />
+                    Profile
+                  </TabsTrigger>
+                  <TabsTrigger value="users" className="gap-2 rounded-lg px-3.5 sm:px-4 md:px-5 lg:px-6 h-9 md:h-10 text-xs sm:text-sm">
+                    <Users className="w-4 h-4" />
+                    Users & Staff
+                  </TabsTrigger>
+                  <TabsTrigger value="system" className="gap-2 rounded-lg px-3.5 sm:px-4 md:px-5 lg:px-6 h-9 md:h-10 text-xs sm:text-sm">
+                    <Shield className="w-4 h-4" />
+                    Settings
+                  </TabsTrigger>
+                  <TabsTrigger value="audit" className="gap-2 rounded-lg px-3.5 sm:px-4 md:px-5 lg:px-6 h-9 md:h-10 text-xs sm:text-sm">
+                    <History className="w-4 h-4" />
+                    Audit
+                  </TabsTrigger>
+                </>
+              )}
+            </TabsList>
+          </div>
         )}
 
         <TabsContent value="profile">
@@ -1827,8 +1829,8 @@ ${profile?.name || 'Vape Avenue Admin'}`;
         </TabsContent>
 
         <TabsContent value="users">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-5 lg:gap-6">
+            <div className="md:col-span-5 lg:col-span-4 space-y-4">
               {/* Access Control Setting Card */}
               <Card className="border border-slate-200/80 shadow-xs bg-white rounded-2xl">
                 <CardHeader className="pb-3">
@@ -1946,7 +1948,7 @@ ${profile?.name || 'Vape Avenue Admin'}`;
               </Card>
             </div>
 
-            <Card className="lg:col-span-8 border-none shadow-sm bg-white">
+            <Card className="md:col-span-7 lg:col-span-8 border-none shadow-sm bg-white overflow-hidden">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div>
